@@ -77,7 +77,7 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
   cursor: grab; touch-action: none;
 }
 #canvas.panning { cursor: grabbing; }
-#world { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+#world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
 #wires { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
 #wires path { fill: none; stroke: var(--wire); stroke-width: 2.5; }
 #wires path.edge { pointer-events: stroke; cursor: pointer; }
@@ -90,7 +90,7 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
   position: absolute; min-width: 180px;
   background: var(--panel); border: 1px solid var(--border);
   border-radius: 7px; box-shadow: 0 4px 14px #0006;
-  user-select: none;
+  user-select: none; touch-action: none;
 }
 .node.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 4px 14px #0006; }
 .node-title {
@@ -151,12 +151,13 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
 .port::after { content: ''; position: absolute; inset: -10px; }
 .drawer-toggle { display: none; }
 
-/* phones: the canvas takes the whole screen; palette and properties are bottom drawers.
-   Keep the query in sync with NARROW in dom.js. */
+/* phones: the canvas takes the screen, the properties panel sits below it and the palette is a
+   bottom drawer over both. Keep the query in sync with NARROW in dom.js. */
 @media (max-width: 760px), (max-height: 500px) {
   body {
+    grid-template-rows: 44px 1fr auto;
     grid-template-columns: 1fr;
-    grid-template-areas: "bar" "canvas";
+    grid-template-areas: "bar" "canvas" "props";
   }
   #toolbar { gap: 6px; padding: 0 8px; }
   #toolbar h1 { display: none; }
@@ -166,14 +167,18 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
   #toolbar #show-palette { margin-left: auto; }
   .drawer-toggle.active { border-color: var(--accent); color: var(--accent); }
 
-  #props, #palette {
+  #props {
+    max-height: 40vh; max-height: 40dvh;
+    border-right: 0; border-top: 1px solid var(--border);
+  }
+  #palette {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
     max-height: 55vh; max-height: 55dvh;
     border: 0; border-top: 1px solid var(--border);
     box-shadow: 0 -6px 18px #0008;
     display: none;
   }
-  body.show-props #props, body.show-palette #palette { display: block; }
+  body.show-palette #palette { display: block; }
   .palette-item { padding: 11px 12px; }
   .param input, .param select { padding: 6px 8px; font-size: 16px; }
 }

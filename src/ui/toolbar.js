@@ -16,22 +16,17 @@ function setStatus() {
   statusEl.classList.toggle('on', running);
 }
 
-// On narrow screens the palette and the properties panel are drawers; at most one is open.
+// On narrow screens the palette is a drawer (the properties panel is always visible below the canvas).
 function initDrawers() {
-  const toggles = { palette: $('#show-palette'), props: $('#show-props') };
-  const show = (which) => {
-    for (const [name, btn] of Object.entries(toggles)) {
-      const open = name === which;
-      document.body.classList.toggle('show-' + name, open);
-      btn.classList.toggle('active', open);
-    }
+  const toggle = $('#show-palette');
+  const show = (open) => {
+    document.body.classList.toggle('show-palette', open);
+    toggle.classList.toggle('active', open);
   };
-  for (const [name, btn] of Object.entries(toggles)) {
-    btn.addEventListener('click', () => show(document.body.classList.contains('show-' + name) ? null : name));
-  }
+  toggle.addEventListener('click', () => show(!document.body.classList.contains('show-palette')));
   // tapping the canvas background or adding a block gets the drawer out of the way
-  $('#canvas').addEventListener('pointerdown', (e) => { if (!e.target.closest('.node')) show(null); });
-  on('node-added', () => show(null));
+  $('#canvas').addEventListener('pointerdown', (e) => { if (!e.target.closest('.node')) show(false); });
+  on('node-added', () => show(false));
 }
 
 export function initToolbar() {

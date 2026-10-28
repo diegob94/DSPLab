@@ -24,22 +24,33 @@ async function withPhone(fn) {
 
 const visible = (page, sel) => page.locator(sel).evaluate((el) => getComputedStyle(el).display !== 'none');
 
-test('on a phone the canvas fills the width and the panels are hidden drawers', () => withPhone(async (page) => {
+test('on a phone the canvas fills the width, properties sit below it and the palette is a hidden drawer', () => withPhone(async (page) => {
   const box = await page.locator('#canvas').boundingBox();
   assert.equal(box.width, 390);
   assert.equal(await visible(page, '#palette'), false);
-  assert.equal(await visible(page, '#props'), false);
+  assert.equal(await visible(page, '#props'), true);
+  assert.equal(await page.locator('#show-props').count(), 0);
+  const props = await page.locator('#props').boundingBox();
+  assert.ok(props.y >= box.y + box.height - 1, 'properties are below the canvas');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
 }));
 
-test('the toolbar buttons open one drawer at a time and tapping the canvas closes it', () => withPhone(async (page) => {
+test('the Blocks button toggles the palette drawer and tapping the canvas closes it; properties stay visible', () => withPhone(async (page) => {
   await page.tap('#show-palette');
   assert.equal(await visible(page, '#palette'), true);
-  await page.tap('#show-props');
+  assert.equal(await visible(page, '#props'), true);
+  await page.tap('#show-palette');
+  assert.equal(await visible(page, '#palette'), false);
+  await page.tap('#show-palette');
+  await page.tap('#canvas', { position: { x: 340, y: 100 } });   // empty spot above the open drawer
   assert.equal(await visible(page, '#palette'), false);
   assert.equal(await visible(page, '#props'), true);
-  await page.tap('#canvas', { position: { x: 300, y: 500 } });
-  assert.equal(await visible(page, '#props'), false);
+}));
+
+test('selecting a block on a phone shows its settings in the always-visible panel', () => withPhone(async (page) => {
+  await page.tap('.node .node-title');
+  assert.ok(await page.locator('#props .param').count() > 0);
+  assert.ok(await page.locator('#props').isVisible());
 }));
 
 test('tapping a palette item adds the block and closes the drawer', () => withPhone(async (page) => {

@@ -14,7 +14,7 @@ export function portEl(nodeId, port, dir) {
 function portPos(dot) {
   const w = world.getBoundingClientRect();
   const r = dot.getBoundingClientRect();
-  return { x: r.left + r.width / 2 - w.left, y: r.top + r.height / 2 - w.top };
+  return { x: (r.left + r.width / 2 - w.left) / graph.zoom, y: (r.top + r.height / 2 - w.top) / graph.zoom };
 }
 
 function curve(a, b) {
@@ -42,7 +42,7 @@ export function startConnect(e, dot) {
 
   const move = (ev) => {
     const w = world.getBoundingClientRect();
-    temp.setAttribute('d', curve(start, { x: ev.clientX - w.left, y: ev.clientY - w.top }));
+    temp.setAttribute('d', curve(start, { x: (ev.clientX - w.left) / graph.zoom, y: (ev.clientY - w.top) / graph.zoom }));
     const t = document.elementFromPoint(ev.clientX, ev.clientY);
     const target = t && t.closest && t.closest('.port.in');
     if (hot && hot !== target) hot.classList.remove('hot');
@@ -52,6 +52,7 @@ export function startConnect(e, dot) {
   const up = () => {
     window.removeEventListener('pointermove', move);
     window.removeEventListener('pointerup', up);
+    window.removeEventListener('dsplab:pinch', cancel);
     temp.remove();
     if (hot) {
       hot.classList.remove('hot');
@@ -59,8 +60,11 @@ export function startConnect(e, dot) {
       if (to.node !== from.node) addEdge(from, to);
     }
   };
+  // a second finger turns the gesture into a pinch: drop the cable
+  const cancel = () => { hot = null; up(); };
   window.addEventListener('pointermove', move);
   window.addEventListener('pointerup', up);
+  window.addEventListener('dsplab:pinch', cancel);
 }
 
 export function initWires() {
