@@ -42,6 +42,12 @@ button {
 }
 button:hover { border-color: var(--accent); }
 button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
+#examples {
+  font: inherit; color: var(--text);
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 5px; padding: 5px 8px; cursor: pointer;
+}
+#examples:hover { border-color: var(--accent); }
 #run.running { background: var(--danger); border-color: var(--danger); color: #fff; }
 #status { color: var(--muted); margin-left: auto; }
 #status.on { color: var(--source); }
@@ -162,6 +168,7 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
   #toolbar { gap: 6px; padding: 0 8px; }
   #toolbar h1 { display: none; }
   #toolbar button { padding: 7px 10px; }
+  #examples { padding: 7px 6px; font-size: 16px; }
   #status { display: none; }
   .drawer-toggle { display: block; }
   #toolbar #show-palette { margin-left: auto; }

@@ -4,7 +4,8 @@ import {
   graph, select, addNode, removeNode, addEdge, removeEdge, rebuildPorts, syncParams,
 } from './core/graph.js';
 import { engine } from './core/engine.js';
-import { serialize, restore } from './core/persistence.js';
+import { serialize, restore, loadDiagram } from './core/persistence.js';
+import { EXAMPLES } from './core/examples.js';
 import { initWires, redrawEdges } from './ui/wires.js';
 import { initNodes, refreshSummary, startRenderLoop } from './ui/nodes.js';
 import { initProperties } from './ui/properties.js';
@@ -20,12 +21,7 @@ initCanvas();
 initToolbar();
 startRenderLoop();
 
-if (!restore()) {
-  const gen  = addNode('wave_generator', 80, 90);
-  const sink = addNode('audio_sink', 420, 120);
-  addEdge({ node: gen.id,  port: 'out' }, { node: sink.id, port: 'in' });
-  select(null);
-}
+if (!restore()) loadDiagram(EXAMPLES[0].diagram);
 
 // handle for the tests and for poking at the app from the browser console
 window.dsplab = {

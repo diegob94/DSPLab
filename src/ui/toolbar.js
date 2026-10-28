@@ -1,8 +1,10 @@
-// Toolbar: Run / Stop, Delete selected, and the audio status.
+// Toolbar: Run / Stop, Delete selected, the Examples menu and the audio status.
 import { $ } from '../dom.js';
 import { on } from '../core/events.js';
 import { deleteSelection } from '../core/graph.js';
 import { engine } from '../core/engine.js';
+import { loadDiagram } from '../core/persistence.js';
+import { EXAMPLES } from '../core/examples.js';
 
 const runBtn = $('#run');
 const delBtn = $('#delete');
@@ -29,8 +31,23 @@ function initDrawers() {
   on('node-added', () => show(false));
 }
 
+// A <select> that acts as a menu: picking an entry replaces the diagram, then it goes back to the title.
+function initExamples() {
+  const menu = $('#examples');
+  menu.append(new Option('Examples', '', true, true));
+  menu.options[0].disabled = true;
+  for (const ex of EXAMPLES) menu.append(new Option(ex.title, ex.id));
+  menu.addEventListener('change', () => {
+    const ex = EXAMPLES.find((e) => e.id === menu.value);
+    if (ex) loadDiagram(ex.diagram);
+    menu.selectedIndex = 0;
+    menu.blur();
+  });
+}
+
 export function initToolbar() {
   initDrawers();
+  initExamples();
   delBtn.addEventListener('click', deleteSelection);
   on('selection', (sel) => { delBtn.disabled = !sel; });
 
