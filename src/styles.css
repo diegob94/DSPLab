@@ -76,7 +76,7 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
   cursor: grab; touch-action: none;
 }
 #canvas.panning { cursor: grabbing; }
-#world { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+#world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
 #wires { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
 #wires path { fill: none; stroke: var(--wire); stroke-width: 2.5; }
 #wires path.edge { pointer-events: stroke; cursor: pointer; }
@@ -89,7 +89,7 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
   position: absolute; min-width: 180px;
   background: var(--panel); border: 1px solid var(--border);
   border-radius: 7px; box-shadow: 0 4px 14px #0006;
-  user-select: none;
+  user-select: none; touch-action: none;
 }
 .node.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 4px 14px #0006; }
 .node-title {

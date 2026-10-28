@@ -5,11 +5,16 @@ import { BLOCKS } from '../blocks/index.js';
 import { emit } from './events.js';
 import { optionsOf, portNames, validParam } from './params.js';
 
+export const MIN_ZOOM = 0.3;
+export const MAX_ZOOM = 2.5;
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
 export const graph = {
   nodes: new Map(),   // id -> { id, type, x, y, params }
   edges: [],          // { id, from: {node, port}, to: {node, port} }
   nextId: 1,          // shared by nodes and edges
   pan: { x: 0, y: 0 },
+  zoom: 1,            // world -> screen scale; screen = pan + world * zoom
 };
 let selection = null; // { kind: 'node' | 'edge', id }
 
@@ -76,6 +81,13 @@ export function moveNode(node, x, y) {
 export function setPan(x, y) {
   graph.pan.x = x;
   graph.pan.y = y;
+  emit('pan');
+}
+
+export function setView(x, y, zoom) {
+  graph.pan.x = x;
+  graph.pan.y = y;
+  graph.zoom = clamp(zoom, MIN_ZOOM, MAX_ZOOM);
   emit('pan');
 }
 

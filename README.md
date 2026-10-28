@@ -50,19 +50,21 @@ On narrow screens (or a phone held sideways) the canvas fills the screen and the
 become drawers that slide up from the bottom. Use the **Blocks** and **Properties** buttons in the
 toolbar to open one (only one at a time); tapping the empty canvas closes it. **Tap** a block in the
 palette to add it, since drag and drop and double-click don't work well on touch screens. Everything
-else (moving blocks, connecting ports, panning) works with your finger as it does with the mouse.
+else (moving blocks, connecting ports, panning) works with your finger as it does with the mouse, and
+pinching the canvas zooms.
 
 ## Working with blocks
 
 | To… | Do this |
 |---|---|
 | Add a block | Drag it from the palette onto the canvas, or double-click it in the palette |
-| Move a block | Drag its coloured title bar |
+| Move a block | Drag it by any part of the block (title bar or body) |
 | Connect blocks | Drag from an **output** port (right side of a block) to an **input** port (left side of another) |
 | Select a block or a cable | Click it. Its settings (or, for a cable, where it goes from and to) appear in Properties |
 | Edit a setting | Select the block, then use the controls in Properties |
 | Delete the selection | `Delete` or `Backspace`, or the **Delete selected** button |
 | Pan the canvas | Drag the empty background |
+| Zoom the canvas | Pinch with two fingers (a two-finger drag also pans), or scroll the mouse wheel over the canvas. 30 %–250 %; the zoom is saved with the diagram |
 | Deselect | Click the empty background |
 
 Connection rules:

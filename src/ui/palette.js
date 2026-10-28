@@ -17,7 +17,7 @@ export function initPalette() {
       // drag & drop and double-click don't work well on touch screens, so there a single tap adds the block
       const addAtCentre = () => {
         const r = canvas.getBoundingClientRect();
-        addNode(type, r.width / 2 - graph.pan.x - 90, r.height / 2 - graph.pan.y - 40);
+        addNode(type, (r.width / 2 - graph.pan.x) / graph.zoom - 90, (r.height / 2 - graph.pan.y) / graph.zoom - 40);
       };
       item.addEventListener('dblclick', addAtCentre);
       item.addEventListener('click', () => { if (NARROW.matches) addAtCentre(); });
@@ -33,6 +33,6 @@ export function initPalette() {
     if (!BLOCKS[type]) return;
     e.preventDefault();
     const r = canvas.getBoundingClientRect();
-    addNode(type, e.clientX - r.left - graph.pan.x - 90, e.clientY - r.top - graph.pan.y - 14);
+    addNode(type, (e.clientX - r.left - graph.pan.x) / graph.zoom - 90, (e.clientY - r.top - graph.pan.y) / graph.zoom - 14);
   });
 }

@@ -59,17 +59,21 @@ function renderNode(node, def) {
   node.el = el;
   refreshSummary(node);
 
-  // select + drag by title
-  el.addEventListener('pointerdown', () => select({ kind: 'node', id: node.id }));
-  title.addEventListener('pointerdown', (e) => {
+  // select + drag from anywhere on the card (ports stop their own pointerdown)
+  el.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
     e.stopPropagation();
     select({ kind: 'node', id: node.id });
     const sx = e.clientX, sy = e.clientY, ox = node.x, oy = node.y;
-    const move = (ev) => moveNode(node, ox + ev.clientX - sx, oy + ev.clientY - sy);
-    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    const move = (ev) => moveNode(node, ox + (ev.clientX - sx) / graph.zoom, oy + (ev.clientY - sy) / graph.zoom);
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('dsplab:pinch', up);
+    };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('dsplab:pinch', up);   // a second finger starts a pinch instead
   });
   return el;
 }
