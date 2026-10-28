@@ -7,7 +7,7 @@
  * build() may also return onConnect(port), called when an edge feeds that input port.
  * `inputs` may be a function of the params (a block with a configurable number of ports); a
  * parameter flagged `ports: true` rebuilds the node's ports when it changes, and a select's
- * `options` may be a function of the params too.
+ * `options` (strings or numbers) may be a function of the params too.
  * Parameters are edited in the properties panel; those marked `show: true` are also
  * displayed (read-only) on the node itself.
  * A block may also define ui(node) -> { el, draw(inst) }: a view shown inside the

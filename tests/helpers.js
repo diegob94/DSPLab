@@ -76,6 +76,9 @@ const setRange = (locator, value) => locator.evaluate((el, v) => {
   el.dispatchEvent(new Event('change'));
 }, value);
 
+// the <select>/<input> of the properties-panel row with this label
+const panelControl = (page, label) => page.locator(`#props .param:has(> label:text-is("${label}")) > :is(select, input)`);
+
 const snapshot = (page) => page.evaluate(() => JSON.stringify(dsplab.serialize()));
 
-module.exports = { assert, launch, withApp, sleep, selectNode, addFromPalette, connect, setRange, snapshot };
+module.exports = { assert, launch, withApp, sleep, selectNode, addFromPalette, connect, setRange, panelControl, snapshot };

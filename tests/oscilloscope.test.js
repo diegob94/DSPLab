@@ -1,6 +1,6 @@
 'use strict';
 const { before, after, test } = require('node:test');
-const { assert, launch, withApp, sleep, selectNode, addFromPalette, setRange } = require('./helpers');
+const { assert, launch, withApp, sleep, selectNode, addFromPalette, panelControl } = require('./helpers');
 
 let app;
 before(async () => { app = await launch(); });
@@ -8,8 +8,8 @@ after(async () => { await app.close(); });
 
 const PORTS = '.node:has-text("Oscilloscope") .port.in';
 const portNames = (page) => page.locator(PORTS).evaluateAll((els) => els.map((e) => e.dataset.port));
-const triggerOptions = (page) => page.locator('#props select option').allTextContents();
-const setInputs = (page, n) => setRange(page.locator('#props input[type=range]').first(), n);
+const triggerOptions = (page) => panelControl(page, 'Trigger').locator('option').allTextContents();
+const setInputs = (page, n) => panelControl(page, 'Inputs').selectOption(String(n));
 
 // Reads `frames` snapshots spread over time (audio has to advance between them) and reports,
 // per channel, the slope direction of the first samples and the range of the first sample.
@@ -55,12 +55,23 @@ test('defaults to two inputs; trigger options follow the inputs', () => withApp(
   assert.equal(new Set(colours).size, 2, 'each channel has its own colour');
 }));
 
+test('the number of inputs is picked from a dropdown, 1 to 8', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  const control = panelControl(page, 'Inputs');
+  assert.equal(await control.evaluate((el) => el.tagName), 'SELECT');
+  assert.deepEqual(await control.locator('option').allTextContents(), ['1', '2', '3', '4', '5', '6', '7', '8']);
+  assert.equal(await control.inputValue(), '2');
+  await control.selectOption('5');
+  const channels = await page.evaluate(() => [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope').params.channels);
+  assert.strictEqual(channels, 5, 'stored as a number, not as the text "5"');
+}));
+
 test('changing the number of inputs adds and removes ports', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
   await setInputs(page, 4);
   assert.deepEqual(await portNames(page), ['ch1', 'ch2', 'ch3', 'ch4']);
   assert.equal((await triggerOptions(page)).length, 4);
-  assert.equal(await page.locator('#props .val').first().textContent(), '4');
+  assert.equal(await panelControl(page, 'Inputs').inputValue(), '4');
   await setInputs(page, 8);
   assert.equal((await portNames(page)).length, 8);
 }));
@@ -74,7 +85,7 @@ test('shrinking drops cables on removed ports and resets a trigger that no longe
     dsplab.addEdge({ node: gen.id, port: 'out' }, { node: scope.id, port: 'ch1' });
     dsplab.addEdge({ node: gen.id, port: 'out' }, { node: scope.id, port: 'ch3' });
   });
-  await page.locator('#props select').selectOption('ch3');
+  await panelControl(page, 'Trigger').selectOption('ch3');
   await setInputs(page, 2);
   const state = await page.evaluate(() => ({
     ports: dsplab.graph.edges.filter((e) => e.to.node === scope.id).map((e) => e.to.port),

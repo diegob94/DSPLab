@@ -1,6 +1,6 @@
 'use strict';
 const { before, after, test } = require('node:test');
-const { assert, launch, withApp, sleep, selectNode, addFromPalette, connect, setRange, snapshot } = require('./helpers');
+const { assert, launch, withApp, sleep, selectNode, addFromPalette, connect, setRange, panelControl, snapshot } = require('./helpers');
 
 let app;
 before(async () => { app = await launch(); });
@@ -60,8 +60,8 @@ test('changes are autosaved shortly afterwards, without closing the page', () =>
 
 test('the number of oscilloscope inputs, the trigger and their cables are restored', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
-  await setRange(page.locator('#props input[type=range]').first(), 3);
-  await page.locator('#props select').selectOption('ch3');
+  await panelControl(page, 'Inputs').selectOption('3');
+  await panelControl(page, 'Trigger').selectOption('ch3');
   await page.evaluate(() => {
     const scope = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
     dsplab.addEdge({ node: [...dsplab.graph.nodes.values()][0].id, port: 'out' }, { node: scope.id, port: 'ch3' });
@@ -101,14 +101,14 @@ test('corrupt saved data falls back to the starter diagram', () => withApp(app, 
   assert.equal(await page.locator('#wires path.edge').count(), 1);
 }, { seed: '{not json' }));
 
-test('saved data is sanitised: bad values reset, unknown blocks/ports dropped, ranges clamped', () => withApp(app, async (page) => {
+test('saved data is sanitised: bad values reset, unknown blocks/ports dropped, out-of-range numbers clamped', () => withApp(app, async (page) => {
   const state = await page.evaluate(() => dsplab.serialize());
   assert.equal(state.nodes.length, 3);
   assert.deepEqual(state.edges.length, 1);
   assert.deepEqual(state.nodes[0].params, { waveform: 'sine', frequency: 440, amplitude: 0.25 });
   assert.deepEqual(state.pan, { x: 0, y: 0 });
   const scope = state.nodes[2].params;
-  assert.deepEqual([scope.channels, scope.trigger, scope.level], [8, 'ch1', 1]);
+  assert.deepEqual([scope.channels, scope.trigger, scope.level], [2, 'ch1', 1]);
 }, {
   seed: {
     version: 1,

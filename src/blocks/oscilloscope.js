@@ -12,7 +12,7 @@ export const oscilloscope = {
   outputs: [],
   portColor: (port) => SCOPE_COLORS[(parseInt(port.slice(2), 10) - 1) % SCOPE_COLORS.length],
   params: [
-    { key: 'channels', label: 'Inputs',     type: 'range', min: 1, max: 8, step: 1, ports: true, default: 2 },
+    { key: 'channels', label: 'Inputs',     type: 'select', options: [1, 2, 3, 4, 5, 6, 7, 8], ports: true, default: 2 },
     { key: 'trigger',  label: 'Trigger',    show: true, type: 'select', options: (p) => inputNames(p), default: 'ch1' },
     { key: 'level',    label: 'Trig level', type: 'range', min: -1, max: 1, step: 0.01, default: 0 },
     { key: 'timespan', label: 'Time span',  show: true, type: 'range', scale: 'log', min: 1, max: 100, unit: 'ms', default: 10 },

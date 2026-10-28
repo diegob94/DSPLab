@@ -42,7 +42,7 @@ function paramWidget(node, p) {
 
   input.addEventListener('pointerdown', (e) => e.stopPropagation());
   input.addEventListener('input', () => {
-    setParam(node, p.key, p.type === 'select' ? input.value : fromSlider(parseFloat(input.value)));
+    setParam(node, p.key, p.type === 'select' ? optionsOf(p, node.params)[input.selectedIndex] : fromSlider(parseFloat(input.value)));
     if (readout) readout.textContent = show(node.params[p.key]);
   });
   if (p.ports) {
