@@ -32,6 +32,7 @@ DSPLAB_URL=http://127.0.0.1:8000/ npm test   # test against a server you already
 
 ```
 index.html            page skeleton; loads src/main.js as a module
+assets/               favicon + app icons (static files, not code); served and deployed next to index.html
 src/
   main.js             boot: init the UI modules, restore the saved diagram or load a starter one
   blocks/             one module per block + index.js (registry, categories, the block contract)
@@ -132,7 +133,7 @@ and for debugging from the console; app code must not use it.
   `git -c user.name=... -c user.email=... commit`.
 - Release flow: `feature/*` branch off `main` (ideally in a worktree under `.claude/worktrees/`, which is
   git-ignored) -> PR into `main` -> merge. `.github/workflows/pages.yml` runs the tests on every PR to
-  `main` and, on a push to `main`, deploys `index.html` + `src/` to GitHub Pages. All paths are
+  `main` and, on a push to `main`, deploys `index.html` + `src/` + `assets/` to GitHub Pages. All paths are
   relative, so the site works under `/DSPlab/` as-is. Merge PRs with a merge commit or rebase, not
   squash, so branches keep sharing history. Pages must be enabled by hand (Settings -> Pages ->
   Source: GitHub Actions); ask before enabling it or publishing anything.

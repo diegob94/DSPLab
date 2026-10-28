@@ -33,7 +33,8 @@ body {
   background: var(--panel);
   border-bottom: 1px solid var(--border);
 }
-#toolbar h1 { font-size: 14px; margin: 0 12px 0 0; font-weight: 600; letter-spacing: .02em; }
+#toolbar h1 { display: flex; align-items: center; gap: 8px; font-size: 14px; margin: 0 12px 0 0; font-weight: 600; letter-spacing: .02em; }
+#toolbar h1 img { display: block; }
 button {
   font: inherit; color: var(--text);
   background: var(--panel-2); border: 1px solid var(--border);
