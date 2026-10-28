@@ -1,6 +1,7 @@
 <p align="center"><img src="assets/banner.png" alt="DSPLab: experiment signal processing right in your browser" width="640"></p>
 
 Works on desktop and on mobile: on a phone the side panels become drawers (see [On a phone](#on-a-phone)).
+
 Build audio signal chains by wiring blocks together on a canvas, then hear them and watch them on an
 oscilloscope. It is a small node-based flowgraph editor (think GNU Radio, for the browser) that runs
 **entirely in your browser**: no server, no account, nothing to install except a way to serve a few files.
