@@ -86,6 +86,19 @@ Offset adds a constant (DC) level to the wave, so the output swings around that 
 
 Shown on the block: Waveform, Frequency and Offset.
 
+**Audio Source**: your microphone (or the browser's default audio input). Output: `out`.
+
+| Setting | Range | Default |
+|---|---|---|
+| Gain | 0 – 2 | 1 |
+
+The browser asks for microphone permission when you press **Run** with an Audio Source in the diagram
+(never otherwise). Echo cancellation, noise suppression and automatic gain are turned off so you get the
+raw signal. Wear headphones when sending it to an Audio Sink, or it will feed back. An Audio Source
+added while running stays silent until you press Stop and Run again.
+
+Shown on the block: Gain.
+
 ### Processing blocks
 
 **Math Operator**: combines two signals sample by sample. Inputs: `a`, `b`. Output: `out`.
