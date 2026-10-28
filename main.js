@@ -6,6 +6,9 @@
  * Each block describes its ports, its parameters (rendered as widgets
  * in the node) and how it maps onto Web Audio nodes:
  *   build(ctx, params) -> { inputs: {port: AudioNode}, outputs: {port: AudioNode}, update(params), dispose() }
+ * A block may also define ui(node) -> { el, draw(inst) }: a view shown inside the
+ * node and redrawn every animation frame (inst is the built instance, or undefined
+ * while the engine is stopped).
  * ------------------------------------------------------------------ */
 const CATEGORIES = {
   'Source blocks': 'var(--source)',
@@ -61,6 +64,78 @@ const BLOCKS = {
         inputs: { in: gain },
         update,
         dispose() { gain.disconnect(); },
+      };
+    },
+  },
+
+  oscilloscope: {
+    title: 'Oscilloscope',
+    category: 'Sink blocks',
+    inputs: ['in'],
+    outputs: [],
+    params: [
+      { key: 'timespan', label: 'Time span', type: 'range', scale: 'log', min: 1, max: 100, unit: 'ms', default: 10 },
+      { key: 'scale',    label: 'Scale',     type: 'range', scale: 'log', min: 0.1, max: 10, unit: '×', default: 1 },
+    ],
+    build(ctx) {
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 16384;
+      const buf = new Float32Array(analyser.fftSize);
+      return {
+        inputs: { in: analyser },
+        outputs: {},
+        update() {},
+        // latest `spanMs` of signal, starting at a rising zero crossing so the trace holds still
+        sample(spanMs) {
+          analyser.getFloatTimeDomainData(buf);
+          const n = Math.min(Math.round(spanMs * ctx.sampleRate / 1000), buf.length >> 1);
+          let start = 0;
+          for (let i = 1; i < buf.length - n; i++) {
+            if (buf[i - 1] < 0 && buf[i] >= 0) { start = i; break; }
+          }
+          return buf.subarray(start, start + n);
+        },
+        dispose() { analyser.disconnect(); },
+      };
+    },
+    ui(node) {
+      const W = 220, H = 130, dpr = window.devicePixelRatio || 1;
+      const el = h('canvas', { className: 'scope', width: W * dpr, height: H * dpr });
+      const g = el.getContext('2d');
+      const css = getComputedStyle(document.documentElement);
+      return {
+        el,
+        draw(inst) {
+          g.setTransform(dpr, 0, 0, dpr, 0, 0);
+          g.fillStyle = '#0d0f12';
+          g.fillRect(0, 0, W, H);
+          g.lineWidth = 1;
+          g.strokeStyle = '#242a33';
+          g.beginPath();
+          for (let i = 1; i < 10; i++) { g.moveTo(Math.round(i * W / 10) + .5, 0); g.lineTo(Math.round(i * W / 10) + .5, H); }
+          for (let i = 1; i < 8; i++)  { g.moveTo(0, Math.round(i * H / 8) + .5);  g.lineTo(W, Math.round(i * H / 8) + .5); }
+          g.stroke();
+          g.strokeStyle = '#3a4350';
+          g.beginPath(); g.moveTo(0, H / 2 + .5); g.lineTo(W, H / 2 + .5); g.stroke();
+
+          g.fillStyle = '#6b7482';
+          g.font = '10px system-ui, sans-serif';
+          if (!inst) { g.fillText('Stopped', 6, 14); return; }
+          g.fillText(`${node.params.timespan} ms`, 6, 14);
+
+          const data = inst.sample(node.params.timespan);
+          if (data.length < 2) return;
+          const amp = (H / 2) * 0.9 * node.params.scale;
+          g.strokeStyle = css.getPropertyValue('--sink').trim() || '#e0894a';
+          g.lineWidth = 1.5;
+          g.beginPath();
+          for (let i = 0; i < data.length; i++) {
+            const x = i * (W - 1) / (data.length - 1);
+            const y = Math.min(H, Math.max(0, H / 2 - data[i] * amp));
+            if (i) g.lineTo(x, y); else g.moveTo(x, y);
+          }
+          g.stroke();
+        },
       };
     },
   },
@@ -205,6 +280,7 @@ function renderNode(node, def) {
   def.outputs.forEach((name) => el.append(portRow('out', name, node.id)));
 
   const body = h('div', { className: 'node-body' });
+  if (def.ui) { node.view = def.ui(node); body.append(node.view.el); }
   for (const p of def.params) body.append(paramWidget(node, p));
   el.append(body);
 
@@ -491,6 +567,13 @@ runBtn.addEventListener('click', async () => {
  * ------------------------------------------------------------------ */
 buildPalette();
 window.addEventListener('resize', redrawEdges);
+
+(function frame() {
+  for (const node of graph.nodes.values()) {
+    if (node.view) node.view.draw(engine.live.get(node.id));
+  }
+  requestAnimationFrame(frame);
+})();
 
 const gen  = addNode('wave_generator', 80, 90);
 const sink = addNode('audio_sink', 420, 120);

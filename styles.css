@@ -118,3 +118,4 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
 }
 .param input[type=range] { padding: 0; accent-color: var(--accent); }
 .param .val { grid-column: 2; color: var(--muted); font-size: 11px; margin-top: -4px; }
+.scope { display: block; width: 220px; height: 130px; border: 1px solid var(--border); border-radius: 4px; }
