@@ -16,7 +16,26 @@ function setStatus() {
   statusEl.classList.toggle('on', running);
 }
 
+// On narrow screens the palette and the properties panel are drawers; at most one is open.
+function initDrawers() {
+  const toggles = { palette: $('#show-palette'), props: $('#show-props') };
+  const show = (which) => {
+    for (const [name, btn] of Object.entries(toggles)) {
+      const open = name === which;
+      document.body.classList.toggle('show-' + name, open);
+      btn.classList.toggle('active', open);
+    }
+  };
+  for (const [name, btn] of Object.entries(toggles)) {
+    btn.addEventListener('click', () => show(document.body.classList.contains('show-' + name) ? null : name));
+  }
+  // tapping the canvas background or adding a block gets the drawer out of the way
+  $('#canvas').addEventListener('pointerdown', (e) => { if (!e.target.closest('.node')) show(null); });
+  on('node-added', () => show(null));
+}
+
 export function initToolbar() {
+  initDrawers();
   delBtn.addEventListener('click', deleteSelection);
   on('selection', (sel) => { delBtn.disabled = !sel; });
 
