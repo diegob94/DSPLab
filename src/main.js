@@ -1,224 +1,6 @@
-'use strict';
-
-/* ------------------------------------------------------------------ *
- * Block definitions
- *
- * Each block describes its ports, its parameters (rendered as widgets
- * in the node) and how it maps onto Web Audio nodes:
- *   build(ctx, params) -> { inputs: {port: AudioNode}, outputs: {port: AudioNode}, update(params), dispose() }
- * build() may also return onConnect(port), called when an edge feeds that input port.
- * `inputs` may be a function of the params (a block with a configurable number of ports); a
- * parameter flagged `ports: true` rebuilds the node's ports when it changes, and a select's
- * `options` may be a function of the params too.
- * Parameters are edited in the properties panel; those marked `show: true` are also
- * displayed (read-only) on the node itself.
- * A block may also define ui(node) -> { el, draw(inst) }: a view shown inside the
- * node and redrawn every animation frame (inst is the built instance, or undefined
- * while the engine is stopped).
- * ------------------------------------------------------------------ */
-const CATEGORIES = {
-  'Source blocks': 'var(--source)',
-  'Processing blocks': 'var(--proc)',
-  'Sink blocks':   'var(--sink)',
-};
-
-// trace / port colours of the oscilloscope channels
-const SCOPE_COLORS = ['#f2a65a', '#4dd0e1', '#8bd17c', '#e57fd0', '#f5d76e', '#7aa7ff', '#ff7b72', '#b5e853'];
-
-const BLOCKS = {
-  wave_generator: {
-    title: 'Wave Generator',
-    category: 'Source blocks',
-    inputs: [],
-    outputs: ['out'],
-    params: [
-      { key: 'waveform',  label: 'Waveform',  show: true, type: 'select', options: ['sine', 'square', 'sawtooth', 'triangle'], default: 'sine' },
-      { key: 'frequency', label: 'Frequency', show: true, type: 'range', scale: 'log', min: 1, max: 20000, unit: 'Hz', default: 440 },
-      { key: 'amplitude', label: 'Amplitude', type: 'range',  min: 0, max: 1, step: 0.01, default: 0.5 },
-    ],
-    build(ctx, p) {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      osc.start();
-      const update = (p) => {
-        const t = ctx.currentTime;
-        osc.type = p.waveform;
-        osc.frequency.setTargetAtTime(clamp(p.frequency, 1, 20000), t, 0.01);
-        gain.gain.setTargetAtTime(p.amplitude, t, 0.01);
-      };
-      update(p);
-      return {
-        outputs: { out: gain },
-        update,
-        dispose() { osc.stop(); osc.disconnect(); gain.disconnect(); },
-      };
-    },
-  },
-
-  audio_sink: {
-    title: 'Audio Sink',
-    category: 'Sink blocks',
-    inputs: ['in'],
-    outputs: [],
-    params: [
-      { key: 'volume', label: 'Volume', show: true, type: 'range', min: 0, max: 1, step: 0.01, default: 0.8 },
-    ],
-    build(ctx, p) {
-      const gain = ctx.createGain();
-      gain.connect(ctx.destination);
-      const update = (p) => gain.gain.setTargetAtTime(p.volume, ctx.currentTime, 0.01);
-      update(p);
-      return {
-        inputs: { in: gain },
-        update,
-        dispose() { gain.disconnect(); },
-      };
-    },
-  },
-
-  oscilloscope: {
-    title: 'Oscilloscope',
-    category: 'Sink blocks',
-    inputs: (p) => Array.from({ length: p.channels }, (_, i) => `ch${i + 1}`),
-    outputs: [],
-    portColor: (port) => SCOPE_COLORS[(parseInt(port.slice(2), 10) - 1) % SCOPE_COLORS.length],
-    params: [
-      { key: 'channels', label: 'Inputs',     type: 'range', min: 1, max: 8, step: 1, ports: true, default: 2 },
-      { key: 'trigger',  label: 'Trigger',    show: true, type: 'select', options: (p) => BLOCKS.oscilloscope.inputs(p), default: 'ch1' },
-      { key: 'level',    label: 'Trig level', type: 'range', min: -1, max: 1, step: 0.01, default: 0 },
-      { key: 'timespan', label: 'Time span',  show: true, type: 'range', scale: 'log', min: 1, max: 100, unit: 'ms', default: 10 },
-      { key: 'scale',    label: 'Scale',      type: 'range', scale: 'log', min: 0.1, max: 10, unit: '×', default: 1 },
-    ],
-    build(ctx, p) {
-      const names = BLOCKS.oscilloscope.inputs(p);
-      const chans = names.map(() => {
-        const an = ctx.createAnalyser();
-        an.fftSize = 16384;
-        return { an, buf: new Float32Array(an.fftSize), check: new Float32Array(an.fftSize), connected: false };
-      });
-
-      // Read the connected channels as one time-aligned snapshot: if the audio thread
-      // advanced while we were reading, a channel differs between two consecutive reads, so retry.
-      const readAll = (live) => {
-        for (let attempt = 0; attempt < 4; attempt++) {
-          live.forEach((c) => c.an.getFloatTimeDomainData(c.buf));
-          if (live.length < 2) return;
-          live.forEach((c) => c.an.getFloatTimeDomainData(c.check));
-          if (live.every((c) => c.buf.every((v, i) => v === c.check[i]))) return;
-        }
-      };
-
-      return {
-        inputs: Object.fromEntries(names.map((name, i) => [name, chans[i].an])),
-        outputs: {},
-        update() {},
-        onConnect(port) { chans[names.indexOf(port)].connected = true; },
-        // One window per connected channel (null for unconnected ones), all starting at the same
-        // rising crossing of `level` on the `trigger` channel so the traces hold still.
-        sample(spanMs, level = 0, trigger = names[0]) {
-          const live = chans.filter((c) => c.connected);
-          readAll(live);
-          const n = Math.min(Math.round(spanMs * ctx.sampleRate / 1000), 16384 >> 1);
-          const t = chans[names.indexOf(trigger)];
-          let start = 0;
-          if (t && t.connected) {
-            // newest crossing that still leaves a full window after it; the oldest data
-            // can hold start-up transients
-            for (let i = t.buf.length - n - 1; i > 0; i--) {
-              if (t.buf[i - 1] < level && t.buf[i] >= level) { start = i; break; }
-            }
-          }
-          return chans.map((c) => (c.connected ? c.buf.subarray(start, start + n) : null));
-        },
-        dispose() { chans.forEach((c) => c.an.disconnect()); },
-      };
-    },
-    ui(node) {
-      const W = 220, H = 130, dpr = window.devicePixelRatio || 1;
-      const el = h('canvas', { className: 'scope', width: W * dpr, height: H * dpr });
-      const g = el.getContext('2d');
-      return {
-        el,
-        draw(inst) {
-          g.setTransform(dpr, 0, 0, dpr, 0, 0);
-          g.fillStyle = '#0d0f12';
-          g.fillRect(0, 0, W, H);
-          g.lineWidth = 1;
-          g.strokeStyle = '#242a33';
-          g.beginPath();
-          for (let i = 1; i < 10; i++) { g.moveTo(Math.round(i * W / 10) + .5, 0); g.lineTo(Math.round(i * W / 10) + .5, H); }
-          for (let i = 1; i < 8; i++)  { g.moveTo(0, Math.round(i * H / 8) + .5);  g.lineTo(W, Math.round(i * H / 8) + .5); }
-          g.stroke();
-          g.strokeStyle = '#3a4350';
-          g.beginPath(); g.moveTo(0, H / 2 + .5); g.lineTo(W, H / 2 + .5); g.stroke();
-
-          g.fillStyle = '#6b7482';
-          g.font = '10px system-ui, sans-serif';
-          if (!inst) { g.fillText('Stopped', 6, 14); return; }
-          g.fillText(`${node.params.timespan} ms · trigger ${node.params.trigger}`, 6, 14);
-
-          const amp = (H / 2) * 0.9 * node.params.scale;
-          g.lineWidth = 1.5;
-          inst.sample(node.params.timespan, node.params.level, node.params.trigger).forEach((data, k) => {
-            if (!data || data.length < 2) return;
-            g.strokeStyle = SCOPE_COLORS[k % SCOPE_COLORS.length];
-            g.beginPath();
-            for (let i = 0; i < data.length; i++) {
-              const x = i * (W - 1) / (data.length - 1);
-              const y = Math.min(H, Math.max(0, H / 2 - data[i] * amp));
-              if (i) g.lineTo(x, y); else g.moveTo(x, y);
-            }
-            g.stroke();
-          });
-        },
-      };
-    },
-  },
-
-  math_operator: {
-    title: 'Math Operator',
-    category: 'Processing blocks',
-    inputs: ['a', 'b'],
-    outputs: ['out'],
-    params: [
-      { key: 'operation', label: 'Operation', show: true, type: 'select', options: ['add', 'subtract', 'multiply'], default: 'add' },
-    ],
-    // An unconnected input counts as 0. Every operation shares one topology and
-    // is selected by gains, so changing it needs no graph rebuild:
-    //   out = ka*a + kb*b + km*(a*b),  with a*b made by driving a gain's AudioParam with b
-    build(ctx, p) {
-      const a = ctx.createGain(), b = ctx.createGain();
-      const ga = ctx.createGain(), gb = ctx.createGain();
-      const prod = ctx.createGain(), gm = ctx.createGain();
-      const out = ctx.createGain();
-      prod.gain.value = 0;
-      a.connect(ga).connect(out);
-      b.connect(gb).connect(out);
-      a.connect(prod);
-      b.connect(prod.gain);
-      prod.connect(gm).connect(out);
-      const all = [a, b, ga, gb, prod, gm, out];
-      const K = { add: [1, 1, 0], subtract: [1, -1, 0], multiply: [0, 0, 1] };
-      const update = (p) => {
-        const t = ctx.currentTime;
-        const [ka, kb, km] = K[p.operation];
-        ga.gain.setTargetAtTime(ka, t, 0.005);
-        gb.gain.setTargetAtTime(kb, t, 0.005);
-        gm.gain.setTargetAtTime(km, t, 0.005);
-      };
-      update(p);
-      return {
-        inputs: { a, b },
-        outputs: { out },
-        update,
-        dispose() { all.forEach((n) => n.disconnect()); },
-      };
-    },
-  },
-};
-
-const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, Number.isFinite(v) ? v : lo));
+import { BLOCKS, CATEGORIES } from './blocks/index.js';
+import { clamp } from './util.js';
+import { $, h, svgEl } from './dom.js';
 
 /* ------------------------------------------------------------------ *
  * Graph model
@@ -233,7 +15,6 @@ let selection = null; // { kind: 'node' | 'edge', id }
 /* ------------------------------------------------------------------ *
  * DOM refs
  * ------------------------------------------------------------------ */
-const $ = (sel) => document.querySelector(sel);
 const canvas = $('#canvas');
 const world  = $('#world');
 const wires  = $('#wires');
@@ -242,18 +23,6 @@ const delBtn = $('#delete');
 const statusEl = $('#status');
 const propsBody = $('#props-body');
 const pan = { x: 0, y: 0 };
-
-const SVG_NS = 'http://www.w3.org/2000/svg';
-const svgEl = (name, attrs = {}) => {
-  const e = document.createElementNS(SVG_NS, name);
-  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
-  return e;
-};
-const h = (tag, props = {}, ...kids) => {
-  const e = Object.assign(document.createElement(tag), props);
-  e.append(...kids);
-  return e;
-};
 
 /* ------------------------------------------------------------------ *
  * Palette
@@ -764,3 +533,10 @@ if (!restore()) {
   addEdge({ node: gen.id,  port: 'out' }, { node: sink.id, port: 'in' });
   select(null);
 }
+
+// handle for the tests and for poking at the app from the browser console
+window.dsplab = {
+  BLOCKS, graph, engine, select,
+  addNode, removeNode, addEdge, removeEdge, rebuildPorts, syncParams,
+  redrawEdges, refreshSummary, serialize,
+};

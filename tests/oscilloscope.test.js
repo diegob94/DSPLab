@@ -2,9 +2,9 @@
 const { before, after, test } = require('node:test');
 const { assert, launch, withApp, sleep, selectNode, addFromPalette, setRange } = require('./helpers');
 
-let browser;
-before(async () => { browser = await launch(); });
-after(async () => { await browser.close(); });
+let app;
+before(async () => { app = await launch(); });
+after(async () => { await app.close(); });
 
 const PORTS = '.node:has-text("Oscilloscope") .port.in';
 const portNames = (page) => page.locator(PORTS).evaluateAll((els) => els.map((e) => e.dataset.port));
@@ -14,7 +14,7 @@ const setInputs = (page, n) => setRange(page.locator('#props input[type=range]')
 // Reads `frames` snapshots spread over time (audio has to advance between them) and reports,
 // per channel, the slope direction of the first samples and the range of the first sample.
 const readFrames = (page, { trigger, level = 0, frames = 12 }) => page.evaluate(async ([trigger, level, frames]) => {
-  const inst = engine.live.get(scope.id);
+  const inst = dsplab.engine.live.get(scope.id);
   const rows = [];
   for (let i = 0; i < frames; i++) {
     rows.push(inst.sample(10, level, trigger).map((d) => d && [d[0], d[6]]));
@@ -37,17 +37,17 @@ async function wireScope(page) {
   await addFromPalette(page, 'Oscilloscope');
   await setInputs(page, 3);
   await page.evaluate(() => {
-    const gen = [...graph.nodes.values()][0];
-    window.scope = [...graph.nodes.values()].find((n) => n.type === 'oscilloscope');
-    window.inv = addNode('math_operator', 200, 420);
+    const gen = [...dsplab.graph.nodes.values()][0];
+    window.scope = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
+    window.inv = dsplab.addNode('math_operator', 200, 420);
     inv.params.operation = 'subtract';
-    addEdge({ node: gen.id, port: 'out' }, { node: scope.id, port: 'ch1' });
-    addEdge({ node: gen.id, port: 'out' }, { node: inv.id, port: 'b' });
-    addEdge({ node: inv.id, port: 'out' }, { node: scope.id, port: 'ch2' });
+    dsplab.addEdge({ node: gen.id, port: 'out' }, { node: scope.id, port: 'ch1' });
+    dsplab.addEdge({ node: gen.id, port: 'out' }, { node: inv.id, port: 'b' });
+    dsplab.addEdge({ node: inv.id, port: 'out' }, { node: scope.id, port: 'ch2' });
   });
 }
 
-test('defaults to two inputs; trigger options follow the inputs', () => withApp(browser, async (page) => {
+test('defaults to two inputs; trigger options follow the inputs', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
   assert.deepEqual(await portNames(page), ['ch1', 'ch2']);
   assert.deepEqual(await triggerOptions(page), ['ch1', 'ch2']);
@@ -55,7 +55,7 @@ test('defaults to two inputs; trigger options follow the inputs', () => withApp(
   assert.equal(new Set(colours).size, 2, 'each channel has its own colour');
 }));
 
-test('changing the number of inputs adds and removes ports', () => withApp(browser, async (page) => {
+test('changing the number of inputs adds and removes ports', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
   await setInputs(page, 4);
   assert.deepEqual(await portNames(page), ['ch1', 'ch2', 'ch3', 'ch4']);
@@ -65,19 +65,19 @@ test('changing the number of inputs adds and removes ports', () => withApp(brows
   assert.equal((await portNames(page)).length, 8);
 }));
 
-test('shrinking drops cables on removed ports and resets a trigger that no longer exists', () => withApp(browser, async (page) => {
+test('shrinking drops cables on removed ports and resets a trigger that no longer exists', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
   await setInputs(page, 4);
   await page.evaluate(() => {
-    const gen = [...graph.nodes.values()][0];
-    window.scope = [...graph.nodes.values()].find((n) => n.type === 'oscilloscope');
-    addEdge({ node: gen.id, port: 'out' }, { node: scope.id, port: 'ch1' });
-    addEdge({ node: gen.id, port: 'out' }, { node: scope.id, port: 'ch3' });
+    const gen = [...dsplab.graph.nodes.values()][0];
+    window.scope = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
+    dsplab.addEdge({ node: gen.id, port: 'out' }, { node: scope.id, port: 'ch1' });
+    dsplab.addEdge({ node: gen.id, port: 'out' }, { node: scope.id, port: 'ch3' });
   });
   await page.locator('#props select').selectOption('ch3');
   await setInputs(page, 2);
   const state = await page.evaluate(() => ({
-    ports: graph.edges.filter((e) => e.to.node === scope.id).map((e) => e.to.port),
+    ports: dsplab.graph.edges.filter((e) => e.to.node === scope.id).map((e) => e.to.port),
     trigger: scope.params.trigger,
     shownOnNode: scope.el.querySelector('[data-key=trigger]').textContent,
   }));
@@ -85,11 +85,11 @@ test('shrinking drops cables on removed ports and resets a trigger that no longe
   assert.equal(await page.locator('#wires path.edge').count(), 2, 'no orphan wires (gen->sink, gen->ch1)');
 }));
 
-test('a single input draws a 440 Hz sine: 4 cycles in 10 ms, peak 0.5', () => withApp(browser, async (page) => {
+test('a single input draws a 440 Hz sine: 4 cycles in 10 ms, peak 0.5', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
   await page.evaluate(() => {
-    window.scope = [...graph.nodes.values()].find((n) => n.type === 'oscilloscope');
-    addEdge({ node: [...graph.nodes.values()][0].id, port: 'out' }, { node: scope.id, port: 'ch1' });
+    window.scope = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
+    dsplab.addEdge({ node: [...dsplab.graph.nodes.values()][0].id, port: 'out' }, { node: scope.id, port: 'ch1' });
   });
   const lit = () => page.evaluate(() => {
     const c = document.querySelector('canvas.scope');
@@ -102,7 +102,7 @@ test('a single input draws a 440 Hz sine: 4 cycles in 10 ms, peak 0.5', () => wi
   await page.click('#run');
   await sleep(600);
   const s = await page.evaluate(() => {
-    const a = Array.from(engine.live.get(scope.id).sample(10, 0, 'ch1')[0]);
+    const a = Array.from(dsplab.engine.live.get(scope.id).sample(10, 0, 'ch1')[0]);
     return { n: a.length, min: Math.min(...a), max: Math.max(...a), cycles: a.filter((v, k) => k && a[k - 1] < 0 && v >= 0).length };
   });
   assert.equal(s.n, 441);
@@ -111,7 +111,7 @@ test('a single input draws a 440 Hz sine: 4 cycles in 10 ms, peak 0.5', () => wi
   assert.ok(await lit() > 100, 'trace drawn while running');
 }));
 
-test('the trigger channel decides where every trace starts', () => withApp(browser, async (page) => {
+test('the trigger channel decides where every trace starts', () => withApp(app, async (page) => {
   await wireScope(page);
   await page.click('#run');
   await sleep(500);
@@ -125,7 +125,7 @@ test('the trigger channel decides where every trace starts', () => withApp(brows
   assert.deepEqual(onCh2.slope.slice(0, 2), ['falling', 'rising'], 'ch1 now aligned to the inverted channel');
 }));
 
-test('the trigger level is honoured', () => withApp(browser, async (page) => {
+test('the trigger level is honoured', () => withApp(app, async (page) => {
   await wireScope(page);
   await page.click('#run');
   await sleep(500);
@@ -133,7 +133,7 @@ test('the trigger level is honoured', () => withApp(browser, async (page) => {
   assert.ok(r.first[0] > 0.2 && r.first[1] < 0.32, `first samples ${r.first}`);
 }));
 
-test('trace colours, trigger and time span are shown on the node', () => withApp(browser, async (page) => {
+test('trace colours, trigger and time span are shown on the node', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
   assert.deepEqual(await page.locator('.node:has-text("Oscilloscope") .kv').allTextContents(), ['Triggerch1', 'Time span10 ms']);
   assert.equal(await page.locator('#props .param').count(), 5);

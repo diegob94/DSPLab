@@ -2,11 +2,11 @@
 const { before, after, test } = require('node:test');
 const { assert, launch, withApp, sleep, selectNode, addFromPalette, connect, setRange, snapshot } = require('./helpers');
 
-let browser;
-before(async () => { browser = await launch(); });
-after(async () => { await browser.close(); });
+let app;
+before(async () => { app = await launch(); });
+after(async () => { await app.close(); });
 
-test('edits survive a reload, even one right after the change', () => withApp(browser, async (page) => {
+test('edits survive a reload, even one right after the change', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
   await addFromPalette(page, 'Math Operator');
   await selectNode(page, 'Wave Generator');
@@ -36,7 +36,7 @@ test('edits survive a reload, even one right after the change', () => withApp(br
   assert.equal(await page.locator('#props select').inputValue(), 'square');
 }));
 
-test('changes are autosaved shortly afterwards, without closing the page', () => withApp(browser, async (page) => {
+test('changes are autosaved shortly afterwards, without closing the page', () => withApp(app, async (page) => {
   const saved = () => page.evaluate(() => JSON.parse(localStorage.getItem('dsplab.diagram')));
   await addFromPalette(page, 'Math Operator');            // structure
   await sleep(500);
@@ -54,17 +54,17 @@ test('changes are autosaved shortly afterwards, without closing the page', () =>
   await page.mouse.up();
   await sleep(500);
   const sink = (await saved()).nodes.find((n) => n.type === 'audio_sink');
-  assert.deepEqual([sink.x, sink.y], await page.evaluate(() => { const n = [...graph.nodes.values()].find((n) => n.type === 'audio_sink'); return [n.x, n.y]; }));
+  assert.deepEqual([sink.x, sink.y], await page.evaluate(() => { const n = [...dsplab.graph.nodes.values()].find((n) => n.type === 'audio_sink'); return [n.x, n.y]; }));
   assert.notDeepEqual([sink.x, sink.y], [420, 120], 'the new position, not the starter one');
 }));
 
-test('the number of oscilloscope inputs, the trigger and their cables are restored', () => withApp(browser, async (page) => {
+test('the number of oscilloscope inputs, the trigger and their cables are restored', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
   await setRange(page.locator('#props input[type=range]').first(), 3);
   await page.locator('#props select').selectOption('ch3');
   await page.evaluate(() => {
-    const scope = [...graph.nodes.values()].find((n) => n.type === 'oscilloscope');
-    addEdge({ node: [...graph.nodes.values()][0].id, port: 'out' }, { node: scope.id, port: 'ch3' });
+    const scope = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
+    dsplab.addEdge({ node: [...dsplab.graph.nodes.values()][0].id, port: 'out' }, { node: scope.id, port: 'ch3' });
   });
   const before = await snapshot(page);
   await page.reload();
@@ -72,16 +72,16 @@ test('the number of oscilloscope inputs, the trigger and their cables are restor
   assert.equal(await page.locator('.node:has-text("Oscilloscope") .port.in').count(), 3);
 }));
 
-test('new blocks after a restore get fresh ids', () => withApp(browser, async (page) => {
-  await page.evaluate(() => removeNode(2));        // leave a gap in the ids
+test('new blocks after a restore get fresh ids', () => withApp(app, async (page) => {
+  await page.evaluate(() => dsplab.removeNode(2));        // leave a gap in the ids
   await sleep(300);
   await page.reload();
   await addFromPalette(page, 'Audio Sink');
-  const ids = await page.evaluate(() => [...graph.nodes.keys()]);
+  const ids = await page.evaluate(() => [...dsplab.graph.nodes.keys()]);
   assert.equal(new Set(ids).size, ids.length, `ids ${ids}`);
 }));
 
-test('a restored diagram can run', () => withApp(browser, async (page) => {
+test('a restored diagram can run', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Math Operator');
   await page.reload();
   await page.click('#run');
@@ -89,20 +89,20 @@ test('a restored diagram can run', () => withApp(browser, async (page) => {
   assert.match(await page.textContent('#status'), /^Running/);
 }));
 
-test('an emptied diagram stays empty', () => withApp(browser, async (page) => {
-  await page.evaluate(() => [...graph.nodes.keys()].forEach(removeNode));
+test('an emptied diagram stays empty', () => withApp(app, async (page) => {
+  await page.evaluate(() => [...dsplab.graph.nodes.keys()].forEach(dsplab.removeNode));
   await sleep(300);
   await page.reload();
   assert.equal(await page.locator('.node').count(), 0);
 }));
 
-test('corrupt saved data falls back to the starter diagram', () => withApp(browser, async (page) => {
+test('corrupt saved data falls back to the starter diagram', () => withApp(app, async (page) => {
   assert.equal(await page.locator('.node').count(), 2);
   assert.equal(await page.locator('#wires path.edge').count(), 1);
 }, { seed: '{not json' }));
 
-test('saved data is sanitised: bad values reset, unknown blocks/ports dropped, ranges clamped', () => withApp(browser, async (page) => {
-  const state = await page.evaluate(() => serialize());
+test('saved data is sanitised: bad values reset, unknown blocks/ports dropped, ranges clamped', () => withApp(app, async (page) => {
+  const state = await page.evaluate(() => dsplab.serialize());
   assert.equal(state.nodes.length, 3);
   assert.deepEqual(state.edges.length, 1);
   assert.deepEqual(state.nodes[0].params, { waveform: 'sine', frequency: 440, amplitude: 0.25 });
@@ -128,12 +128,12 @@ test('saved data is sanitised: bad values reset, unknown blocks/ports dropped, r
 }));
 
 test('the app still works when localStorage is blocked', async () => {
-  const ctx = await browser.newContext();
+  const ctx = await app.browser.newContext();
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.addInitScript(() => { Object.defineProperty(window, 'localStorage', { get() { throw new Error('blocked'); } }); });
-  await page.goto(require('./helpers').URL);
+  await page.goto(app.url);
   await addFromPalette(page, 'Math Operator');
   await sleep(400);
   assert.equal(await page.locator('.node').count(), 3);
