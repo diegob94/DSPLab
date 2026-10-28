@@ -277,11 +277,13 @@ canvas.addEventListener('drop', (e) => {
 /* ------------------------------------------------------------------ *
  * Nodes
  * ------------------------------------------------------------------ */
-function addNode(type, x, y) {
+function addNode(type, x, y, saved = {}) {
   const def = BLOCKS[type];
+  const id = Number.isInteger(saved.id) ? saved.id : graph.nextId;
+  graph.nextId = Math.max(graph.nextId, id + 1);
   const node = {
-    id: graph.nextId++, type, x: Math.round(x), y: Math.round(y),
-    params: Object.fromEntries(def.params.map((p) => [p.key, p.default])),
+    id, type, x: Math.round(x), y: Math.round(y),
+    params: Object.fromEntries(def.params.map((p) => [p.key, validParam(p, saved.params && saved.params[p.key])])),
   };
   node.el = renderNode(node, def);
   graph.nodes.set(node.id, node);
@@ -289,6 +291,12 @@ function addNode(type, x, y) {
   select({ kind: 'node', id: node.id });
   structureChanged();
   return node;
+}
+
+// a saved value is only trusted if it still fits the parameter definition
+function validParam(p, v) {
+  const ok = p.type === 'select' ? p.options.includes(v) : Number.isFinite(v);
+  return ok ? v : p.default;
 }
 
 function renderNode(node, def) {
@@ -322,7 +330,7 @@ function renderNode(node, def) {
       el.style.top = node.y + 'px';
       redrawEdges();
     };
-    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); save(); };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
   });
@@ -377,6 +385,7 @@ function paramWidget(node, p) {
     node.params[p.key] = p.type === 'select' ? input.value : fromSlider(parseFloat(input.value));
     if (readout) readout.textContent = show(node.params[p.key]);
     engine.updateNode(node);
+    save();
   });
   return wrap;
 }
@@ -501,6 +510,7 @@ canvas.addEventListener('pointerdown', (e) => {
     canvas.classList.remove('panning');
     window.removeEventListener('pointermove', move);
     window.removeEventListener('pointerup', up);
+    save();
   };
   window.addEventListener('pointermove', move);
   window.addEventListener('pointerup', up);
@@ -561,6 +571,7 @@ const engine = {
 
 function structureChanged() {
   if (engine.running) engine.rebuild();
+  save();
 }
 
 function setStatus() {
@@ -587,7 +598,61 @@ runBtn.addEventListener('click', async () => {
 });
 
 /* ------------------------------------------------------------------ *
- * Boot: a starter flowgraph
+ * Persistence: the diagram is autosaved to localStorage and restored on load
+ * ------------------------------------------------------------------ */
+const STORAGE_KEY = 'dsplab.diagram';
+let restoring = false;
+let saveTimer = null;
+
+function serialize() {
+  return {
+    version: 1,
+    pan: { x: pan.x, y: pan.y },
+    nodes: [...graph.nodes.values()].map(({ id, type, x, y, params }) => ({ id, type, x, y, params })),
+    edges: graph.edges.map(({ from, to }) => ({ from, to })),
+  };
+}
+
+function saveNow() {
+  clearTimeout(saveTimer);
+  if (restoring) return;
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(serialize())); } catch (err) { /* storage unavailable or full */ }
+}
+
+function save() {
+  if (restoring) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveNow, 200);
+}
+window.addEventListener('pagehide', saveNow);
+
+// returns false when there is nothing usable saved, so the caller can load the starter graph
+function restore() {
+  let data;
+  try { data = JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch (err) { return false; }
+  if (!data || data.version !== 1 || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) return false;
+
+  restoring = true;
+  try {
+    for (const n of data.nodes) {
+      if (n && BLOCKS[n.type] && Number.isFinite(n.x) && Number.isFinite(n.y)) addNode(n.type, n.x, n.y, n);
+    }
+    for (const e of data.edges) {
+      if (e && e.from && e.to && portEl(e.from.node, e.from.port, 'out') && portEl(e.to.node, e.to.port, 'in')) {
+        addEdge({ node: e.from.node, port: e.from.port }, { node: e.to.node, port: e.to.port });
+      }
+    }
+    if (data.pan && Number.isFinite(data.pan.x) && Number.isFinite(data.pan.y)) setPan(data.pan.x, data.pan.y);
+    redrawEdges();
+  } finally {
+    restoring = false;
+  }
+  select(null);
+  return true;
+}
+
+/* ------------------------------------------------------------------ *
+ * Boot: restore the saved diagram, or load a starter flowgraph
  * ------------------------------------------------------------------ */
 buildPalette();
 window.addEventListener('resize', redrawEdges);
@@ -599,7 +664,9 @@ window.addEventListener('resize', redrawEdges);
   requestAnimationFrame(frame);
 })();
 
-const gen  = addNode('wave_generator', 80, 90);
-const sink = addNode('audio_sink', 420, 120);
-addEdge({ node: gen.id,  port: 'out' }, { node: sink.id, port: 'in' });
-select(null);
+if (!restore()) {
+  const gen  = addNode('wave_generator', 80, 90);
+  const sink = addNode('audio_sink', 420, 120);
+  addEdge({ node: gen.id,  port: 'out' }, { node: sink.id, port: 'in' });
+  select(null);
+}
