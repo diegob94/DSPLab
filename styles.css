@@ -19,8 +19,8 @@ body {
   font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
   display: grid;
   grid-template-rows: 44px 1fr;
-  grid-template-columns: 220px 1fr;
-  grid-template-areas: "bar bar" "side canvas";
+  grid-template-columns: 1fr 220px;
+  grid-template-areas: "bar bar" "canvas side";
   overflow: hidden;
 }
 
@@ -48,7 +48,7 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
 #palette {
   grid-area: side;
   background: var(--panel);
-  border-right: 1px solid var(--border);
+  border-left: 1px solid var(--border);
   padding: 10px; overflow-y: auto;
 }
 #palette h2 {
