@@ -168,7 +168,7 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
   #toolbar { gap: 6px; padding: 0 8px; }
   #toolbar h1 { display: none; }
   #toolbar button { padding: 7px 10px; }
-  #examples { padding: 7px 6px; font-size: 16px; }
+  #examples { padding: 7px 6px; font-size: 16px; min-width: 0; max-width: 8.5em; }
   #status { display: none; }
   .drawer-toggle { display: block; }
   #toolbar #show-palette { margin-left: auto; }

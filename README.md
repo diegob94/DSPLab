@@ -46,7 +46,7 @@ You start with a **Wave Generator** already connected to an **Audio Sink**. Pres
   values, read-only; you change them here.
 - **Toolbar** (top): Run/Stop, delete, the **Examples** menu, and the audio status (the sample rate while
   running).
-- **Examples** (toolbar): *Simple tone* (the starting diagram) and *ASK modulation*. Picking one replaces
+- **Examples** (toolbar): *Simple tone* (the starting diagram), *ASK modulation* and *Audio source scope* (microphone → oscilloscope). Picking one replaces
   the current diagram, so it can't be undone (the old diagram is overwritten by the autosave).
 
 ### On a phone
@@ -169,7 +169,7 @@ Frequency slider.
 **See a wave.** Add an Oscilloscope and connect the generator's `out` to `ch1` as well (an output can feed
 several inputs). Press Run. The default 10 ms span shows about four cycles of 440 Hz.
 
-**Amplitude-shift keying.** Pick *ASK modulation* in the Examples menu: a 433 Hz sine is multiplied by a
+**Amplitude-shift keying.** Pick *ASK modulation* in the Examples menu: a 440 Hz sine is multiplied by a
 2 Hz square wave that swings between 0 and 1, so the tone switches on and off. The scope shows the keyed
 signal (`ch1`) against the square wave (`ch2`, the trigger).
 

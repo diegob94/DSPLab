@@ -9,7 +9,7 @@ after(async () => { await app.close(); });
 const types = (page) => page.evaluate(() => [...dsplab.graph.nodes.values()].map((n) => n.type).sort());
 
 test('the Examples menu lists the examples under its title', () => withApp(app, async (page) => {
-  assert.deepEqual(await page.locator('#examples option').allTextContents(), ['Examples', 'Simple tone', 'ASK modulation']);
+  assert.deepEqual(await page.locator('#examples option').allTextContents(), ['Examples', 'Simple tone', 'ASK modulation', 'Audio source scope']);
   assert.equal(await page.locator('#examples').inputValue(), '');
 }));
 
@@ -48,4 +48,11 @@ test('an example can be loaded while running and keeps running', () => withApp(a
   await sleep(300);
   assert.equal(await page.evaluate(() => dsplab.engine.running), true);
   assert.equal(await page.locator('.node').count(), 5);
+}));
+
+test('Audio source scope wires the Audio Source to a one-channel Oscilloscope', () => withApp(app, async (page) => {
+  await page.selectOption('#examples', { label: 'Audio source scope' });
+  assert.deepEqual(await types(page), ['audio_source', 'oscilloscope']);
+  assert.equal(await page.locator('#wires path.edge').count(), 1);
+  assert.equal(await page.locator('.node:has-text("Oscilloscope") .port.in').count(), 1);
 }));
