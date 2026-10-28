@@ -79,6 +79,10 @@ the oscillators restarting their phase.
 | Waveform | sine, square, sawtooth, triangle | sine |
 | Frequency | 1 Hz – 20 000 Hz (logarithmic slider) | 440 Hz |
 | Amplitude | 0 – 1 | 0.5 |
+| Offset | −1 – 1 | 0 |
+
+Offset adds a constant (DC) level to the wave, so the output swings around that level instead of around
+0. It is independent of Amplitude: amplitude 0.5 with offset 0.3 goes from −0.2 to 0.8.
 
 Shown on the block: Waveform and Frequency.
 
@@ -100,7 +104,8 @@ open gives silence, and `subtract` with only `b` connected inverts it.
 **Audio Sink**: plays a signal on your speakers. Input: `in`. Setting: **Volume** 0 – 1 (default 0.8).
 
 Audio is clipped at ±1 by the browser, and nothing in DSPLab prevents that. If you add signals or
-turn amplitudes up so the sum exceeds 1, you'll hear distortion; lower the amplitudes.
+turn amplitudes up so the sum exceeds 1, you'll hear distortion; lower the amplitudes. A Wave
+Generator's Offset counts too: amplitude 0.5 with offset 0.8 already goes past 1.
 
 **Oscilloscope**: draws signals over time. Inputs: `ch1` … `chN`, each channel in its own colour. It
 only draws while the audio is running (otherwise it reads *Stopped*).
