@@ -1,4 +1,4 @@
-# DSPLab
+<p align="center"><img src="assets/banner.png" alt="DSPLab: experiment signal processing right in your browser" width="640"></p>
 
 Build audio signal chains by wiring blocks together on a canvas, then hear them and watch them on an
 oscilloscope. It is a small node-based flowgraph editor (think GNU Radio, for the browser) that runs
