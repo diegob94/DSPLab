@@ -1,16 +1,13 @@
 import { BLOCKS, CATEGORIES } from './blocks/index.js';
-import { clamp } from './util.js';
 import { $, h, svgEl } from './dom.js';
-
-/* ------------------------------------------------------------------ *
- * Graph model
- * ------------------------------------------------------------------ */
-const graph = {
-  nodes: new Map(),   // id -> { id, type, x, y, params, el }
-  edges: [],          // { id, from: {node, port}, to: {node, port}, el }
-  nextId: 1,
-};
-let selection = null; // { kind: 'node' | 'edge', id }
+import { on } from './core/events.js';
+import { optionsOf, portNames } from './core/params.js';
+import {
+  graph, getSelection, select, addNode, removeNode, addEdge, removeEdge, moveNode, setPan,
+  setParam, syncParams, rebuildPorts, deleteSelection,
+} from './core/graph.js';
+import { engine } from './core/engine.js';
+import { serialize, restore } from './core/persistence.js';
 
 /* ------------------------------------------------------------------ *
  * DOM refs
@@ -22,7 +19,6 @@ const runBtn = $('#run');
 const delBtn = $('#delete');
 const statusEl = $('#status');
 const propsBody = $('#props-body');
-const pan = { x: 0, y: 0 };
 
 /* ------------------------------------------------------------------ *
  * Palette
@@ -38,7 +34,7 @@ function buildPalette() {
       item.addEventListener('dragstart', (e) => e.dataTransfer.setData('text/block', type));
       item.addEventListener('dblclick', () => {
         const r = canvas.getBoundingClientRect();
-        addNode(type, r.width / 2 - pan.x - 90, r.height / 2 - pan.y - 40);
+        addNode(type, r.width / 2 - graph.pan.x - 90, r.height / 2 - graph.pan.y - 40);
       });
       pal.append(item);
     }
@@ -53,30 +49,12 @@ canvas.addEventListener('drop', (e) => {
   if (!BLOCKS[type]) return;
   e.preventDefault();
   const r = canvas.getBoundingClientRect();
-  addNode(type, e.clientX - r.left - pan.x - 90, e.clientY - r.top - pan.y - 14);
+  addNode(type, e.clientX - r.left - graph.pan.x - 90, e.clientY - r.top - graph.pan.y - 14);
 });
 
 /* ------------------------------------------------------------------ *
  * Nodes
  * ------------------------------------------------------------------ */
-function addNode(type, x, y, saved = {}) {
-  const def = BLOCKS[type];
-  const id = Number.isInteger(saved.id) ? saved.id : graph.nextId;
-  graph.nextId = Math.max(graph.nextId, id + 1);
-  const params = {};
-  for (const p of def.params) params[p.key] = validParam(p, saved.params && saved.params[p.key], params);
-  const node = { id, type, x: Math.round(x), y: Math.round(y), params };
-  node.el = renderNode(node, def);
-  graph.nodes.set(node.id, node);
-  world.append(node.el);
-  select({ kind: 'node', id: node.id });
-  structureChanged();
-  return node;
-}
-
-const optionsOf = (p, params) => (typeof p.options === 'function' ? p.options(params) : p.options);
-const portNames = (def, dir, params) => (typeof def[dir] === 'function' ? def[dir](params) : def[dir]);
-
 const fmt = (p, v) => p.unit ? `${v} ${p.unit}` : String(v);
 
 function refreshSummary(node) {
@@ -84,14 +62,6 @@ function refreshSummary(node) {
     const out = node.el.querySelector(`[data-key="${p.key}"]`);
     if (out) out.textContent = fmt(p, node.params[p.key]);
   }
-}
-
-// a saved value is only trusted if it still fits the parameter definition
-function validParam(p, v, params) {
-  if (p.type === 'select') return optionsOf(p, params).includes(v) ? v : p.default;
-  if (!Number.isFinite(v)) return p.default;
-  const c = clamp(v, p.min, p.max);
-  return p.step === 1 ? Math.round(c) : c;
 }
 
 function renderNode(node, def) {
@@ -127,14 +97,8 @@ function renderNode(node, def) {
     e.stopPropagation();
     select({ kind: 'node', id: node.id });
     const sx = e.clientX, sy = e.clientY, ox = node.x, oy = node.y;
-    const move = (ev) => {
-      node.x = ox + ev.clientX - sx;
-      node.y = oy + ev.clientY - sy;
-      el.style.left = node.x + 'px';
-      el.style.top = node.y + 'px';
-      redrawEdges();
-    };
-    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); save(); };
+    const move = (ev) => moveNode(node, ox + ev.clientX - sx, oy + ev.clientY - sy);
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
   });
@@ -153,25 +117,6 @@ function portRow(dir, name, nodeId, color) {
   if (color) label.style.color = color;
   row.append(dot, label);
   return row;
-}
-
-// re-render the input ports after a parameter changed their number
-function rebuildPorts(node) {
-  const names = portNames(BLOCKS[node.type], 'inputs', node.params);
-  graph.edges.filter((e) => e.to.node === node.id && !names.includes(e.to.port)).forEach(removeEdge);
-  node.el.querySelectorAll('.port-row.in').forEach((row) => row.remove());
-  const def = BLOCKS[node.type];
-  node.el.querySelector('.node-title').after(...names.map((name) => portRow('in', name, node.id, def.portColor && def.portColor(name))));
-  redrawEdges();
-  structureChanged();
-}
-
-// a select whose options depend on other params may have lost its value
-function syncParams(node) {
-  for (const p of BLOCKS[node.type].params) {
-    if (p.type === 'select' && !optionsOf(p, node.params).includes(node.params[p.key])) node.params[p.key] = p.default;
-  }
-  refreshSummary(node);
 }
 
 function paramWidget(node, p) {
@@ -208,11 +153,8 @@ function paramWidget(node, p) {
 
   input.addEventListener('pointerdown', (e) => e.stopPropagation());
   input.addEventListener('input', () => {
-    node.params[p.key] = p.type === 'select' ? input.value : fromSlider(parseFloat(input.value));
+    setParam(node, p.key, p.type === 'select' ? input.value : fromSlider(parseFloat(input.value)));
     if (readout) readout.textContent = show(node.params[p.key]);
-    refreshSummary(node);
-    engine.updateNode(node);
-    save();
   });
   if (p.ports) {
     // applied on release, so dragging a slider across a smaller value doesn't drop cables on the way
@@ -227,15 +169,23 @@ function paramWidget(node, p) {
   return wrap;
 }
 
-function removeNode(id) {
-  const node = graph.nodes.get(id);
-  if (!node) return;
-  graph.edges.filter((e) => e.from.node === id || e.to.node === id).forEach(removeEdge);
-  node.el.remove();
-  graph.nodes.delete(id);
-  if (selection && selection.kind === 'node' && selection.id === id) select(null);
-  structureChanged();
-}
+on('node-added', (node) => world.append(renderNode(node, BLOCKS[node.type])));
+on('node-removed', (node) => node.el.remove());
+on('param', (node) => refreshSummary(node));
+on('moved', (node) => {
+  node.el.style.left = node.x + 'px';
+  node.el.style.top = node.y + 'px';
+  redrawEdges();
+});
+
+// the number of input ports changed: re-render them
+on('ports', (node) => {
+  const def = BLOCKS[node.type];
+  node.el.querySelectorAll('.port-row.in').forEach((row) => row.remove());
+  const names = portNames(def, 'inputs', node.params);
+  node.el.querySelector('.node-title').after(...names.map((name) => portRow('in', name, node.id, def.portColor && def.portColor(name))));
+  redrawEdges();
+});
 
 /* ------------------------------------------------------------------ *
  * Edges
@@ -256,23 +206,6 @@ function curve(a, b) {
   return `M${a.x},${a.y} C${a.x + dx},${a.y} ${b.x - dx},${b.y} ${b.x},${b.y}`;
 }
 
-function addEdge(from, to) {
-  // an input accepts a single connection; replace any existing one
-  graph.edges.filter((e) => e.to.node === to.node && e.to.port === to.port).forEach(removeEdge);
-  const edge = { id: graph.nextId++, from, to, el: svgEl('path', { class: 'edge' }) };
-  edge.el.addEventListener('pointerdown', (e) => { e.stopPropagation(); select({ kind: 'edge', id: edge.id }); });
-  wires.append(edge.el);
-  graph.edges.push(edge);
-  redrawEdges();
-  structureChanged();
-}
-
-function removeEdge(edge) {
-  edge.el.remove();
-  graph.edges = graph.edges.filter((e) => e !== edge);
-  structureChanged();
-}
-
 function redrawEdges() {
   for (const e of graph.edges) {
     const a = portEl(e.from.node, e.from.port, 'out');
@@ -280,6 +213,14 @@ function redrawEdges() {
     if (a && b) e.el.setAttribute('d', curve(portPos(a), portPos(b)));
   }
 }
+
+on('edge-added', (edge) => {
+  edge.el = svgEl('path', { class: 'edge' });
+  edge.el.addEventListener('pointerdown', (e) => { e.stopPropagation(); select({ kind: 'edge', id: edge.id }); });
+  wires.append(edge.el);
+  redrawEdges();
+});
+on('edge-removed', (edge) => edge.el.remove());
 
 function startConnect(e, dot) {
   if (e.button !== 0 || dot.dataset.dir !== 'out') return;
@@ -314,17 +255,17 @@ function startConnect(e, dot) {
 }
 
 /* ------------------------------------------------------------------ *
- * Selection, panning, keyboard
+ * Selection, properties panel, panning, keyboard
  * ------------------------------------------------------------------ */
-function select(sel) {
-  selection = sel;
+on('selection', (sel) => {
   graph.nodes.forEach((n) => n.el.classList.toggle('selected', !!sel && sel.kind === 'node' && sel.id === n.id));
   graph.edges.forEach((e) => e.el.classList.toggle('selected', !!sel && sel.kind === 'edge' && sel.id === e.id));
   delBtn.disabled = !sel;
   renderProps();
-}
+});
 
 function renderProps() {
+  const selection = getSelection();
   propsBody.replaceChildren();
   const hint = (text) => propsBody.append(h('p', { className: 'hint', textContent: text }));
   if (!selection) return hint('Select a block to see and edit its properties.');
@@ -348,12 +289,6 @@ function renderProps() {
   for (const p of def.params) propsBody.append(paramWidget(node, p));
 }
 
-function deleteSelection() {
-  if (!selection) return;
-  if (selection.kind === 'node') removeNode(selection.id);
-  else { const e = graph.edges.find((e) => e.id === selection.id); if (e) removeEdge(e); }
-  select(null);
-}
 delBtn.addEventListener('click', deleteSelection);
 
 window.addEventListener('keydown', (e) => {
@@ -367,76 +302,25 @@ canvas.addEventListener('pointerdown', (e) => {
   if (e.button !== 0 || e.target.closest('.node')) return;
   select(null);
   canvas.classList.add('panning');
-  const sx = e.clientX, sy = e.clientY, ox = pan.x, oy = pan.y;
-  const move = (ev) => { setPan(ox + ev.clientX - sx, oy + ev.clientY - sy); };
+  const sx = e.clientX, sy = e.clientY, ox = graph.pan.x, oy = graph.pan.y;
+  const move = (ev) => setPan(ox + ev.clientX - sx, oy + ev.clientY - sy);
   const up = () => {
     canvas.classList.remove('panning');
     window.removeEventListener('pointermove', move);
     window.removeEventListener('pointerup', up);
-    save();
   };
   window.addEventListener('pointermove', move);
   window.addEventListener('pointerup', up);
 });
 
-function setPan(x, y) {
-  pan.x = x; pan.y = y;
-  world.style.transform = `translate(${x}px, ${y}px)`;
-  canvas.style.backgroundPosition = `${x}px ${y}px`;
-}
+on('pan', () => {
+  world.style.transform = `translate(${graph.pan.x}px, ${graph.pan.y}px)`;
+  canvas.style.backgroundPosition = `${graph.pan.x}px ${graph.pan.y}px`;
+});
 
 /* ------------------------------------------------------------------ *
- * Audio engine: maps the graph onto Web Audio nodes
+ * Run / stop
  * ------------------------------------------------------------------ */
-const engine = {
-  ctx: null,
-  live: new Map(), // node id -> built block instance
-
-  get running() { return !!this.ctx; },
-
-  async start() {
-    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-    this.rebuild();
-    await this.ctx.resume();
-  },
-
-  async stop() {
-    this.teardown();
-    const ctx = this.ctx;
-    this.ctx = null;
-    await ctx.close();
-  },
-
-  teardown() {
-    this.live.forEach((inst) => inst.dispose());
-    this.live.clear();
-  },
-
-  rebuild() {
-    this.teardown();
-    for (const node of graph.nodes.values()) {
-      this.live.set(node.id, BLOCKS[node.type].build(this.ctx, node.params));
-    }
-    for (const e of graph.edges) {
-      const src = this.live.get(e.from.node);
-      const dst = this.live.get(e.to.node);
-      const from = src && src.outputs[e.from.port];
-      const to = dst && dst.inputs[e.to.port];
-      if (from && to) { from.connect(to); if (dst.onConnect) dst.onConnect(e.to.port); }
-    }
-  },
-
-  updateNode(node) {
-    const inst = this.live.get(node.id);
-    if (inst) inst.update(node.params);
-  },
-};
-
-function structureChanged() {
-  if (engine.running) engine.rebuild();
-  save();
-}
-
 function setStatus() {
   const on = engine.running;
   runBtn.textContent = on ? '■ Stop' : '▶ Run';
@@ -459,60 +343,6 @@ runBtn.addEventListener('click', async () => {
   runBtn.disabled = false;
   setStatus();
 });
-
-/* ------------------------------------------------------------------ *
- * Persistence: the diagram is autosaved to localStorage and restored on load
- * ------------------------------------------------------------------ */
-const STORAGE_KEY = 'dsplab.diagram';
-let restoring = false;
-let saveTimer = null;
-
-function serialize() {
-  return {
-    version: 1,
-    pan: { x: pan.x, y: pan.y },
-    nodes: [...graph.nodes.values()].map(({ id, type, x, y, params }) => ({ id, type, x, y, params })),
-    edges: graph.edges.map(({ from, to }) => ({ from, to })),
-  };
-}
-
-function saveNow() {
-  clearTimeout(saveTimer);
-  if (restoring) return;
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(serialize())); } catch (err) { /* storage unavailable or full */ }
-}
-
-function save() {
-  if (restoring) return;
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveNow, 200);
-}
-window.addEventListener('pagehide', saveNow);
-
-// returns false when there is nothing usable saved, so the caller can load the starter graph
-function restore() {
-  let data;
-  try { data = JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch (err) { return false; }
-  if (!data || data.version !== 1 || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) return false;
-
-  restoring = true;
-  try {
-    for (const n of data.nodes) {
-      if (n && BLOCKS[n.type] && Number.isFinite(n.x) && Number.isFinite(n.y)) addNode(n.type, n.x, n.y, n);
-    }
-    for (const e of data.edges) {
-      if (e && e.from && e.to && portEl(e.from.node, e.from.port, 'out') && portEl(e.to.node, e.to.port, 'in')) {
-        addEdge({ node: e.from.node, port: e.from.port }, { node: e.to.node, port: e.to.port });
-      }
-    }
-    if (data.pan && Number.isFinite(data.pan.x) && Number.isFinite(data.pan.y)) setPan(data.pan.x, data.pan.y);
-    redrawEdges();
-  } finally {
-    restoring = false;
-  }
-  select(null);
-  return true;
-}
 
 /* ------------------------------------------------------------------ *
  * Boot: restore the saved diagram, or load a starter flowgraph
