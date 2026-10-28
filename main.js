@@ -5,10 +5,11 @@
  *
  * Each block describes its ports, its parameters (rendered as widgets
  * in the node) and how it maps onto Web Audio nodes:
- *   build(ctx, params) -> { input?, output?, nodes: [...], update(params) }
+ *   build(ctx, params) -> { inputs: {port: AudioNode}, outputs: {port: AudioNode}, update(params), dispose() }
  * ------------------------------------------------------------------ */
 const CATEGORIES = {
   'Source blocks': 'var(--source)',
+  'Processing blocks': 'var(--proc)',
   'Sink blocks':   'var(--sink)',
 };
 
@@ -36,7 +37,7 @@ const BLOCKS = {
       };
       update(p);
       return {
-        output: gain,
+        outputs: { out: gain },
         update,
         dispose() { osc.stop(); osc.disconnect(); gain.disconnect(); },
       };
@@ -57,9 +58,50 @@ const BLOCKS = {
       const update = (p) => gain.gain.setTargetAtTime(p.volume, ctx.currentTime, 0.01);
       update(p);
       return {
-        input: gain,
+        inputs: { in: gain },
         update,
         dispose() { gain.disconnect(); },
+      };
+    },
+  },
+
+  arithmetic: {
+    title: 'Arithmetic',
+    category: 'Processing blocks',
+    inputs: ['a', 'b'],
+    outputs: ['out'],
+    params: [
+      { key: 'operation', label: 'Operation', type: 'select', options: ['add', 'subtract', 'multiply'], default: 'add' },
+    ],
+    // An unconnected input counts as 0. Every operation shares one topology and
+    // is selected by gains, so changing it needs no graph rebuild:
+    //   out = ka*a + kb*b + km*(a*b),  with a*b made by driving a gain's AudioParam with b
+    build(ctx, p) {
+      const a = ctx.createGain(), b = ctx.createGain();
+      const ga = ctx.createGain(), gb = ctx.createGain();
+      const prod = ctx.createGain(), gm = ctx.createGain();
+      const out = ctx.createGain();
+      prod.gain.value = 0;
+      a.connect(ga).connect(out);
+      b.connect(gb).connect(out);
+      a.connect(prod);
+      b.connect(prod.gain);
+      prod.connect(gm).connect(out);
+      const all = [a, b, ga, gb, prod, gm, out];
+      const K = { add: [1, 1, 0], subtract: [1, -1, 0], multiply: [0, 0, 1] };
+      const update = (p) => {
+        const t = ctx.currentTime;
+        const [ka, kb, km] = K[p.operation];
+        ga.gain.setTargetAtTime(ka, t, 0.005);
+        gb.gain.setTargetAtTime(kb, t, 0.005);
+        gm.gain.setTargetAtTime(km, t, 0.005);
+      };
+      update(p);
+      return {
+        inputs: { a, b },
+        outputs: { out },
+        update,
+        dispose() { all.forEach((n) => n.disconnect()); },
       };
     },
   },
@@ -394,7 +436,9 @@ const engine = {
     for (const e of graph.edges) {
       const src = this.live.get(e.from.node);
       const dst = this.live.get(e.to.node);
-      if (src && src.output && dst && dst.input) src.output.connect(dst.input);
+      const from = src && src.outputs[e.from.port];
+      const to = dst && dst.inputs[e.to.port];
+      if (from && to) from.connect(to);
     }
   },
 
