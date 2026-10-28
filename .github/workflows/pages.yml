@@ -1,5 +1,5 @@
-# Publishes main to GitHub Pages. Flow: work on devel (or a feature branch),
-# open a PR into main, merge it; the push to main runs the tests and deploys.
+# Publishes main to GitHub Pages. Flow: branch off main for each feature, open
+# a PR into main, merge it; the push to main runs the tests and deploys.
 # Needs Settings -> Pages -> Source: "GitHub Actions" (enabled by hand, once).
 name: Pages
 

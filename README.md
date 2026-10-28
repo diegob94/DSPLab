@@ -44,6 +44,14 @@ You start with a **Wave Generator** already connected to an **Audio Sink**. Pres
   values, read-only; you change them here.
 - **Toolbar** (top): Run/Stop, delete, and the audio status (the sample rate while running).
 
+### On a phone
+
+On narrow screens (or a phone held sideways) the canvas fills the screen and the two side panels
+become drawers that slide up from the bottom. Use the **Blocks** and **Properties** buttons in the
+toolbar to open one (only one at a time); tapping the empty canvas closes it. **Tap** a block in the
+palette to add it, since drag and drop and double-click don't work well on touch screens. Everything
+else (moving blocks, connecting ports, panning) works with your finger as it does with the mouse.
+
 ## Working with blocks
 
 | To… | Do this |
@@ -85,6 +93,19 @@ Offset adds a constant (DC) level to the wave, so the output swings around that 
 0. It is independent of Amplitude: amplitude 0.5 with offset 0.3 goes from −0.2 to 0.8.
 
 Shown on the block: Waveform, Frequency and Offset.
+
+**Audio Source**: your microphone (or the browser's default audio input). Output: `out`.
+
+| Setting | Range | Default |
+|---|---|---|
+| Gain | 0 – 2 | 1 |
+
+The browser asks for microphone permission when you press **Run** with an Audio Source in the diagram
+(never otherwise). Echo cancellation, noise suppression and automatic gain are turned off so you get the
+raw signal. Wear headphones when sending it to an Audio Sink, or it will feed back. An Audio Source
+added while running stays silent until you press Stop and Run again.
+
+Shown on the block: Gain.
 
 ### Processing blocks
 

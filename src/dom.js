@@ -11,3 +11,7 @@ export const h = (tag, props = {}, ...kids) => {
   e.append(...kids);
   return e;
 };
+
+// Narrow screens (phones): the palette and properties become drawers and a tap replaces drag & drop.
+// Keep in sync with the media query in styles.css.
+export const NARROW = window.matchMedia('(max-width: 760px), (max-height: 500px)');

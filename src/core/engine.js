@@ -13,7 +13,9 @@ export const engine = {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     try {
       // blocks may need to load modules (e.g. an AudioWorklet) before they can be built
-      await Promise.all(Object.values(BLOCKS).map((block) => block.setup && block.setup(ctx)));
+      // (knowing which types are in the diagram lets a block skip intrusive work, e.g. the microphone prompt)
+      const used = new Set([...graph.nodes.values()].map((n) => n.type));
+      await Promise.all(Object.entries(BLOCKS).map(([type, block]) => block.setup && block.setup(ctx, used.has(type))));
     } catch (err) {
       await ctx.close();
       throw err;

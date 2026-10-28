@@ -123,16 +123,16 @@ and for debugging from the console; app code must not use it.
 
 ## Git
 
-- Work happens on `devel`; the remote is `origin` (`github.com/diegob94/DSPlab`). `main` only holds a
-  LICENSE and shares no history with `devel`; don't merge or force-push it without asking.
+- `main` is the only long-lived branch; the remote is `origin` (`github.com/diegob94/DSPlab`). Every
+  feature starts from `main` on a `feature/*` branch and ends with a PR back into `main`. Don't
+  force-push `main` without asking.
 - Commit and push in small, separate commits (a refactor, a feature and the tests that cover it are
   different commits). Run `npm test` first; all tests must pass.
 - No git identity is configured in the container; pass it per command:
   `git -c user.name=... -c user.email=... commit`.
-- Release flow: `devel` (or a `feature/*` branch, ideally in a worktree under `.claude/worktrees/`, which is
+- Release flow: `feature/*` branch off `main` (ideally in a worktree under `.claude/worktrees/`, which is
   git-ignored) -> PR into `main` -> merge. `.github/workflows/pages.yml` runs the tests on every PR to
   `main` and, on a push to `main`, deploys `index.html` + `src/` to GitHub Pages. All paths are
-  relative, so the site works under `/DSPlab/` as-is.
-- `main` and `devel` share no history: the first PR needs `--allow-unrelated-histories` (or main reset
-  to devel). Ask before doing either. Pages must be enabled by hand (Settings -> Pages -> Source:
-  GitHub Actions); ask before enabling it or publishing anything.
+  relative, so the site works under `/DSPlab/` as-is. Merge PRs with a merge commit or rebase, not
+  squash, so branches keep sharing history. Pages must be enabled by hand (Settings -> Pages ->
+  Source: GitHub Actions); ask before enabling it or publishing anything.
