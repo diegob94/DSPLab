@@ -46,12 +46,12 @@ You start with a **Wave Generator** already connected to an **Audio Sink**. Pres
 
 ### On a phone
 
-On narrow screens (or a phone held sideways) the canvas fills the screen and the two side panels
-become drawers that slide up from the bottom. Use the **Blocks** and **Properties** buttons in the
-toolbar to open one (only one at a time); tapping the empty canvas closes it. **Tap** a block in the
-palette to add it, since drag and drop and double-click don't work well on touch screens. Everything
-else (moving blocks, connecting ports, panning) works with your finger as it does with the mouse, and
-pinching the canvas zooms.
+On narrow screens (or a phone held sideways) the canvas fills the screen. **Properties** are always
+shown in a panel below the canvas, and the **Blocks** palette is a drawer that slides up from the
+bottom: open it with the **Blocks** button in the toolbar; tapping the empty canvas closes it. **Tap** a
+block in the palette to add it, since drag and drop and double-click don't work well on touch screens.
+Everything else (moving blocks, connecting ports, panning) works with your finger as it does with the
+mouse, and pinching the canvas zooms.
 
 ## Working with blocks
 
