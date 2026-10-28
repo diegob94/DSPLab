@@ -16,7 +16,7 @@ test('nothing selected shows a hint; selecting a block lists all its parameters'
   assert.match(await page.locator('#props .hint').textContent(), /Select a block/);
   await selectNode(page, 'Wave Generator');
   assert.equal(await page.locator('#props .props-head').textContent(), 'Wave Generator');
-  assert.deepEqual(await page.locator('#props .param label').allTextContents(), ['Waveform', 'Frequency', 'Amplitude']);
+  assert.deepEqual(await page.locator('#props .param label').allTextContents(), ['Waveform', 'Frequency', 'Amplitude', 'Offset']);
 }));
 
 test('nodes only show their key values', () => withApp(app, async (page) => {
