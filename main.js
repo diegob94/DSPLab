@@ -6,6 +6,7 @@
  * Each block describes its ports, its parameters (rendered as widgets
  * in the node) and how it maps onto Web Audio nodes:
  *   build(ctx, params) -> { inputs: {port: AudioNode}, outputs: {port: AudioNode}, update(params), dispose() }
+ * build() may also return onConnect(port), called when an edge feeds that input port.
  * A block may also define ui(node) -> { el, draw(inst) }: a view shown inside the
  * node and redrawn every animation frame (inst is the built instance, or undefined
  * while the engine is stopped).
@@ -71,31 +72,54 @@ const BLOCKS = {
   oscilloscope: {
     title: 'Oscilloscope',
     category: 'Sink blocks',
-    inputs: ['in'],
+    inputs: ['in', 'trigger'],
     outputs: [],
     params: [
       { key: 'timespan', label: 'Time span', type: 'range', scale: 'log', min: 1, max: 100, unit: 'ms', default: 10 },
       { key: 'scale',    label: 'Scale',     type: 'range', scale: 'log', min: 0.1, max: 10, unit: '×', default: 1 },
+      { key: 'level',    label: 'Trig level', type: 'range', min: -1, max: 1, step: 0.01, default: 0 },
     ],
     build(ctx) {
       const analyser = ctx.createAnalyser();
-      analyser.fftSize = 16384;
+      const trig = ctx.createAnalyser();
+      analyser.fftSize = trig.fftSize = 16384;
       const buf = new Float32Array(analyser.fftSize);
+      const trigBuf = new Float32Array(trig.fftSize);
+      const check = new Float32Array(analyser.fftSize);
+      let external = false;
+
+      // Read both analysers as one aligned snapshot: if the audio thread advanced
+      // while we were reading, `in` differs between the first and last read, so retry.
+      const snapshot = () => {
+        for (let attempt = 0; attempt < 4; attempt++) {
+          analyser.getFloatTimeDomainData(buf);
+          trig.getFloatTimeDomainData(trigBuf);
+          analyser.getFloatTimeDomainData(check);
+          if (buf.every((v, i) => v === check[i])) return;
+        }
+      };
+
       return {
-        inputs: { in: analyser },
+        inputs: { in: analyser, trigger: trig },
         outputs: {},
         update() {},
-        // latest `spanMs` of signal, starting at a rising zero crossing so the trace holds still
-        sample(spanMs) {
-          analyser.getFloatTimeDomainData(buf);
+        onConnect(port) { if (port === 'trigger') external = true; },
+        get externalTrigger() { return external; },
+        // latest `spanMs` of `in`, starting at a rising crossing of `level` so the trace holds still.
+        // The trigger input is used when connected, otherwise `in` triggers itself.
+        sample(spanMs, level = 0) {
+          let ref = buf;
+          if (external) { snapshot(); ref = trigBuf; } else analyser.getFloatTimeDomainData(buf);
           const n = Math.min(Math.round(spanMs * ctx.sampleRate / 1000), buf.length >> 1);
+          // newest crossing that still leaves a full window after it; the oldest data
+          // can hold start-up transients
           let start = 0;
-          for (let i = 1; i < buf.length - n; i++) {
-            if (buf[i - 1] < 0 && buf[i] >= 0) { start = i; break; }
+          for (let i = ref.length - n - 1; i > 0; i--) {
+            if (ref[i - 1] < level && ref[i] >= level) { start = i; break; }
           }
           return buf.subarray(start, start + n);
         },
-        dispose() { analyser.disconnect(); },
+        dispose() { analyser.disconnect(); trig.disconnect(); },
       };
     },
     ui(node) {
@@ -121,9 +145,9 @@ const BLOCKS = {
           g.fillStyle = '#6b7482';
           g.font = '10px system-ui, sans-serif';
           if (!inst) { g.fillText('Stopped', 6, 14); return; }
-          g.fillText(`${node.params.timespan} ms`, 6, 14);
+          g.fillText(`${node.params.timespan} ms${inst.externalTrigger ? ' · ext trigger' : ''}`, 6, 14);
 
-          const data = inst.sample(node.params.timespan);
+          const data = inst.sample(node.params.timespan, node.params.level);
           if (data.length < 2) return;
           const amp = (H / 2) * 0.9 * node.params.scale;
           g.strokeStyle = css.getPropertyValue('--sink').trim() || '#e0894a';
@@ -525,7 +549,7 @@ const engine = {
       const dst = this.live.get(e.to.node);
       const from = src && src.outputs[e.from.port];
       const to = dst && dst.inputs[e.to.port];
-      if (from && to) from.connect(to);
+      if (from && to) { from.connect(to); if (dst.onConnect) dst.onConnect(e.to.port); }
     }
   },
 
