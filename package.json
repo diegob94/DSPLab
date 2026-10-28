@@ -1,0 +1,11 @@
+{
+  "name": "dsplab",
+  "private": true,
+  "description": "Browser-only node-based DSP flowgraph editor. The app itself has no dependencies; Playwright is only used by the tests.",
+  "scripts": {
+    "test": "node --test --test-concurrency=1"
+  },
+  "devDependencies": {
+    "playwright": "1.64.1"
+  }
+}

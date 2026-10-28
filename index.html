@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DSPLab</title>
+<link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+
+<header id="toolbar">
+  <h1>DSPLab</h1>
+  <button id="run">▶ Run</button>
+  <button id="delete" disabled>Delete selected</button>
+  <span id="status">Stopped</span>
+</header>
+
+<aside id="props">
+  <h2>Properties</h2>
+  <div id="props-body"></div>
+</aside>
+
+<aside id="palette"></aside>
+
+<main id="canvas">
+  <div id="world">
+    <svg id="wires"></svg>
+  </div>
+</main>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
