@@ -1,6 +1,6 @@
 'use strict';
 const { before, after, test } = require('node:test');
-const { assert, launch, withApp, sleep, selectNode, addFromPalette, connect, setRange, panelControl, snapshot } = require('./helpers');
+const { assert, launch, withApp, sleep, selectNode, addFromPalette, connect, setRange, panelControl, snapshot, startAudio } = require('./helpers');
 
 let app;
 before(async () => { app = await launch(); });
@@ -84,7 +84,7 @@ test('new blocks after a restore get fresh ids', () => withApp(app, async (page)
 test('a restored diagram can run', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Math Operator');
   await page.reload();
-  await page.click('#run');
+  await startAudio(page);
   await sleep(300);
   assert.match(await page.textContent('#status'), /^Running/);
 }));

@@ -1,6 +1,6 @@
 'use strict';
 const { before, after, test } = require('node:test');
-const { assert, launch, withApp, sleep, addFromPalette, connect } = require('./helpers');
+const { assert, launch, withApp, sleep, addFromPalette, connect, startAudio } = require('./helpers');
 
 let app;
 before(async () => { app = await launch(); });
@@ -29,11 +29,12 @@ test('palette groups blocks by category', () => withApp(app, async (page) => {
 }));
 
 test('Run starts the audio engine and Stop ends it', () => withApp(app, async (page) => {
-  await page.click('#run');
+  await startAudio(page);
   await sleep(300);
   assert.match(await page.textContent('#status'), /^Running @ \d+ Hz$/);
   await page.click('#run');
-  await sleep(200);
+  await page.waitForFunction(() => !dsplab.engine.running);
+  await sleep(100);
   assert.equal(await page.textContent('#status'), 'Stopped');
 }));
 

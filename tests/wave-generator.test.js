@@ -1,6 +1,6 @@
 'use strict';
 const { before, after, test } = require('node:test');
-const { assert, launch, withApp, selectNode, setRange } = require('./helpers');
+const { assert, launch, withApp, selectNode, setRange, startAudio } = require('./helpers');
 
 let app;
 before(async () => { app = await launch(); });
@@ -24,8 +24,7 @@ test('frequency is a logarithmic slider from 1 Hz to 20 kHz', () => withApp(app,
 
 test('the slider keeps working while the audio runs', () => withApp(app, async (page) => {
   await selectNode(page, 'Wave Generator');
-  await page.click('#run');
-  await page.waitForFunction(() => dsplab.engine.running);
+  await startAudio(page);
   await setRange(freqSlider(page), 0.4);
   await setRange(freqSlider(page), 0.5);
   assert.match(await page.textContent('#status'), /^Running/);

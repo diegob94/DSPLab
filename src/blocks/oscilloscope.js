@@ -15,51 +15,88 @@ export const oscilloscope = {
     { key: 'channels', label: 'Inputs',     type: 'select', options: [1, 2, 3, 4, 5, 6, 7, 8], ports: true, default: 2 },
     { key: 'trigger',  label: 'Trigger',    show: true, type: 'select', options: (p) => inputNames(p), default: 'ch1' },
     { key: 'level',    label: 'Trig level', type: 'range', min: -1, max: 1, step: 0.01, default: 0 },
-    { key: 'timespan', label: 'Time span',  show: true, type: 'range', scale: 'log', min: 1, max: 100, unit: 'ms', default: 10 },
+    { key: 'timespan', label: 'Time span',  show: true, type: 'range', scale: 'log', min: 1, max: 1000, unit: 'ms', default: 10 },
     { key: 'scale',    label: 'Scale',      type: 'range', scale: 'log', min: 0.1, max: 10, unit: '×', default: 1 },
   ],
+  // the capture processor must be registered before build() can create the worklet node
+  setup(ctx) {
+    return ctx.audioWorklet.addModule(new URL('./scope-processor.js', import.meta.url).href);
+  },
   build(ctx, p) {
     const names = inputNames(p);
-    const chans = names.map(() => {
-      const an = ctx.createAnalyser();
-      an.fftSize = 16384;
-      return { an, buf: new Float32Array(an.fftSize), check: new Float32Array(an.fftSize), connected: false };
+    const cap = Math.ceil(ctx.sampleRate * 2);        // history kept per channel: 2 s
+    const maxWindow = Math.ceil(ctx.sampleRate);      // longest time span: 1 s
+    const rings = names.map(() => new Float32Array(cap));
+    const windows = names.map(() => new Float32Array(maxWindow));
+    const search = new Float32Array(cap);
+    const connected = names.map(() => false);
+    let written = 0;                                  // samples received so far, per channel
+
+    const capture = new AudioWorkletNode(ctx, 'dsplab-scope', {
+      numberOfInputs: names.length, numberOfOutputs: 1, outputChannelCount: [1],
+      channelCount: 1, channelCountMode: 'explicit',
+    });
+    // the node only runs if it reaches the destination, so route its (silent) output there
+    const mute = ctx.createGain();
+    mute.gain.value = 0;
+    capture.connect(mute).connect(ctx.destination);
+    // one gain per channel: a cable connects to an AudioNode, and each feeds one input of the worklet
+    const taps = names.map((_, i) => {
+      const g = ctx.createGain();
+      g.connect(capture, 0, i);
+      return g;
     });
 
-    // Read the connected channels as one time-aligned snapshot: if the audio thread
-    // advanced while we were reading, a channel differs between two consecutive reads, so retry.
-    const readAll = (live) => {
-      for (let attempt = 0; attempt < 4; attempt++) {
-        live.forEach((c) => c.an.getFloatTimeDomainData(c.buf));
-        if (live.length < 2) return;
-        live.forEach((c) => c.an.getFloatTimeDomainData(c.check));
-        if (live.every((c) => c.buf.every((v, i) => v === c.check[i]))) return;
-      }
+    capture.port.onmessage = ({ data }) => {
+      const len = data[0].length;
+      const head = written % cap;
+      const first = Math.min(len, cap - head);
+      data.forEach((chunk, c) => {
+        rings[c].set(chunk.subarray(0, first), head);
+        if (first < len) rings[c].set(chunk.subarray(first), 0);
+      });
+      written += len;
+    };
+
+    // copy `len` samples of a ring into dst, starting `from` samples into its oldest-first view
+    const read = (ring, from, len, dst) => {
+      const s = (written + from) % cap;
+      const first = Math.min(len, cap - s);
+      dst.set(ring.subarray(s, s + first), 0);
+      if (first < len) dst.set(ring.subarray(0, len - first), first);
     };
 
     return {
-      inputs: Object.fromEntries(names.map((name, i) => [name, chans[i].an])),
+      inputs: Object.fromEntries(names.map((name, i) => [name, taps[i]])),
       outputs: {},
       update() {},
-      onConnect(port) { chans[names.indexOf(port)].connected = true; },
+      onConnect(port) { connected[names.indexOf(port)] = true; },
       // One window per connected channel (null for unconnected ones), all starting at the same
-      // rising crossing of `level` on the `trigger` channel so the traces hold still.
+      // rising crossing of `level` on the `trigger` channel so the traces hold still. Without a
+      // trigger crossing the newest samples are shown.
       sample(spanMs, level = 0, trigger = names[0]) {
-        const live = chans.filter((c) => c.connected);
-        readAll(live);
-        const n = Math.min(Math.round(spanMs * ctx.sampleRate / 1000), 16384 >> 1);
-        const t = chans[names.indexOf(trigger)];
-        let start = 0;
-        if (t && t.connected) {
-          // newest crossing that still leaves a full window after it; the oldest data
-          // can hold start-up transients
-          for (let i = t.buf.length - n - 1; i > 0; i--) {
-            if (t.buf[i - 1] < level && t.buf[i] >= level) { start = i; break; }
+        const n = Math.min(Math.round(spanMs * ctx.sampleRate / 1000), maxWindow);
+        let start = cap - n;
+        const t = names.indexOf(trigger);
+        if (t >= 0 && connected[t]) {
+          read(rings[t], 0, cap, search);
+          // newest crossing that still leaves a full window after it
+          for (let i = cap - n - 1; i > 0; i--) {
+            if (search[i - 1] < level && search[i] >= level) { start = i; break; }
           }
         }
-        return chans.map((c) => (c.connected ? c.buf.subarray(start, start + n) : null));
+        return names.map((_, c) => {
+          if (!connected[c]) return null;
+          read(rings[c], start, n, windows[c]);
+          return windows[c].subarray(0, n);
+        });
       },
-      dispose() { chans.forEach((c) => c.an.disconnect()); },
+      dispose() {
+        capture.port.onmessage = null;
+        taps.forEach((g) => g.disconnect());
+        capture.disconnect();
+        mute.disconnect();
+      },
     };
   },
   ui(node) {
@@ -91,11 +128,26 @@ export const oscilloscope = {
         inst.sample(node.params.timespan, node.params.level, node.params.trigger).forEach((data, k) => {
           if (!data || data.length < 2) return;
           g.strokeStyle = SCOPE_COLORS[k % SCOPE_COLORS.length];
+          const yOf = (v) => Math.min(H, Math.max(0, H / 2 - v * amp));
           g.beginPath();
-          for (let i = 0; i < data.length; i++) {
-            const x = i * (W - 1) / (data.length - 1);
-            const y = Math.min(H, Math.max(0, H / 2 - data[i] * amp));
-            if (i) g.lineTo(x, y); else g.moveTo(x, y);
+          if (data.length <= 4 * W) {
+            for (let i = 0; i < data.length; i++) {
+              const x = i * (W - 1) / (data.length - 1);
+              if (i) g.lineTo(x, yOf(data[i])); else g.moveTo(x, yOf(data[i]));
+            }
+          } else {
+            // many samples per pixel: draw each column's lowest and highest sample, in time order
+            for (let x = 0; x < W; x++) {
+              const end = Math.floor((x + 1) * data.length / W);
+              let lo = Infinity, hi = -Infinity, iLo = 0, iHi = 0;
+              for (let i = Math.floor(x * data.length / W); i < end; i++) {
+                if (data[i] < lo) { lo = data[i]; iLo = i; }
+                if (data[i] > hi) { hi = data[i]; iHi = i; }
+              }
+              const [first, last] = iLo < iHi ? [lo, hi] : [hi, lo];
+              if (x) g.lineTo(x, yOf(first)); else g.moveTo(x, yOf(first));
+              g.lineTo(x, yOf(last));
+            }
           }
           g.stroke();
         });

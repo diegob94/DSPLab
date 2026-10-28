@@ -1,6 +1,6 @@
 'use strict';
 const { before, after, test } = require('node:test');
-const { assert, launch, withApp, sleep, selectNode, addFromPalette, panelControl } = require('./helpers');
+const { assert, launch, withApp, sleep, selectNode, addFromPalette, panelControl, setRange, startAudio } = require('./helpers');
 
 let app;
 before(async () => { app = await launch(); });
@@ -110,7 +110,7 @@ test('a single input draws a 440 Hz sine: 4 cycles in 10 ms, peak 0.5', () => wi
     return n;
   });
   assert.equal(await lit(), 0, 'nothing drawn while stopped');
-  await page.click('#run');
+  await startAudio(page);
   await sleep(600);
   const s = await page.evaluate(() => {
     const a = Array.from(dsplab.engine.live.get(scope.id).sample(10, 0, 'ch1')[0]);
@@ -122,9 +122,50 @@ test('a single input draws a 440 Hz sine: 4 cycles in 10 ms, peak 0.5', () => wi
   assert.ok(await lit() > 100, 'trace drawn while running');
 }));
 
+test('the time span reaches 1 s', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  const slider = panelControl(page, 'Time span');
+  await setRange(slider, 1);
+  assert.equal(await page.evaluate(() => [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope').params.timespan), 1000);
+  assert.equal(await page.locator('.node:has-text("Oscilloscope") [data-key=timespan]').textContent(), '1000 ms');
+  await setRange(slider, 0);
+  assert.equal(await page.locator('.node:has-text("Oscilloscope") [data-key=timespan]').textContent(), '1 ms');
+}));
+
+test('a 1 s window holds a full second of signal (440 cycles of a 440 Hz sine)', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  await page.evaluate(() => {
+    window.scope = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
+    dsplab.addEdge({ node: [...dsplab.graph.nodes.values()][0].id, port: 'out' }, { node: scope.id, port: 'ch1' });
+  });
+  await startAudio(page);
+  await sleep(2300);                       // let the 2 s history fill up
+  const r = await page.evaluate(() => {
+    const sr = dsplab.engine.ctx.sampleRate;
+    const w = Array.from(dsplab.engine.live.get(scope.id).sample(1000, 0, 'ch1')[0]);
+    let zeros = 0, run = 0, longestZeroRun = 0;
+    for (const v of w) { if (v === 0) { zeros++; run++; longestZeroRun = Math.max(longestZeroRun, run); } else run = 0; }
+    return { sr, n: w.length, cycles: w.filter((v, k) => k && w[k - 1] < 0 && v >= 0).length, min: Math.min(...w), max: Math.max(...w), longestZeroRun };
+  });
+  assert.equal(r.n, r.sr, 'one second of samples');
+  assert.ok(r.cycles >= 438 && r.cycles <= 441, `cycles ${r.cycles}`);
+  assert.ok(Math.abs(r.max - 0.5) < 0.01 && Math.abs(r.min + 0.5) < 0.01, `peak ${r.min}..${r.max}`);
+  assert.ok(r.longestZeroRun < 50, 'no gaps: the whole window is real signal');
+
+  const lit = await page.evaluate(() => {
+    const c = document.querySelector('canvas.scope');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] > 200 && d[i + 1] > 120 && d[i + 2] < 120) n++;
+    return n;
+  });
+  assert.equal(await page.locator('.node:has-text("Oscilloscope") canvas.scope').count(), 1);
+  assert.ok(lit > 100, 'the long window is drawn');
+}));
+
 test('the trigger channel decides where every trace starts', () => withApp(app, async (page) => {
   await wireScope(page);
-  await page.click('#run');
+  await startAudio(page);
   await sleep(500);
 
   const onCh1 = await readFrames(page, { trigger: 'ch1' });
@@ -138,7 +179,7 @@ test('the trigger channel decides where every trace starts', () => withApp(app, 
 
 test('the trigger level is honoured', () => withApp(app, async (page) => {
   await wireScope(page);
-  await page.click('#run');
+  await startAudio(page);
   await sleep(500);
   const r = await readFrames(page, { trigger: 'ch1', level: 0.25 });
   assert.ok(r.first[0] > 0.2 && r.first[1] < 0.32, `first samples ${r.first}`);

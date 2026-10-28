@@ -10,9 +10,17 @@ export const engine = {
   get running() { return !!this.ctx; },
 
   async start() {
-    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    try {
+      // blocks may need to load modules (e.g. an AudioWorklet) before they can be built
+      await Promise.all(Object.values(BLOCKS).map((block) => block.setup && block.setup(ctx)));
+    } catch (err) {
+      await ctx.close();
+      throw err;
+    }
+    this.ctx = ctx;
     this.rebuild();
-    await this.ctx.resume();
+    await ctx.resume();
   },
 
   async stop() {
