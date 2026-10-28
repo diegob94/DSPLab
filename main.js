@@ -65,8 +65,8 @@ const BLOCKS = {
     },
   },
 
-  arithmetic: {
-    title: 'Arithmetic',
+  math_operator: {
+    title: 'Math Operator',
     category: 'Processing blocks',
     inputs: ['a', 'b'],
     outputs: ['out'],
