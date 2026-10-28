@@ -9,7 +9,7 @@ export const waveGenerator = {
     { key: 'waveform',  label: 'Waveform',  show: true, type: 'select', options: ['sine', 'square', 'sawtooth', 'triangle'], default: 'sine' },
     { key: 'frequency', label: 'Frequency', show: true, type: 'range', scale: 'log', min: 1, max: 20000, unit: 'Hz', default: 440 },
     { key: 'amplitude', label: 'Amplitude', type: 'range',  min: 0, max: 1, step: 0.01, default: 0.5 },
-    { key: 'offset',    label: 'Offset',    type: 'range',  min: -1, max: 1, step: 0.01, default: 0 },
+    { key: 'offset',    label: 'Offset',    show: true, type: 'range',  min: -1, max: 1, step: 0.01, default: 0 },
   ],
   build(ctx, p) {
     const osc = ctx.createOscillator();

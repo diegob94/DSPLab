@@ -84,7 +84,7 @@ the oscillators restarting their phase.
 Offset adds a constant (DC) level to the wave, so the output swings around that level instead of around
 0. It is independent of Amplitude: amplitude 0.5 with offset 0.3 goes from −0.2 to 0.8.
 
-Shown on the block: Waveform and Frequency.
+Shown on the block: Waveform, Frequency and Offset.
 
 ### Processing blocks
 

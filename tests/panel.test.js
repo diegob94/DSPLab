@@ -21,7 +21,7 @@ test('nothing selected shows a hint; selecting a block lists all its parameters'
 
 test('nodes only show their key values', () => withApp(app, async (page) => {
   const rows = (title) => page.locator(`.node:has-text("${title}") .kv span`).allTextContents();
-  assert.deepEqual(await rows('Wave Generator'), ['Waveform', 'Frequency']);
+  assert.deepEqual(await rows('Wave Generator'), ['Waveform', 'Frequency', 'Offset']);
   assert.deepEqual(await rows('Audio Sink'), ['Volume']);
   await addFromPalette(page, 'Math Operator');
   assert.deepEqual(await rows('Math Operator'), ['Operation']);
