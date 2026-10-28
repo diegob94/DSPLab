@@ -7,6 +7,10 @@ when you press Run.
 
 Language: the user writes in Spanish; code, comments, commit messages and UI text are in English.
 
+User-facing documentation is in `README.md` (a user guide: screen, blocks and their settings, recipes,
+saving, troubleshooting). When you change what a block does, a setting's range/default or an
+interaction, update it in the same commit.
+
 ## Commands
 
 ```
@@ -104,6 +108,9 @@ and for debugging from the console; app code must not use it.
 
 ## Gotchas
 
+- The diagram is also saved on `pagehide`, so removing the localStorage key by hand and reloading does
+  **not** reset it (the page writes its state back as it unloads). In tests, put a diagram in storage
+  before the app starts with `withApp(..., { seed })`.
 - Web Audio only starts after a user gesture, so the diagram is restored on load but audio waits for Run.
 - `AnalyserNode` can't hold more than 32768 samples (0.74 s at 44.1 kHz), which is why the oscilloscope
   captures through an `AudioWorklet` into 2 s ring buffers (`blocks/scope-processor.js`).
