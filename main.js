@@ -7,6 +7,9 @@
  * in the node) and how it maps onto Web Audio nodes:
  *   build(ctx, params) -> { inputs: {port: AudioNode}, outputs: {port: AudioNode}, update(params), dispose() }
  * build() may also return onConnect(port), called when an edge feeds that input port.
+ * `inputs` may be a function of the params (a block with a configurable number of ports); a
+ * parameter flagged `ports: true` rebuilds the node's ports when it changes, and a select's
+ * `options` may be a function of the params too.
  * Parameters are edited in the properties panel; those marked `show: true` are also
  * displayed (read-only) on the node itself.
  * A block may also define ui(node) -> { el, draw(inst) }: a view shown inside the
@@ -18,6 +21,9 @@ const CATEGORIES = {
   'Processing blocks': 'var(--proc)',
   'Sink blocks':   'var(--sink)',
 };
+
+// trace / port colours of the oscilloscope channels
+const SCOPE_COLORS = ['#f2a65a', '#4dd0e1', '#8bd17c', '#e57fd0', '#f5d76e', '#7aa7ff', '#ff7b72', '#b5e853'];
 
 const BLOCKS = {
   wave_generator: {
@@ -74,61 +80,64 @@ const BLOCKS = {
   oscilloscope: {
     title: 'Oscilloscope',
     category: 'Sink blocks',
-    inputs: ['in', 'trigger'],
+    inputs: (p) => Array.from({ length: p.channels }, (_, i) => `ch${i + 1}`),
     outputs: [],
+    portColor: (port) => SCOPE_COLORS[(parseInt(port.slice(2), 10) - 1) % SCOPE_COLORS.length],
     params: [
-      { key: 'timespan', label: 'Time span', show: true, type: 'range', scale: 'log', min: 1, max: 100, unit: 'ms', default: 10 },
-      { key: 'scale',    label: 'Scale',     type: 'range', scale: 'log', min: 0.1, max: 10, unit: '×', default: 1 },
+      { key: 'channels', label: 'Inputs',     type: 'range', min: 1, max: 8, step: 1, ports: true, default: 2 },
+      { key: 'trigger',  label: 'Trigger',    show: true, type: 'select', options: (p) => BLOCKS.oscilloscope.inputs(p), default: 'ch1' },
       { key: 'level',    label: 'Trig level', type: 'range', min: -1, max: 1, step: 0.01, default: 0 },
+      { key: 'timespan', label: 'Time span',  show: true, type: 'range', scale: 'log', min: 1, max: 100, unit: 'ms', default: 10 },
+      { key: 'scale',    label: 'Scale',      type: 'range', scale: 'log', min: 0.1, max: 10, unit: '×', default: 1 },
     ],
-    build(ctx) {
-      const analyser = ctx.createAnalyser();
-      const trig = ctx.createAnalyser();
-      analyser.fftSize = trig.fftSize = 16384;
-      const buf = new Float32Array(analyser.fftSize);
-      const trigBuf = new Float32Array(trig.fftSize);
-      const check = new Float32Array(analyser.fftSize);
-      let external = false;
+    build(ctx, p) {
+      const names = BLOCKS.oscilloscope.inputs(p);
+      const chans = names.map(() => {
+        const an = ctx.createAnalyser();
+        an.fftSize = 16384;
+        return { an, buf: new Float32Array(an.fftSize), check: new Float32Array(an.fftSize), connected: false };
+      });
 
-      // Read both analysers as one aligned snapshot: if the audio thread advanced
-      // while we were reading, `in` differs between the first and last read, so retry.
-      const snapshot = () => {
+      // Read the connected channels as one time-aligned snapshot: if the audio thread
+      // advanced while we were reading, a channel differs between two consecutive reads, so retry.
+      const readAll = (live) => {
         for (let attempt = 0; attempt < 4; attempt++) {
-          analyser.getFloatTimeDomainData(buf);
-          trig.getFloatTimeDomainData(trigBuf);
-          analyser.getFloatTimeDomainData(check);
-          if (buf.every((v, i) => v === check[i])) return;
+          live.forEach((c) => c.an.getFloatTimeDomainData(c.buf));
+          if (live.length < 2) return;
+          live.forEach((c) => c.an.getFloatTimeDomainData(c.check));
+          if (live.every((c) => c.buf.every((v, i) => v === c.check[i]))) return;
         }
       };
 
       return {
-        inputs: { in: analyser, trigger: trig },
+        inputs: Object.fromEntries(names.map((name, i) => [name, chans[i].an])),
         outputs: {},
         update() {},
-        onConnect(port) { if (port === 'trigger') external = true; },
-        get externalTrigger() { return external; },
-        // latest `spanMs` of `in`, starting at a rising crossing of `level` so the trace holds still.
-        // The trigger input is used when connected, otherwise `in` triggers itself.
-        sample(spanMs, level = 0) {
-          let ref = buf;
-          if (external) { snapshot(); ref = trigBuf; } else analyser.getFloatTimeDomainData(buf);
-          const n = Math.min(Math.round(spanMs * ctx.sampleRate / 1000), buf.length >> 1);
-          // newest crossing that still leaves a full window after it; the oldest data
-          // can hold start-up transients
+        onConnect(port) { chans[names.indexOf(port)].connected = true; },
+        // One window per connected channel (null for unconnected ones), all starting at the same
+        // rising crossing of `level` on the `trigger` channel so the traces hold still.
+        sample(spanMs, level = 0, trigger = names[0]) {
+          const live = chans.filter((c) => c.connected);
+          readAll(live);
+          const n = Math.min(Math.round(spanMs * ctx.sampleRate / 1000), 16384 >> 1);
+          const t = chans[names.indexOf(trigger)];
           let start = 0;
-          for (let i = ref.length - n - 1; i > 0; i--) {
-            if (ref[i - 1] < level && ref[i] >= level) { start = i; break; }
+          if (t && t.connected) {
+            // newest crossing that still leaves a full window after it; the oldest data
+            // can hold start-up transients
+            for (let i = t.buf.length - n - 1; i > 0; i--) {
+              if (t.buf[i - 1] < level && t.buf[i] >= level) { start = i; break; }
+            }
           }
-          return buf.subarray(start, start + n);
+          return chans.map((c) => (c.connected ? c.buf.subarray(start, start + n) : null));
         },
-        dispose() { analyser.disconnect(); trig.disconnect(); },
+        dispose() { chans.forEach((c) => c.an.disconnect()); },
       };
     },
     ui(node) {
       const W = 220, H = 130, dpr = window.devicePixelRatio || 1;
       const el = h('canvas', { className: 'scope', width: W * dpr, height: H * dpr });
       const g = el.getContext('2d');
-      const css = getComputedStyle(document.documentElement);
       return {
         el,
         draw(inst) {
@@ -147,20 +156,21 @@ const BLOCKS = {
           g.fillStyle = '#6b7482';
           g.font = '10px system-ui, sans-serif';
           if (!inst) { g.fillText('Stopped', 6, 14); return; }
-          g.fillText(`${node.params.timespan} ms${inst.externalTrigger ? ' · ext trigger' : ''}`, 6, 14);
+          g.fillText(`${node.params.timespan} ms · trigger ${node.params.trigger}`, 6, 14);
 
-          const data = inst.sample(node.params.timespan, node.params.level);
-          if (data.length < 2) return;
           const amp = (H / 2) * 0.9 * node.params.scale;
-          g.strokeStyle = css.getPropertyValue('--sink').trim() || '#e0894a';
           g.lineWidth = 1.5;
-          g.beginPath();
-          for (let i = 0; i < data.length; i++) {
-            const x = i * (W - 1) / (data.length - 1);
-            const y = Math.min(H, Math.max(0, H / 2 - data[i] * amp));
-            if (i) g.lineTo(x, y); else g.moveTo(x, y);
-          }
-          g.stroke();
+          inst.sample(node.params.timespan, node.params.level, node.params.trigger).forEach((data, k) => {
+            if (!data || data.length < 2) return;
+            g.strokeStyle = SCOPE_COLORS[k % SCOPE_COLORS.length];
+            g.beginPath();
+            for (let i = 0; i < data.length; i++) {
+              const x = i * (W - 1) / (data.length - 1);
+              const y = Math.min(H, Math.max(0, H / 2 - data[i] * amp));
+              if (i) g.lineTo(x, y); else g.moveTo(x, y);
+            }
+            g.stroke();
+          });
         },
       };
     },
@@ -284,10 +294,9 @@ function addNode(type, x, y, saved = {}) {
   const def = BLOCKS[type];
   const id = Number.isInteger(saved.id) ? saved.id : graph.nextId;
   graph.nextId = Math.max(graph.nextId, id + 1);
-  const node = {
-    id, type, x: Math.round(x), y: Math.round(y),
-    params: Object.fromEntries(def.params.map((p) => [p.key, validParam(p, saved.params && saved.params[p.key])])),
-  };
+  const params = {};
+  for (const p of def.params) params[p.key] = validParam(p, saved.params && saved.params[p.key], params);
+  const node = { id, type, x: Math.round(x), y: Math.round(y), params };
   node.el = renderNode(node, def);
   graph.nodes.set(node.id, node);
   world.append(node.el);
@@ -295,6 +304,9 @@ function addNode(type, x, y, saved = {}) {
   structureChanged();
   return node;
 }
+
+const optionsOf = (p, params) => (typeof p.options === 'function' ? p.options(params) : p.options);
+const portNames = (def, dir, params) => (typeof def[dir] === 'function' ? def[dir](params) : def[dir]);
 
 const fmt = (p, v) => p.unit ? `${v} ${p.unit}` : String(v);
 
@@ -306,9 +318,11 @@ function refreshSummary(node) {
 }
 
 // a saved value is only trusted if it still fits the parameter definition
-function validParam(p, v) {
-  const ok = p.type === 'select' ? p.options.includes(v) : Number.isFinite(v);
-  return ok ? v : p.default;
+function validParam(p, v, params) {
+  if (p.type === 'select') return optionsOf(p, params).includes(v) ? v : p.default;
+  if (!Number.isFinite(v)) return p.default;
+  const c = clamp(v, p.min, p.max);
+  return p.step === 1 ? Math.round(c) : c;
 }
 
 function renderNode(node, def) {
@@ -320,8 +334,11 @@ function renderNode(node, def) {
   const title = h('div', { className: 'node-title', textContent: def.title });
   el.append(title);
 
-  def.inputs.forEach((name) => el.append(portRow('in', name, node.id)));
-  def.outputs.forEach((name) => el.append(portRow('out', name, node.id)));
+  for (const dir of ['in', 'out']) {
+    for (const name of portNames(def, dir === 'in' ? 'inputs' : 'outputs', node.params)) {
+      el.append(portRow(dir, name, node.id, def.portColor && def.portColor(name)));
+    }
+  }
 
   const body = h('div', { className: 'node-body' });
   if (def.ui) { node.view = def.ui(node); body.append(node.view.el); }
@@ -355,15 +372,37 @@ function renderNode(node, def) {
   return el;
 }
 
-function portRow(dir, name, nodeId) {
+function portRow(dir, name, nodeId, color) {
   const row = h('div', { className: `port-row ${dir}` });
   const dot = h('div', { className: `port ${dir}` });
+  if (color) row.style.setProperty('--cat', color);
   dot.dataset.node = nodeId;
   dot.dataset.port = name;
   dot.dataset.dir = dir;
   dot.addEventListener('pointerdown', (e) => startConnect(e, dot));
-  row.append(dot, h('span', { className: 'port-label', textContent: name }));
+  const label = h('span', { className: 'port-label', textContent: name });
+  if (color) label.style.color = color;
+  row.append(dot, label);
   return row;
+}
+
+// re-render the input ports after a parameter changed their number
+function rebuildPorts(node) {
+  const names = portNames(BLOCKS[node.type], 'inputs', node.params);
+  graph.edges.filter((e) => e.to.node === node.id && !names.includes(e.to.port)).forEach(removeEdge);
+  node.el.querySelectorAll('.port-row.in').forEach((row) => row.remove());
+  const def = BLOCKS[node.type];
+  node.el.querySelector('.node-title').after(...names.map((name) => portRow('in', name, node.id, def.portColor && def.portColor(name))));
+  redrawEdges();
+  structureChanged();
+}
+
+// a select whose options depend on other params may have lost its value
+function syncParams(node) {
+  for (const p of BLOCKS[node.type].params) {
+    if (p.type === 'select' && !optionsOf(p, node.params).includes(node.params[p.key])) node.params[p.key] = p.default;
+  }
+  refreshSummary(node);
 }
 
 function paramWidget(node, p) {
@@ -383,7 +422,7 @@ function paramWidget(node, p) {
   let input;
   if (p.type === 'select') {
     input = h('select', { id });
-    p.options.forEach((o) => input.append(h('option', { value: o, textContent: o })));
+    optionsOf(p, node.params).forEach((o) => input.append(h('option', { value: o, textContent: o })));
   } else if (log) {
     input = h('input', { id, type: 'range', min: 0, max: 1, step: 0.001 });
   } else {
@@ -406,6 +445,16 @@ function paramWidget(node, p) {
     engine.updateNode(node);
     save();
   });
+  if (p.ports) {
+    // applied on release, so dragging a slider across a smaller value doesn't drop cables on the way
+    input.addEventListener('change', () => {
+      syncParams(node);
+      rebuildPorts(node);
+      renderProps();
+      const again = document.getElementById(id);
+      if (again) again.focus();
+    });
+  }
   return wrap;
 }
 
