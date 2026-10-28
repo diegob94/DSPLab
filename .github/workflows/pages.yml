@@ -1,0 +1,53 @@
+# Publishes main to GitHub Pages. Flow: work on devel (or a feature branch),
+# open a PR into main, merge it; the push to main runs the tests and deploys.
+# Needs Settings -> Pages -> Source: "GitHub Actions" (enabled by hand, once).
+name: Pages
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+
+  deploy:
+    # Pull requests only run the tests; only main is published.
+    if: github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      # The site is just the static app; all paths are relative, so it works under /DSPlab/.
+      - name: Stage the site
+        run: mkdir _site && cp -r index.html src _site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
