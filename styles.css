@@ -20,8 +20,8 @@ body {
   font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
   display: grid;
   grid-template-rows: 44px 1fr;
-  grid-template-columns: 1fr 220px;
-  grid-template-areas: "bar bar" "canvas side";
+  grid-template-columns: 240px 1fr 220px;
+  grid-template-areas: "bar bar bar" "props canvas side";
   overflow: hidden;
 }
 
@@ -119,3 +119,28 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
 .param input[type=range] { padding: 0; accent-color: var(--accent); }
 .param .val { grid-column: 2; color: var(--muted); font-size: 11px; margin-top: -4px; }
 .scope { display: block; width: 220px; height: 130px; border: 1px solid var(--border); border-radius: 4px; }
+
+/* properties panel */
+#props {
+  grid-area: props;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  padding: 10px; overflow-y: auto;
+}
+#props h2 {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--muted); margin: 2px 0 10px;
+}
+#props .hint { color: var(--muted); font-size: 12px; margin: 0; }
+.props-head {
+  font-weight: 600; font-size: 14px; padding-left: 8px;
+  border-left: 3px solid var(--cat, var(--accent));
+}
+.props-cat { color: var(--muted); font-size: 11px; margin: 2px 0 12px 11px; }
+#props .param { grid-template-columns: 84px 1fr; margin-bottom: 8px; }
+#props .kv { margin: 6px 0; }
+
+/* read-only values on a node */
+.kv { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
+.kv span { color: var(--muted); }
+.kv b { font-weight: 500; font-variant-numeric: tabular-nums; }

@@ -7,6 +7,8 @@
  * in the node) and how it maps onto Web Audio nodes:
  *   build(ctx, params) -> { inputs: {port: AudioNode}, outputs: {port: AudioNode}, update(params), dispose() }
  * build() may also return onConnect(port), called when an edge feeds that input port.
+ * Parameters are edited in the properties panel; those marked `show: true` are also
+ * displayed (read-only) on the node itself.
  * A block may also define ui(node) -> { el, draw(inst) }: a view shown inside the
  * node and redrawn every animation frame (inst is the built instance, or undefined
  * while the engine is stopped).
@@ -24,8 +26,8 @@ const BLOCKS = {
     inputs: [],
     outputs: ['out'],
     params: [
-      { key: 'waveform',  label: 'Waveform',  type: 'select', options: ['sine', 'square', 'sawtooth', 'triangle'], default: 'sine' },
-      { key: 'frequency', label: 'Frequency', type: 'range', scale: 'log', min: 1, max: 20000, unit: 'Hz', default: 440 },
+      { key: 'waveform',  label: 'Waveform',  show: true, type: 'select', options: ['sine', 'square', 'sawtooth', 'triangle'], default: 'sine' },
+      { key: 'frequency', label: 'Frequency', show: true, type: 'range', scale: 'log', min: 1, max: 20000, unit: 'Hz', default: 440 },
       { key: 'amplitude', label: 'Amplitude', type: 'range',  min: 0, max: 1, step: 0.01, default: 0.5 },
     ],
     build(ctx, p) {
@@ -54,7 +56,7 @@ const BLOCKS = {
     inputs: ['in'],
     outputs: [],
     params: [
-      { key: 'volume', label: 'Volume', type: 'range', min: 0, max: 1, step: 0.01, default: 0.8 },
+      { key: 'volume', label: 'Volume', show: true, type: 'range', min: 0, max: 1, step: 0.01, default: 0.8 },
     ],
     build(ctx, p) {
       const gain = ctx.createGain();
@@ -75,7 +77,7 @@ const BLOCKS = {
     inputs: ['in', 'trigger'],
     outputs: [],
     params: [
-      { key: 'timespan', label: 'Time span', type: 'range', scale: 'log', min: 1, max: 100, unit: 'ms', default: 10 },
+      { key: 'timespan', label: 'Time span', show: true, type: 'range', scale: 'log', min: 1, max: 100, unit: 'ms', default: 10 },
       { key: 'scale',    label: 'Scale',     type: 'range', scale: 'log', min: 0.1, max: 10, unit: '×', default: 1 },
       { key: 'level',    label: 'Trig level', type: 'range', min: -1, max: 1, step: 0.01, default: 0 },
     ],
@@ -170,7 +172,7 @@ const BLOCKS = {
     inputs: ['a', 'b'],
     outputs: ['out'],
     params: [
-      { key: 'operation', label: 'Operation', type: 'select', options: ['add', 'subtract', 'multiply'], default: 'add' },
+      { key: 'operation', label: 'Operation', show: true, type: 'select', options: ['add', 'subtract', 'multiply'], default: 'add' },
     ],
     // An unconnected input counts as 0. Every operation shares one topology and
     // is selected by gains, so changing it needs no graph rebuild:
@@ -228,6 +230,7 @@ const wires  = $('#wires');
 const runBtn = $('#run');
 const delBtn = $('#delete');
 const statusEl = $('#status');
+const propsBody = $('#props-body');
 const pan = { x: 0, y: 0 };
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -262,7 +265,7 @@ function buildPalette() {
     }
   }
   pal.append(h('p', { className: 'hint', textContent:
-    'Drag from an output port (right) to an input port (left) to connect blocks. Drag the background to pan. Delete removes the selection.' }));
+    'Drag from an output port (right) to an input port (left) to connect blocks. Select a block to edit it in the properties panel. Drag the background to pan. Delete removes the selection.' }));
 }
 
 canvas.addEventListener('dragover', (e) => e.preventDefault());
@@ -293,6 +296,15 @@ function addNode(type, x, y, saved = {}) {
   return node;
 }
 
+const fmt = (p, v) => p.unit ? `${v} ${p.unit}` : String(v);
+
+function refreshSummary(node) {
+  for (const p of BLOCKS[node.type].params) {
+    const out = node.el.querySelector(`[data-key="${p.key}"]`);
+    if (out) out.textContent = fmt(p, node.params[p.key]);
+  }
+}
+
 // a saved value is only trusted if it still fits the parameter definition
 function validParam(p, v) {
   const ok = p.type === 'select' ? p.options.includes(v) : Number.isFinite(v);
@@ -313,8 +325,14 @@ function renderNode(node, def) {
 
   const body = h('div', { className: 'node-body' });
   if (def.ui) { node.view = def.ui(node); body.append(node.view.el); }
-  for (const p of def.params) body.append(paramWidget(node, p));
+  for (const p of def.params.filter((p) => p.show)) {
+    const val = h('b');
+    val.dataset.key = p.key;
+    body.append(h('div', { className: 'kv' }, h('span', { textContent: p.label }), val));
+  }
   el.append(body);
+  node.el = el;
+  refreshSummary(node);
 
   // select + drag by title
   el.addEventListener('pointerdown', () => select({ kind: 'node', id: node.id }));
@@ -360,7 +378,7 @@ function paramWidget(node, p) {
     if (!log) return t;
     return Number((p.min * Math.pow(p.max / p.min, t)).toPrecision(3));
   };
-  const show = (v) => p.unit ? `${v} ${p.unit}` : v;
+  const show = (v) => fmt(p, v);
 
   let input;
   if (p.type === 'select') {
@@ -384,6 +402,7 @@ function paramWidget(node, p) {
   input.addEventListener('input', () => {
     node.params[p.key] = p.type === 'select' ? input.value : fromSlider(parseFloat(input.value));
     if (readout) readout.textContent = show(node.params[p.key]);
+    refreshSummary(node);
     engine.updateNode(node);
     save();
   });
@@ -396,6 +415,7 @@ function removeNode(id) {
   graph.edges.filter((e) => e.from.node === id || e.to.node === id).forEach(removeEdge);
   node.el.remove();
   graph.nodes.delete(id);
+  if (selection && selection.kind === 'node' && selection.id === id) select(null);
   structureChanged();
 }
 
@@ -483,6 +503,31 @@ function select(sel) {
   graph.nodes.forEach((n) => n.el.classList.toggle('selected', !!sel && sel.kind === 'node' && sel.id === n.id));
   graph.edges.forEach((e) => e.el.classList.toggle('selected', !!sel && sel.kind === 'edge' && sel.id === e.id));
   delBtn.disabled = !sel;
+  renderProps();
+}
+
+function renderProps() {
+  propsBody.replaceChildren();
+  const hint = (text) => propsBody.append(h('p', { className: 'hint', textContent: text }));
+  if (!selection) return hint('Select a block to see and edit its properties.');
+
+  if (selection.kind === 'edge') {
+    const e = graph.edges.find((e) => e.id === selection.id);
+    if (!e) return hint('');
+    const name = (end) => `${BLOCKS[graph.nodes.get(end.node).type].title} · ${end.port}`;
+    propsBody.append(h('div', { className: 'props-head', textContent: 'Connection' }));
+    propsBody.append(h('div', { className: 'kv' }, h('span', { textContent: 'From' }), h('b', { textContent: name(e.from) })));
+    propsBody.append(h('div', { className: 'kv' }, h('span', { textContent: 'To' }), h('b', { textContent: name(e.to) })));
+    return;
+  }
+
+  const node = graph.nodes.get(selection.id);
+  const def = BLOCKS[node.type];
+  const head = h('div', { className: 'props-head', textContent: def.title });
+  head.style.setProperty('--cat', CATEGORIES[def.category]);
+  propsBody.append(head, h('div', { className: 'props-cat', textContent: def.category }));
+  if (!def.params.length) return hint('This block has no properties.');
+  for (const p of def.params) propsBody.append(paramWidget(node, p));
 }
 
 function deleteSelection() {
