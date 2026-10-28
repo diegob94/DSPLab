@@ -10,13 +10,14 @@
  * `options` (strings or numbers) may be a function of the params too.
  * Parameters are edited in the properties panel; those marked `show: true` are also
  * displayed (read-only) on the node itself.
- * A block may also define an async setup(ctx), awaited before the first build (e.g. to register
- * an AudioWorklet module).
+ * A block may also define an async setup(ctx, inUse), awaited before the first build (e.g. to register
+ * an AudioWorklet module); inUse says whether the diagram has a node of this type.
  * A block may also define ui(node) -> { el, draw(inst) }: a view shown inside the
  * node and redrawn every animation frame (inst is the built instance, or undefined
  * while the engine is stopped).
  * ------------------------------------------------------------------ */
 import { waveGenerator } from './wave-generator.js';
+import { audioSource } from './audio-source.js';
 import { audioSink } from './audio-sink.js';
 import { oscilloscope } from './oscilloscope.js';
 import { mathOperator } from './math-operator.js';
@@ -29,6 +30,7 @@ export const CATEGORIES = {
 
 export const BLOCKS = {
   wave_generator: waveGenerator,
+  audio_source: audioSource,
   audio_sink: audioSink,
   oscilloscope,
   math_operator: mathOperator,

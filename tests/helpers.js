@@ -26,7 +26,7 @@ function serve() {
 
 // -> { browser, url, close }
 async function launch() {
-  const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
+  const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] });
   const server = process.env.DSPLAB_URL ? null : await serve();
   const url = process.env.DSPLAB_URL || `http://127.0.0.1:${server.address().port}/`;
   return { browser, url, close: async () => { await browser.close(); if (server) server.close(); } };
