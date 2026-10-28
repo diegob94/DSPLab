@@ -1,7 +1,7 @@
 // A tiny event bus: the model emits, the engine / persistence / UI subscribe.
 //
 //   node-added(node)  node-removed(node)  edge-added(edge)  edge-removed(edge)
-//   selection(sel)    param(node, key)    moved(node)        pan()
+//   selection(sel)    param(node, key)    moved(node)        pan()  (pan or zoom)
 //   ports(node)       changed()           (the structure of the graph changed)
 const handlers = new Map();
 

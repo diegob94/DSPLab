@@ -1,6 +1,6 @@
 // The diagram is autosaved to localStorage and restored on load.
 import { BLOCKS } from '../blocks/index.js';
-import { graph, addNode, addEdge, setPan, select, hasPort } from './graph.js';
+import { graph, addNode, addEdge, setView, select, hasPort } from './graph.js';
 import { on } from './events.js';
 
 const STORAGE_KEY = 'dsplab.diagram';
@@ -11,6 +11,7 @@ export function serialize() {
   return {
     version: 1,
     pan: { x: graph.pan.x, y: graph.pan.y },
+    zoom: graph.zoom,
     nodes: [...graph.nodes.values()].map(({ id, type, x, y, params }) => ({ id, type, x, y, params })),
     edges: graph.edges.map(({ from, to }) => ({ from, to })),
   };
@@ -47,7 +48,7 @@ export function restore() {
         addEdge({ node: e.from.node, port: e.from.port }, { node: e.to.node, port: e.to.port });
       }
     }
-    if (data.pan && Number.isFinite(data.pan.x) && Number.isFinite(data.pan.y)) setPan(data.pan.x, data.pan.y);
+    if (data.pan && Number.isFinite(data.pan.x) && Number.isFinite(data.pan.y)) setView(data.pan.x, data.pan.y, Number.isFinite(data.zoom) ? data.zoom : 1);
   } finally {
     restoring = false;
   }
