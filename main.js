@@ -21,7 +21,7 @@ const BLOCKS = {
     outputs: ['out'],
     params: [
       { key: 'waveform',  label: 'Waveform',  type: 'select', options: ['sine', 'square', 'sawtooth', 'triangle'], default: 'sine' },
-      { key: 'frequency', label: 'Frequency', type: 'number', min: 1, max: 20000, step: 1, unit: 'Hz', default: 440 },
+      { key: 'frequency', label: 'Frequency', type: 'range', scale: 'log', min: 1, max: 20000, unit: 'Hz', default: 440 },
       { key: 'amplitude', label: 'Amplitude', type: 'range',  min: 0, max: 1, step: 0.01, default: 0.5 },
     ],
     build(ctx, p) {
@@ -245,26 +245,37 @@ function paramWidget(node, p) {
   const id = `p${node.id}-${p.key}`;
   wrap.append(h('label', { htmlFor: id, textContent: p.label }));
 
+  // log sliders move over 0..1 and map to [min, max] exponentially
+  const log = p.type === 'range' && p.scale === 'log';
+  const toSlider = (v) => log ? Math.log(v / p.min) / Math.log(p.max / p.min) : v;
+  const fromSlider = (t) => {
+    if (!log) return t;
+    return Number((p.min * Math.pow(p.max / p.min, t)).toPrecision(3));
+  };
+  const show = (v) => p.unit ? `${v} ${p.unit}` : v;
+
   let input;
   if (p.type === 'select') {
     input = h('select', { id });
     p.options.forEach((o) => input.append(h('option', { value: o, textContent: o })));
+  } else if (log) {
+    input = h('input', { id, type: 'range', min: 0, max: 1, step: 0.001 });
   } else {
     input = h('input', { id, type: p.type, min: p.min, max: p.max, step: p.step });
   }
-  input.value = node.params[p.key];
+  input.value = toSlider(node.params[p.key]);
   wrap.append(input);
 
   let readout;
   if (p.type === 'range') {
-    readout = h('div', { className: 'val', textContent: node.params[p.key] });
+    readout = h('div', { className: 'val', textContent: show(node.params[p.key]) });
     wrap.append(readout);
   }
 
   input.addEventListener('pointerdown', (e) => e.stopPropagation());
   input.addEventListener('input', () => {
-    node.params[p.key] = p.type === 'select' ? input.value : parseFloat(input.value);
-    if (readout) readout.textContent = node.params[p.key];
+    node.params[p.key] = p.type === 'select' ? input.value : fromSlider(parseFloat(input.value));
+    if (readout) readout.textContent = show(node.params[p.key]);
     engine.updateNode(node);
   });
   return wrap;
