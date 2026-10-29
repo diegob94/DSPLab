@@ -9,6 +9,7 @@
   --source: #3fb67a;
   --proc: #a77bf0;
   --sink: #e0894a;
+  --message: #4aa8e0;
   --wire: #7a8599;
   --danger: #e5534b;
 }
@@ -117,6 +118,7 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
   background: var(--panel); border: 2px solid var(--cat); border-radius: 50%;
   cursor: crosshair;
 }
+.port.msg { border-radius: 2px; }   /* message ports are square */
 .port.in { left: -7px; }
 .port.out { right: -7px; }
 .port:hover, .port.hot { background: var(--cat); transform: scale(1.25); }
