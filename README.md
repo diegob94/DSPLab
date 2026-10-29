@@ -146,6 +146,19 @@ Shown on the block: Pause.
 An unconnected input is 0, so `add` with only `a` connected passes `a` through, `multiply` with `b`
 open gives silence, and `subtract` with only `b` connected inverts it.
 
+**Filter**: a low-pass or high-pass filter (second order, 12 dB per octave). Input: `in`. Output: `out`.
+
+| Setting | Range | Default |
+|---|---|---|
+| Type | lowpass, highpass | lowpass |
+| Cutoff | 10 – 20000 Hz | 1000 Hz |
+| Q | 0.1 – 20 | 0.707 |
+
+Low-pass keeps what is below the cutoff and attenuates what is above; high-pass does the opposite. At
+the cutoff the level is −3 dB (with Q = 0.707). Raising Q adds a resonant peak at the cutoff.
+
+Shown on the block: Type and Cutoff.
+
 ### Sink blocks
 
 **Audio Sink**: plays a signal on your speakers. Input: `in`. Setting: **Volume** 0 – 1 (default 0.8).

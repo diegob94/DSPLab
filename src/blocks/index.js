@@ -26,6 +26,7 @@ import { oscilloscope } from './oscilloscope.js';
 import { mathOperator } from './math-operator.js';
 import { fftPlot } from './fft-plot.js';
 import { audioRecorder } from './audio-recorder.js';
+import { filter } from './filter.js';
 
 export const CATEGORIES = {
   'Source blocks': 'var(--source)',
@@ -41,4 +42,5 @@ export const BLOCKS = {
   math_operator: mathOperator,
   fft_plot: fftPlot,
   audio_recorder: audioRecorder,
+  filter,
 };
