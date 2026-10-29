@@ -5,7 +5,6 @@ const SCOPE_COLORS = ['#f2a65a', '#4dd0e1', '#8bd17c', '#e57fd0', '#f5d76e', '#7
 
 const inputNames = (p) => Array.from({ length: p.channels }, (_, i) => `ch${i + 1}`);
 
-const AUTO_HZ = 100;      // sweep rate of the free-running ("auto") trigger
 const DIV_X = 10, DIV_Y = 8;   // graticule divisions
 const LEVEL_SHOWN_MS = 1500;   // how long the trigger level line stays after it was last changed
 
@@ -17,7 +16,7 @@ export const oscilloscope = {
   portColor: (port) => SCOPE_COLORS[(parseInt(port.slice(2), 10) - 1) % SCOPE_COLORS.length],
   params: [
     { key: 'channels', label: 'Inputs',     type: 'select', options: [1, 2, 3, 4, 5, 6, 7, 8], ports: true, default: 2 },
-    { key: 'trigger',  label: 'Trigger',    show: true, type: 'select', options: (p) => ['auto', ...inputNames(p)], default: 'auto' },
+    { key: 'trigger',  label: 'Trigger',    show: true, type: 'select', options: (p) => inputNames(p), default: 'ch1' },
     { key: 'level',    label: 'Trig level', type: 'range', min: -1, max: 1, step: 0.01, default: 0 },
     { key: 'xdiv',     label: 'X / div',    show: true, type: 'range', scale: 'log', min: 0.1, max: 100, unit: 'ms', default: 1 },
     { key: 'ydiv',     label: 'Y / div',    show: true, type: 'range', scale: 'log', min: 0.01, max: 2, default: 0.25 },
@@ -76,17 +75,13 @@ export const oscilloscope = {
       update() {},
       onConnect(port) { connected[names.indexOf(port)] = true; },
       // One window per connected channel (null for unconnected ones), all starting at the same
-      // instant so the traces hold still: the rising crossing of `level` on the `trigger` channel,
-      // or with trigger 'auto' the newest multiple of 1/100 s on the sample clock (free-running,
-      // so `level` is ignored). Without a trigger crossing the newest samples are shown.
-      sample(spanMs, level = 0, trigger = 'auto') {
+      // rising crossing of `level` on the `trigger` channel so the traces hold still. Without a
+      // trigger crossing the newest samples are shown.
+      sample(spanMs, level = 0, trigger = names[0]) {
         const n = Math.min(Math.round(spanMs * ctx.sampleRate / 1000), maxWindow);
         let start = cap - n;
         const t = names.indexOf(trigger);
-        if (trigger === 'auto') {
-          const period = Math.round(ctx.sampleRate / AUTO_HZ);
-          start -= (((written - n) % period) + period) % period;   // (written - n) is the sample number at `start`
-        } else if (t >= 0 && connected[t]) {
+        if (t >= 0 && connected[t]) {
           read(rings[t], 0, cap, search);
           // newest crossing that still leaves a full window after it
           for (let i = cap - n - 1; i > 0; i--) {
@@ -141,8 +136,7 @@ export const oscilloscope = {
         if (level !== lastLevel) { lastLevel = level; levelShownAt = performance.now(); }
         if (performance.now() - levelShownAt < LEVEL_SHOWN_MS) {
           const ly = Math.round(yOf(level)) + .5;
-          const k = trigger === 'auto' ? -1 : parseInt(trigger.slice(2), 10) - 1;
-          g.strokeStyle = g.fillStyle = k < 0 ? '#9aa4b2' : SCOPE_COLORS[k % SCOPE_COLORS.length];
+          g.strokeStyle = g.fillStyle = SCOPE_COLORS[(parseInt(trigger.slice(2), 10) - 1) % SCOPE_COLORS.length];
           g.setLineDash([4, 3]);
           g.beginPath(); g.moveTo(0, ly); g.lineTo(W, ly); g.stroke();
           g.setLineDash([]);
