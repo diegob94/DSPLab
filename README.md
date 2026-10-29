@@ -164,6 +164,22 @@ While you change *Trig level* a dashed line shows it on the screen for a moment.
   apart in 220 pixels). Use a slow signal, or a shorter span, to see the shape. The band's outline is
   the signal's envelope, which is useful on its own (see *Beats* below).
 
+### Message blocks
+
+Messages are discrete events (a number at a given moment) rather than a continuous signal. Their ports
+are **square** and blue, and they travel on their own cables: a message port can only be connected to
+another message port, never to an audio one.
+
+**Message Strobe**: sends the same number again and again. Output: `msg`.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Period | Time between messages | 10 ms – 10 s (logarithmic) | 1000 ms |
+| Value | The number sent | −1000 – 1000 | 1 |
+
+It only sends while the audio is running. There are no blocks that receive messages yet, so for now
+this one has nothing to talk to.
+
 ## Recipes
 
 **Hear a tone.** Wave Generator → Audio Sink (this is the starting diagram). Press Run and move the
@@ -226,7 +242,7 @@ Things to know:
 
 Undo/redo, copy and paste, selecting several blocks at once, zooming the canvas, exporting or importing
 diagrams as files, a divide operation, and audio inputs from a microphone or file. Blocks are a short
-list for now (one generator, one operator, two sinks).
+list for now (one generator, one operator, two sinks, one message source).
 
 ## For developers
 
