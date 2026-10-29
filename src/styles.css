@@ -40,6 +40,7 @@ button {
   background: var(--panel-2); border: 1px solid var(--border);
   border-radius: 5px; padding: 5px 12px; cursor: pointer;
 }
+#toolbar button { white-space: nowrap; }   /* the bar is a fixed height: wrapped text would be clipped */
 button:hover { border-color: var(--accent); }
 button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
 #examples {
@@ -168,8 +169,9 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
   }
   #toolbar { gap: 6px; padding: 0 8px; }
   #toolbar h1 { display: none; }
-  #toolbar button { padding: 7px 10px; }
-  #examples { padding: 7px 6px; font-size: 16px; min-width: 0; max-width: 8.5em; }
+  #toolbar button { padding: 7px 8px; }
+  #delete .long { display: none; }
+  #examples { padding: 7px 6px; font-size: 16px; min-width: 0; max-width: 7em; }
   #status { display: none; }
   .drawer-toggle { display: block; }
   #toolbar #show-palette { margin-left: auto; }
