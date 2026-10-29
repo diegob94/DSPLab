@@ -33,6 +33,7 @@ import { messageDebug } from './message-debug.js';
 import { messageReshape } from './message-reshape.js';
 import { messageSerialize } from './message-serialize.js';
 import { pulseShaper } from './pulse-shaper.js';
+import { symbolTiming } from './symbol-timing.js';
 import { fftPlot } from './fft-plot.js';
 import { audioRecorder } from './audio-recorder.js';
 import { filter } from './filter.js';
@@ -55,6 +56,7 @@ export const BLOCKS = {
   message_reshape: messageReshape,
   message_serialize: messageSerialize,
   pulse_shaper: pulseShaper,
+  symbol_timing: symbolTiming,
   fft_plot: fftPlot,
   audio_recorder: audioRecorder,
   filter,

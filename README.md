@@ -159,6 +159,49 @@ the cutoff the level is −3 dB (with Q = 0.707). Raising Q adds a resonant peak
 
 Shown on the block: Type and Cutoff.
 
+**Pulse Shaper**: turns a stream of 1 × 1 messages (symbols) into a waveform you can play or look at.
+Input: `msg`. Output: `out` (audio).
+
+A one is `1` (times the amplitude) and a zero is `0`; the train of symbols is convolved with a pulse shape,
+sampled at the audio sample rate. Symbols are placed one after the other on a grid of 1 / baud seconds,
+whatever the exact moment each message arrives; the first symbol after a pause starts about 50 ms ahead. Set
+the same baud rate here as on the Message Serializer, or the stream will fall behind or run ahead. Messages
+that aren't 1 × 1 are ignored.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Pulse | *square* holds the level for the whole symbol; *sinc* is a band-limited pulse that crosses zero at the other symbols' centres | square, sinc | square |
+| Baud rate | Symbols per second | 50 – 20000 (logarithmic) | 1000 baud |
+| Amplitude | Level of a one | 0 – 1 | 0.5 |
+
+The sinc pulse is cut off 4 symbols to each side of its peak. Changing a setting applies to the next symbol.
+
+Shown on the block: Pulse and Baud rate.
+
+**Symbol Timing Recovery**: samples a digital-looking signal (like the output of a matched filter) at the
+right instants and returns the bits. Input: `in` (audio). Output: `msg`.
+
+It runs a simple phase-locked loop: an oscillator that ticks once per symbol (at the baud rate you set) looks
+at the signal at the symbol instant and halfway between symbols. A Gardner detector compares the two at every
+transition and nudges the oscillator's phase, and slowly its frequency, until the ticks fall on the
+symbols' centres. Each tick sends a **1 × 1** message: 1 if the sample is above the decision level, which is
+halfway between the levels the loop sees at symbol instants, 0 otherwise.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Baud rate | Nominal symbol rate, the loop's starting frequency | 50 – 20000 (logarithmic) | 1000 baud |
+| Loop bandwidth | How fast the loop reacts, as a fraction of the baud rate: higher locks sooner but is noisier | 0.001 – 0.1 (logarithmic) | 0.005 |
+| Squelch | Peak-to-peak swing below which the signal counts as silence and nothing is sent | 0 – 1 | 0.1 |
+
+Limits: it needs transitions to lock, so a long run of identical bits is held by the loop's memory rather than
+tracked. It cannot tell a silence from zeros in a signal that rests at 0, so a few zeros follow the end of a
+unipolar burst until the level estimate fades below the squelch. The ticks are placed by linear interpolation,
+which is fine from about 4 samples per symbol up. A pure sinc pulse has long tails that make the detector noisy,
+so use a low loop bandwidth with it. Starting from a symbol boundary it may take a while to leave; square
+pulses lock quickly.
+
+Shown on the block: Baud rate.
+
 ### Sink blocks
 
 **Audio Sink**: plays a signal on your speakers. Input: `in`. Setting: **Volume** 0 – 1 (default 0.8).
@@ -252,26 +295,19 @@ must equal the number of bits, and only one of them can be −1. If it doesn't f
 (numpy would raise an error) and the block shows what it could not do, like `3x3 can't be 2 x -1`. The
 block also shows the last change, like `8x5 → 2x20`.
 
-**Message Serialize**: turns a message into a waveform you can play or look at. Input: `msg`
-(message). Output: `out` (audio).
+**Message Serializer**: turns a message into a stream of single bits. Input: `msg`. Output: `msg`.
 
-Each bit becomes one *symbol*: a one is `1` (times the amplitude) and a zero is `0`, and the sequence of
-symbols is convolved with a pulse shape, sampled at the audio sample rate. When a message arrives the
-block sends its waveform **once** and then falls silent until the next message. A message that arrives
-while the previous one is still playing is added on top of it.
+Each bit of the incoming message goes out as its own **1 × 1** message, one per symbol, at the baud rate. The
+bits are read column by column, so an 8 × N message goes byte by byte, most significant bit first. Pacing
+follows the audio clock, so the average rate is exact; because a browser timer can't fire once per symbol at
+kilobaud, the symbols that are due are sent together every ~10 ms, and whoever receives them (the Pulse
+Shaper) does its own timing. A message that arrives while another is going out is queued behind it.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
-| Pulse | Shape of each symbol: *square* holds the level for the whole symbol; *sinc* is a band-limited pulse that crosses zero at the other symbols' centres | square, sinc | square |
-| Baud rate | Symbols per second (a message of 8 bits at 1000 baud lasts 8 ms) | 50 – 20000 (logarithmic) | 1000 baud |
-| Amplitude | Level of a one | 0 – 1 | 0.5 |
+| Baud rate | Symbols per second | 50 – 20000 (logarithmic) | 1000 baud |
 
-The bits are sent column by column, so an 8 × N message goes byte by byte, most significant bit first.
-The sinc pulse is cut off 4 symbols to each side of its peak, and the waveform has 4 extra symbols before and
-after the message that hold the pulse's ringing, so its ends aren't chopped. With a square pulse the waveform lasts
-exactly as many symbols as the message has bits. Changing a setting applies to the next message.
-
-Shown on the block: Pulse and Baud rate.
+Shown on the block: Baud rate.
 
 ## Recipes
 
