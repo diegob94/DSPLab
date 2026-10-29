@@ -67,6 +67,7 @@ mouse, and pinching the canvas zooms.
 | Connect blocks | Drag from an **output** port (right side of a block) to an **input** port (left side of another) |
 | Select a block or a cable | Click it. Its settings (or, for a cable, where it goes from and to) appear in Properties |
 | Edit a setting | Select the block, then use the controls in Properties |
+| Set an exact value | Type it in the number field under a slider and press Enter (or leave the field). Values outside the range are clamped to it |
 | Delete the selection | `Delete` or `Backspace`, or the **Delete selected** button |
 | Pan the canvas | Drag the empty background |
 | Zoom the canvas | Pinch with two fingers (a two-finger drag also pans), or scroll the mouse wheel over the canvas. 30 %–250 %; the zoom is saved with the diagram |

@@ -124,7 +124,8 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
   background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px;
 }
 .param input[type=range] { padding: 0; accent-color: var(--accent); }
-.param .val { grid-column: 2; color: var(--muted); font-size: 11px; margin-top: -4px; }
+.param .val { grid-column: 2; display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; margin-top: -2px; }
+.param .val input { width: 7em; flex: none; padding: 2px 6px; font-size: 12px; }
 .scope { display: block; width: 220px; height: 130px; border: 1px solid var(--border); border-radius: 4px; }
 
 /* properties panel */
