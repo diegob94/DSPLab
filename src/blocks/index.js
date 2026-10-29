@@ -38,6 +38,7 @@ import { messageConcatenate } from './message-concatenate.js';
 import { pulseShaper } from './pulse-shaper.js';
 import { symbolTiming } from './symbol-timing.js';
 import { squelch } from './squelch.js';
+import { carrierRecovery } from './carrier-recovery.js';
 import { fftPlot } from './fft-plot.js';
 import { audioRecorder } from './audio-recorder.js';
 import { filter } from './filter.js';
@@ -65,6 +66,7 @@ export const BLOCKS = {
   pulse_shaper: pulseShaper,
   symbol_timing: symbolTiming,
   squelch,
+  carrier_recovery: carrierRecovery,
   fft_plot: fftPlot,
   audio_recorder: audioRecorder,
   filter,

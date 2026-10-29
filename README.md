@@ -205,6 +205,31 @@ it. Starting from a symbol boundary it may take a while to leave; square pulses 
 
 Shown on the block: Baud rate.
 
+**Carrier Recovery**: locks a clean sine to a carrier hidden in its input, even a noisy or weak one.
+Input: `in`. Output: `out` (audio).
+
+It is a phase-locked loop whose oscillator is a sine. The input is compared with the oscillator in quadrature
+(multiplied by its cosine and sine, then low-passed), which gives the phase difference whatever the level of the
+input; a PI loop filter then corrects the oscillator's phase and, slowly, its frequency. Once locked the output
+is a pure sine at the carrier's frequency and in step with it, at the amplitude you set (the input's level
+does not matter). Use it to get the carrier back from a modulated signal, or to clean up a noisy tone.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Frequency | Where the oscillator runs on its own, and where it looks for the carrier | 20 – 20000 Hz (logarithmic) | 440 Hz |
+| Loop bandwidth | How wide a band around the frequency it can lock from, and how fast it follows: higher locks from further and sooner but lets more noise through | 1 – 500 Hz (logarithmic) | 20 Hz |
+| Amplitude | Level of the output sine | 0 – 1 | 0.5 |
+
+Set *Frequency* close to the carrier (within about the loop bandwidth, a few times that at most) and give it
+a moment to lock; with 20 Hz it takes a few tenths of a second. If the input has no carrier (silence, or an
+unconnected input) the oscillator keeps running at *Frequency*. Keep the loop bandwidth under about a
+sixteenth of the frequency: above that the low-pass filters can't separate the carrier from its double and the
+loop gets noisy or unstable. It locks
+onto a pure carrier; for a signal that is modulated with a sign flip (like BPSK) the carrier is suppressed and
+this block will not find it.
+
+Shown on the block: Frequency and Loop bandwidth.
+
 **Squelch**: a gate that mutes a signal while it is too weak. Input: `in`. Output: `out`.
 
 It follows the top and bottom of the signal over a short window; while the difference (the peak-to-peak
