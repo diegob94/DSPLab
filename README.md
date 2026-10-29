@@ -205,6 +205,74 @@ draws while the audio is running.
 The vertical axis goes from 0 dB (full scale) down to −100 dB. The loudest frequency is printed in the corner
 as *peak … Hz*. Shown on the block: Window size and Freq. axis.
 
+### Message blocks
+
+Messages are discrete events rather than a continuous signal. Their ports are **square**, and they
+travel on their own cables: a message port can only be connected to another message port, never to an
+audio one.
+
+A message is a table of ones and zeros with some rows and some columns. Text travels as **8 × N**: one
+column per byte (UTF-8, so `é` takes two columns), with the most significant bit in the top row. For
+example `A` (0x41) is the single column `0 1 0 0 0 0 0 1`, read from top to bottom. A block never edits
+a message it receives; it builds a new one.
+
+**Message Strobe**: sends the same text, as an 8 × N message, again and again. Output: `msg`.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Period | Time between messages | 10 ms – 10 s (logarithmic) | 1000 ms |
+| Message | The text sent | up to 100 characters | hello |
+
+It only sends while the audio is running, and sends nothing while the text is empty. Editing the
+message applies at once, without restarting the clock.
+
+**Message Debug**: prints the messages it receives, one per line, each with the time (in seconds of
+audio) at which it arrived. Input: `msg`. It reads *Stopped* while the audio is off, and the log starts
+empty on every Run.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Lines | How many of the newest messages stay on the block | 4, 8, 16 | 8 |
+| Decode | Turn an 8 × N message back into text | on, off | on |
+
+A message of any other shape, or any message when *Decode* is off, is printed as its bits: the size,
+then the rows separated by `/`, like `2x3  101 / 011`. Control characters in decoded text are shown as `·`.
+
+**Message Reshape**: changes the rows and columns of a message without changing its bits, like
+`numpy.reshape`. The bits are read row by row and laid out again in the new shape, so a 1 × 100 message can
+become 10 × 10 and back. Input: `msg`. Output: `msg`.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Rows | Rows of the output, or −1 to work it out from Columns | −1, 1 – 4096 | 1 |
+| Columns | Columns of the output, or −1 to work it out from Rows | −1, 1 – 4096 | −1 |
+
+Messages have at most two dimensions. The defaults flatten any message into a single row. Rows × columns
+must equal the number of bits, and only one of them can be −1. If it doesn't fit, the message is **dropped**
+(numpy would raise an error) and the block shows what it could not do, like `3x3 can't be 2 x -1`. The
+block also shows the last change, like `8x5 → 2x20`.
+
+**Message Serialize**: turns a message into a waveform you can play or look at. Input: `msg`
+(message). Output: `out` (audio).
+
+Each bit becomes one *symbol*: a one is `1` (times the amplitude) and a zero is `0`, and the sequence of
+symbols is convolved with a pulse shape, sampled at the audio sample rate. When a message arrives the
+block sends its waveform **once** and then falls silent until the next message. A message that arrives
+while the previous one is still playing is added on top of it.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Pulse | Shape of each symbol: *square* holds the level for the whole symbol; *sinc* is a band-limited pulse that crosses zero at the other symbols' centres | square, sinc | square |
+| Baud rate | Symbols per second (a message of 8 bits at 1000 baud lasts 8 ms) | 50 – 20000 (logarithmic) | 1000 baud |
+| Amplitude | Level of a one | 0 – 1 | 0.5 |
+
+The bits are sent column by column, so an 8 × N message goes byte by byte, most significant bit first.
+The sinc pulse is cut off 4 symbols to each side of its peak, and the waveform has 4 extra symbols before and
+after the message that hold the pulse's ringing, so its ends aren't chopped. With a square pulse the waveform lasts
+exactly as many symbols as the message has bits. Changing a setting applies to the next message.
+
+Shown on the block: Pulse and Baud rate.
+
 ## Recipes
 
 **Hear a tone.** Wave Generator → Audio Sink (this is the starting diagram). Press Run and move the
@@ -267,7 +335,7 @@ Things to know:
 
 Undo/redo, copy and paste, selecting several blocks at once, zooming the canvas, exporting or importing
 diagrams as files, a divide operation, and audio inputs from a microphone or file. Blocks are a short
-list for now (one generator, one operator, two sinks).
+list for now (one generator, one operator, two sinks, four message blocks).
 
 ## For developers
 

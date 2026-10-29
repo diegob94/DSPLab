@@ -3,7 +3,7 @@
 import { BLOCKS, CATEGORIES } from '../blocks/index.js';
 import { $, h } from '../dom.js';
 import { on } from '../core/events.js';
-import { portNames } from '../core/params.js';
+import { portKind, portNames } from '../core/params.js';
 import { graph, select, moveNode } from '../core/graph.js';
 import { engine } from '../core/engine.js';
 import { redrawEdges, startConnect } from './wires.js';
@@ -19,9 +19,9 @@ export function refreshSummary(node) {
   }
 }
 
-function portRow(dir, name, nodeId, color) {
+function portRow(dir, name, nodeId, color, kind) {
   const row = h('div', { className: `port-row ${dir}` });
-  const dot = h('div', { className: `port ${dir}` });
+  const dot = h('div', { className: `port ${dir}${kind === 'message' ? ' msg' : ''}` });
   if (color) row.style.setProperty('--cat', color);
   dot.dataset.node = nodeId;
   dot.dataset.port = name;
@@ -39,7 +39,7 @@ function portsEl(node, def) {
   for (const dir of ['in', 'out']) {
     const names = portNames(def, dir === 'in' ? 'inputs' : 'outputs', node.params);
     if (!names.length) continue;
-    ports.append(h('div', { className: `ports-${dir}` }, ...names.map((name) => portRow(dir, name, node.id, def.portColor && def.portColor(name)))));
+    ports.append(h('div', { className: `ports-${dir}` }, ...names.map((name) => portRow(dir, name, node.id, def.portColor && def.portColor(name), portKind(def, name)))));
   }
   return ports;
 }
