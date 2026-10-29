@@ -40,7 +40,7 @@ export const engine = {
   rebuild() {
     this.teardown();
     for (const node of graph.nodes.values()) {
-      this.live.set(node.id, BLOCKS[node.type].build(this.ctx, node.params));
+      this.live.set(node.id, BLOCKS[node.type].build(this.ctx, node.params, node));
     }
     for (const e of graph.edges) {
       const src = this.live.get(e.from.node);
@@ -59,3 +59,4 @@ export const engine = {
 
 on('changed', () => { if (engine.running) engine.rebuild(); });
 on('param', (node) => engine.updateNode(node));
+on('data', (node) => engine.updateNode(node));

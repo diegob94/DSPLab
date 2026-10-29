@@ -2,7 +2,8 @@
 //
 //   node-added(node)  node-removed(node)  edge-added(edge)  edge-removed(edge)
 //   selection(sel)    param(node, key)    moved(node)        pan()  (pan or zoom)
-//   ports(node)       changed()           (the structure of the graph changed)
+//   ports(node)       data(node)          (runtime data of a block, not saved)
+//   changed()         (the structure of the graph changed)
 const handlers = new Map();
 
 export const on = (name, fn) => {
