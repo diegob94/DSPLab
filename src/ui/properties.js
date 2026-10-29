@@ -4,7 +4,7 @@ import { $, h } from '../dom.js';
 import { on } from '../core/events.js';
 import { optionsOf } from '../core/params.js';
 import { graph, getSelection, setParam, syncParams, rebuildPorts } from '../core/graph.js';
-import { fmt } from './nodes.js';
+import { clamp } from '../util.js';
 
 const propsBody = $('#props-body');
 
@@ -20,8 +20,6 @@ function paramWidget(node, p) {
     if (!log) return t;
     return Number((p.min * Math.pow(p.max / p.min, t)).toPrecision(3));
   };
-  const show = (v) => fmt(p, v);
-
   let input;
   if (p.type === 'select') {
     input = h('select', { id });
@@ -34,17 +32,32 @@ function paramWidget(node, p) {
   input.value = toSlider(node.params[p.key]);
   wrap.append(input);
 
-  let readout;
+  // the exact value: shown under the slider, and typing one (Enter / leaving the field) sets it
+  let number;
   if (p.type === 'range') {
-    readout = h('div', { className: 'val', textContent: show(node.params[p.key]) });
-    wrap.append(readout);
+    number = h('input', { type: 'number', min: p.min, max: p.max, step: p.step || 'any', value: node.params[p.key] });
+    number.setAttribute('aria-label', `${p.label} value`);
+    wrap.append(h('div', { className: 'val' }, number, h('span', { textContent: p.unit || '' })));
   }
 
   input.addEventListener('pointerdown', (e) => e.stopPropagation());
   input.addEventListener('input', () => {
     setParam(node, p.key, p.type === 'select' ? optionsOf(p, node.params)[input.selectedIndex] : fromSlider(parseFloat(input.value)));
-    if (readout) readout.textContent = show(node.params[p.key]);
+    if (number) number.value = node.params[p.key];
   });
+  if (number) {
+    number.addEventListener('pointerdown', (e) => e.stopPropagation());
+    number.addEventListener('change', () => {
+      const typed = parseFloat(number.value);
+      // an empty or invalid entry goes back to the current value
+      if (Number.isFinite(typed)) {
+        const v = clamp(typed, p.min, p.max);
+        setParam(node, p.key, p.step === 1 ? Math.round(v) : v);
+        input.value = toSlider(node.params[p.key]);
+      }
+      number.value = node.params[p.key];
+    });
+  }
   if (p.ports) {
     // applied on release, so dragging a slider across a smaller value doesn't drop cables on the way
     input.addEventListener('change', () => {

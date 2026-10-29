@@ -44,7 +44,11 @@ You start with a **Wave Generator** already connected to an **Audio Sink**. Pres
 - **Block palette** (right): the available blocks, grouped by category.
 - **Properties** (left): every setting of the selected block. Blocks themselves only show their key
   values, read-only; you change them here.
-- **Toolbar** (top): Run/Stop, delete, and the audio status (the sample rate while running).
+- **Toolbar** (top): Run/Stop, delete, the **Examples** menu, and the audio status (the sample rate while
+  running).
+- **Examples** (toolbar): *Simple tone* (the starting diagram), *ASK modulation* and *Audio source scope* (microphone → oscilloscope). Picking one replaces
+  the current diagram, so it asks for confirmation first (unless the canvas is empty); it can't be undone,
+  because the autosave overwrites the old diagram.
 
 ### On a phone
 
@@ -64,7 +68,8 @@ mouse, and pinching the canvas zooms.
 | Connect blocks | Drag from an **output** port (right side of a block) to an **input** port (left side of another) |
 | Select a block or a cable | Click it. Its settings (or, for a cable, where it goes from and to) appear in Properties |
 | Edit a setting | Select the block, then use the controls in Properties |
-| Delete the selection | `Delete` or `Backspace`, or the **Delete selected** button |
+| Set an exact value | Type it in the number field under a slider and press Enter (or leave the field). Values outside the range are clamped to it |
+| Delete the selection | `Delete` or `Backspace`, or the **Delete selected** button (just **Delete** on a phone) |
 | Pan the canvas | Drag the empty background |
 | Zoom the canvas | Pinch with two fingers (a two-finger drag also pans), or scroll the mouse wheel over the canvas. 30 %–250 %; the zoom is saved with the diagram |
 | Deselect | Click the empty background |
@@ -140,10 +145,11 @@ only draws while the audio is running (otherwise it reads *Stopped*).
 | Inputs | How many channels (inputs) the block has | 1 – 8 | 2 |
 | Trigger | Which channel starts each sweep | `ch1` … `chN` | ch1 |
 | Trig level | Level the trigger channel must cross going upwards | −1 – 1 | 0 |
-| Time span | How much time fits on the screen | 1 ms – 1000 ms (logarithmic) | 10 ms |
-| Scale | Vertical zoom, shared by all channels | 0.1× – 10× (logarithmic) | 1× |
+| X / div | Time per horizontal division (10 divisions, so the screen shows ten times this) | 0.1 ms – 100 ms (logarithmic) | 1 ms |
+| Y / div | Signal units per vertical division (8 divisions), shared by all channels | 0.01 – 2 (logarithmic) | 0.25 |
 
-Shown on the block: Trigger and Time span.
+Shown on the block: Trigger, X / div and Y / div. The screen has 10 × 8 divisions.
+While you change *Trig level* a dashed line shows it on the screen for a moment.
 
 - **Trigger.** Each sweep starts where the trigger channel rises through *Trig level*, and every
   channel is drawn from that same instant, so a repeating signal holds still and channels can be
@@ -154,7 +160,7 @@ Shown on the block: Trigger and Time span.
 - Channels without a cable aren't drawn.
 - If you reduce *Inputs*, cables on the channels that disappear are removed, and the trigger returns to
   `ch1` if its channel is gone.
-- At long time spans a fast signal fills the screen as a solid band (440 cycles in 1 s can't be told
+- At long time scales (X / div of tens of ms) a fast signal fills the screen as a solid band (440 cycles in 1 s can't be told
   apart in 220 pixels). Use a slow signal, or a shorter span, to see the shape. The band's outline is
   the signal's envelope, which is useful on its own (see *Beats* below).
 
@@ -166,12 +172,16 @@ Frequency slider.
 **See a wave.** Add an Oscilloscope and connect the generator's `out` to `ch1` as well (an output can feed
 several inputs). Press Run. The default 10 ms span shows about four cycles of 440 Hz.
 
-**Compare two waves.** Add a second Wave Generator and connect it to `ch2`. Set the scope's Time span to
-5 ms, both generators to 1000 Hz, one to *sine* and the other to *square*, and set *Trigger* to `ch2`:
+**Amplitude-shift keying.** Pick *ASK modulation* in the Examples menu: a 440 Hz sine is multiplied by a
+2 Hz square wave that swings between 0 and 1, so the tone switches on and off. The scope shows the keyed
+signal (`ch1`) against the square wave (`ch2`, the trigger).
+
+**Compare two waves.** Add a second Wave Generator and connect it to `ch2`. Set the scope's X / div to
+0.5 ms, both generators to 1000 Hz, one to *sine* and the other to *square*, and set *Trigger* to `ch2`:
 both traces start where the square wave rises, and you see how the sine lines up with it.
 
 **Beats.** Two generators at 440 Hz and 444 Hz, both into a Math Operator set to *add*, whose output goes
-to an Audio Sink and to an Oscilloscope with a Time span of 1000 ms. You hear the tone swell four times a
+to an Audio Sink and to an Oscilloscope with X / div set to 100 ms. You hear the tone swell four times a
 second, and the scope's band shows four lobes.
 
 **Ring modulation.** Same wiring, but set the second generator to 5 Hz and the Math Operator to

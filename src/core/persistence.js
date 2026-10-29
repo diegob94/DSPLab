@@ -1,6 +1,6 @@
 // The diagram is autosaved to localStorage and restored on load.
 import { BLOCKS } from '../blocks/index.js';
-import { graph, addNode, addEdge, setView, select, hasPort } from './graph.js';
+import { graph, addNode, addEdge, setView, select, hasPort, clearGraph } from './graph.js';
 import { on } from './events.js';
 
 const STORAGE_KEY = 'dsplab.diagram';
@@ -32,14 +32,14 @@ function save() {
 for (const event of ['changed', 'param', 'moved', 'pan']) on(event, save);
 window.addEventListener('pagehide', saveNow);
 
-// returns false when there is nothing usable saved, so the caller can load the starter graph
-export function restore() {
-  let data;
-  try { data = JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch (err) { return false; }
+// Replaces the diagram with a saved one. Returns false (leaving the diagram alone) when the data
+// is not usable. Saved data is never trusted: unknown blocks, bad numbers and dangling cables are dropped.
+export function loadDiagram(data) {
   if (!data || data.version !== 1 || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) return false;
 
   restoring = true;
   try {
+    clearGraph();
     for (const n of data.nodes) {
       if (n && BLOCKS[n.type] && Number.isFinite(n.x) && Number.isFinite(n.y)) addNode(n.type, n.x, n.y, n);
     }
@@ -48,10 +48,20 @@ export function restore() {
         addEdge({ node: e.from.node, port: e.from.port }, { node: e.to.node, port: e.to.port });
       }
     }
-    if (data.pan && Number.isFinite(data.pan.x) && Number.isFinite(data.pan.y)) setView(data.pan.x, data.pan.y, Number.isFinite(data.zoom) ? data.zoom : 1);
+    const pan = data.pan;
+    if (pan && Number.isFinite(pan.x) && Number.isFinite(pan.y)) setView(pan.x, pan.y, Number.isFinite(data.zoom) ? data.zoom : 1);
+    else setView(0, 0, 1);
   } finally {
     restoring = false;
   }
   select(null);
+  saveNow();
   return true;
+}
+
+// returns false when there is nothing usable saved, so the caller can load the starter graph
+export function restore() {
+  let data;
+  try { data = JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch (err) { return false; }
+  return loadDiagram(data);
 }

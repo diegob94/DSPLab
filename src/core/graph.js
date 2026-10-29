@@ -49,6 +49,13 @@ export function removeNode(id) {
   emit('changed');
 }
 
+// empties the diagram (a new one is about to be loaded); ids start over
+export function clearGraph() {
+  [...graph.nodes.keys()].forEach(removeNode);
+  graph.nextId = 1;
+  select(null);
+}
+
 export function addEdge(from, to) {
   // an input accepts a single connection; replace any existing one
   graph.edges.filter((e) => e.to.node === to.node && e.to.port === to.port).forEach(removeEdge);

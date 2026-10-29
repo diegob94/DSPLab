@@ -6,14 +6,16 @@ let app;
 before(async () => { app = await launch(); });
 after(async () => { await app.close(); });
 
+// the exact-value field under the first slider, with its unit
+const shown = async (page) => `${await page.locator('#props .val input').first().inputValue()} ${await page.locator('#props .val span').first().textContent()}`;
 const freqSlider = (page) => page.locator('#props input[type=range]').first();
 
 test('frequency is a logarithmic slider from 1 Hz to 20 kHz', () => withApp(app, async (page) => {
   await selectNode(page, 'Wave Generator');
-  assert.equal(await page.locator('#props .val').first().textContent(), '440 Hz');
+  assert.equal(await shown(page), '440 Hz');
   const at = async (t) => {
     await setRange(freqSlider(page), t);
-    return [await page.locator('#props .val').first().textContent(), await page.evaluate(() => [...dsplab.graph.nodes.values()][0].params.frequency)];
+    return [await shown(page), await page.evaluate(() => [...dsplab.graph.nodes.values()][0].params.frequency)];
   };
   assert.deepEqual(await at(0), ['1 Hz', 1]);
   assert.deepEqual(await at(0.25), ['11.9 Hz', 11.9]);
@@ -53,4 +55,41 @@ test('offset is a slider from -1 to 1, 0 by default', () => withApp(app, async (
   await selectNode(page, 'Wave Generator');
   await setRange(page.locator('#props input[type=range]').nth(2), 1);
   assert.equal(await page.evaluate(() => [...dsplab.graph.nodes.values()][0].params.offset), 1);
+}));
+
+test('typing an exact value sets the parameter, moves the slider and clamps to the range', () => withApp(app, async (page) => {
+  await selectNode(page, 'Wave Generator');
+  const field = page.locator('#props .val input').first();
+  const freq = () => page.evaluate(() => [...dsplab.graph.nodes.values()][0].params.frequency);
+
+  await field.fill('433');
+  await field.press('Enter');
+  assert.equal(await freq(), 433);
+  assert.equal(await page.locator('.node:has-text("Wave Generator") [data-key="frequency"]').textContent(), '433 Hz');
+  const t = Number(await freqSlider(page).inputValue());
+  assert.ok(Math.abs(t - Math.log(433) / Math.log(20000)) < 0.001, `slider at ${t}`);
+
+  await field.fill('99999');
+  await field.press('Enter');
+  assert.equal(await freq(), 20000);
+  assert.equal(await field.inputValue(), '20000');
+
+  await field.fill('0.1');
+  await field.press('Enter');
+  assert.equal(await freq(), 1);
+
+  await field.fill('');
+  await field.press('Enter');
+  assert.equal(await freq(), 1, 'an empty entry leaves the value alone');
+  assert.equal(await field.inputValue(), '1');
+}));
+
+test('linear sliders take exact values too, and moving the slider updates the field', () => withApp(app, async (page) => {
+  await selectNode(page, 'Wave Generator');
+  const field = page.locator('#props .param:has(> label:text-is("Offset")) .val input');
+  await field.fill('0.25');
+  await field.press('Enter');
+  assert.equal(await page.evaluate(() => [...dsplab.graph.nodes.values()][0].params.offset), 0.25);
+  await setRange(page.locator('#props .param:has(> label:text-is("Offset")) input[type=range]'), -0.5);
+  assert.equal(await field.inputValue(), '-0.5');
 }));

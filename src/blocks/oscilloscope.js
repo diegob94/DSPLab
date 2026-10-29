@@ -5,6 +5,9 @@ const SCOPE_COLORS = ['#f2a65a', '#4dd0e1', '#8bd17c', '#e57fd0', '#f5d76e', '#7
 
 const inputNames = (p) => Array.from({ length: p.channels }, (_, i) => `ch${i + 1}`);
 
+const DIV_X = 10, DIV_Y = 8;   // graticule divisions
+const LEVEL_SHOWN_MS = 1500;   // how long the trigger level line stays after it was last changed
+
 export const oscilloscope = {
   title: 'Oscilloscope',
   category: 'Sink blocks',
@@ -15,8 +18,8 @@ export const oscilloscope = {
     { key: 'channels', label: 'Inputs',     type: 'select', options: [1, 2, 3, 4, 5, 6, 7, 8], ports: true, default: 2 },
     { key: 'trigger',  label: 'Trigger',    show: true, type: 'select', options: (p) => inputNames(p), default: 'ch1' },
     { key: 'level',    label: 'Trig level', type: 'range', min: -1, max: 1, step: 0.01, default: 0 },
-    { key: 'timespan', label: 'Time span',  show: true, type: 'range', scale: 'log', min: 1, max: 1000, unit: 'ms', default: 10 },
-    { key: 'scale',    label: 'Scale',      type: 'range', scale: 'log', min: 0.1, max: 10, unit: '×', default: 1 },
+    { key: 'xdiv',     label: 'X / div',    show: true, type: 'range', scale: 'log', min: 0.1, max: 100, unit: 'ms', default: 1 },
+    { key: 'ydiv',     label: 'Y / div',    show: true, type: 'range', scale: 'log', min: 0.01, max: 2, default: 0.25 },
   ],
   // the capture processor must be registered before build() can create the worklet node
   setup(ctx) {
@@ -103,6 +106,7 @@ export const oscilloscope = {
     const W = 220, H = 130, dpr = window.devicePixelRatio || 1;
     const el = h('canvas', { className: 'scope', width: W * dpr, height: H * dpr });
     const g = el.getContext('2d');
+    let lastLevel = node.params.level, levelShownAt = -Infinity;
     return {
       el,
       draw(inst) {
@@ -112,23 +116,38 @@ export const oscilloscope = {
         g.lineWidth = 1;
         g.strokeStyle = '#242a33';
         g.beginPath();
-        for (let i = 1; i < 10; i++) { g.moveTo(Math.round(i * W / 10) + .5, 0); g.lineTo(Math.round(i * W / 10) + .5, H); }
-        for (let i = 1; i < 8; i++)  { g.moveTo(0, Math.round(i * H / 8) + .5);  g.lineTo(W, Math.round(i * H / 8) + .5); }
+        for (let i = 1; i < DIV_X; i++) { g.moveTo(Math.round(i * W / DIV_X) + .5, 0); g.lineTo(Math.round(i * W / DIV_X) + .5, H); }
+        for (let i = 1; i < DIV_Y; i++) { g.moveTo(0, Math.round(i * H / DIV_Y) + .5); g.lineTo(W, Math.round(i * H / DIV_Y) + .5); }
         g.stroke();
         g.strokeStyle = '#3a4350';
         g.beginPath(); g.moveTo(0, H / 2 + .5); g.lineTo(W, H / 2 + .5); g.stroke();
 
+        const { xdiv, trigger, level, ydiv } = node.params;
+        const pxPerUnit = (H / DIV_Y) / ydiv;
+        const yOf = (v) => Math.min(H, Math.max(0, H / 2 - v * pxPerUnit));
+
         g.fillStyle = '#6b7482';
         g.font = '10px system-ui, sans-serif';
-        if (!inst) { g.fillText('Stopped', 6, 14); return; }
-        g.fillText(`${node.params.timespan} ms · trigger ${node.params.trigger}`, 6, 14);
+        g.textBaseline = 'alphabetic';
+        g.textAlign = 'left';
+        if (!inst) g.fillText('Stopped', 6, 14);
 
-        const amp = (H / 2) * 0.9 * node.params.scale;
+        // the trigger level, drawn for a moment after it was changed (also while stopped)
+        if (level !== lastLevel) { lastLevel = level; levelShownAt = performance.now(); }
+        if (performance.now() - levelShownAt < LEVEL_SHOWN_MS) {
+          const ly = Math.round(yOf(level)) + .5;
+          g.strokeStyle = g.fillStyle = SCOPE_COLORS[(parseInt(trigger.slice(2), 10) - 1) % SCOPE_COLORS.length];
+          g.setLineDash([4, 3]);
+          g.beginPath(); g.moveTo(0, ly); g.lineTo(W, ly); g.stroke();
+          g.setLineDash([]);
+          g.fillText(`level ${level}`, 6, ly < 28 ? ly + 12 : ly - 4);
+        }
+        if (!inst) return;
+
         g.lineWidth = 1.5;
-        inst.sample(node.params.timespan, node.params.level, node.params.trigger).forEach((data, k) => {
+        inst.sample(xdiv * DIV_X, level, trigger).forEach((data, k) => {
           if (!data || data.length < 2) return;
           g.strokeStyle = SCOPE_COLORS[k % SCOPE_COLORS.length];
-          const yOf = (v) => Math.min(H, Math.max(0, H / 2 - v * amp));
           g.beginPath();
           if (data.length <= 4 * W) {
             for (let i = 0; i < data.length; i++) {

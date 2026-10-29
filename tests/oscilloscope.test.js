@@ -122,14 +122,15 @@ test('a single input draws a 440 Hz sine: 4 cycles in 10 ms, peak 0.5', () => wi
   assert.ok(await lit() > 100, 'trace drawn while running');
 }));
 
-test('the time span reaches 1 s', () => withApp(app, async (page) => {
+test('X / div goes from 0.1 ms to 100 ms, i.e. a 1 ms to 1 s screen', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
-  const slider = panelControl(page, 'Time span');
+  const slider = panelControl(page, 'X / div');
+  const shown = () => page.locator('.node:has-text("Oscilloscope") [data-key=xdiv]').textContent();
   await setRange(slider, 1);
-  assert.equal(await page.evaluate(() => [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope').params.timespan), 1000);
-  assert.equal(await page.locator('.node:has-text("Oscilloscope") [data-key=timespan]').textContent(), '1000 ms');
+  assert.equal(await page.evaluate(() => [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope').params.xdiv), 100);
+  assert.equal(await shown(), '100 ms');
   await setRange(slider, 0);
-  assert.equal(await page.locator('.node:has-text("Oscilloscope") [data-key=timespan]').textContent(), '1 ms');
+  assert.equal(await shown(), '0.1 ms');
 }));
 
 test('a 1 s window holds a full second of signal (440 cycles of a 440 Hz sine)', () => withApp(app, async (page) => {
@@ -185,8 +186,43 @@ test('the trigger level is honoured', () => withApp(app, async (page) => {
   assert.ok(r.first[0] > 0.2 && r.first[1] < 0.32, `first samples ${r.first}`);
 }));
 
-test('trace colours, trigger and time span are shown on the node', () => withApp(app, async (page) => {
+test('trace colours, trigger, X / div and Y / div are shown on the node', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
-  assert.deepEqual(await page.locator('.node:has-text("Oscilloscope") .kv').allTextContents(), ['Triggerch1', 'Time span10 ms']);
+  assert.deepEqual(await page.locator('.node:has-text("Oscilloscope") .kv').allTextContents(), ['Triggerch1', 'X / div1 ms', 'Y / div0.25']);
   assert.equal(await page.locator('#props .param').count(), 5);
+}));
+
+test('the screen carries no text besides "Stopped" and the trigger level line (the settings are on the node)', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  const draw = (running) => page.evaluate((running) => {
+    const node = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
+    const texts = [];
+    const ctx = node.view.el.getContext('2d');
+    const orig = ctx.fillText.bind(ctx);
+    ctx.fillText = (t, ...rest) => { texts.push(t); return orig(t, ...rest); };
+    node.view.draw(running ? { sample: () => [] } : undefined);
+    ctx.fillText = orig;
+    return texts;
+  }, running);
+  assert.deepEqual(await draw(false), ['Stopped']);
+  assert.deepEqual(await draw(true), []);
+}));
+
+test('the trigger level line is drawn while the level is being changed, and goes away again', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  const texts = () => page.evaluate(async () => {
+    const node = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
+    const ctx = node.view.el.getContext('2d');
+    const seen = [];
+    const orig = ctx.fillText.bind(ctx);
+    ctx.fillText = (t, ...rest) => { seen.push(t); return orig(t, ...rest); };
+    await new Promise((r) => setTimeout(r, 100));   // a few animation frames
+    ctx.fillText = orig;
+    return seen;
+  });
+  assert.ok(!(await texts()).some((t) => t.startsWith('level')), 'no level line until it is touched');
+  await setRange(panelControl(page, 'Trig level'), 0.3);
+  assert.ok((await texts()).includes('level 0.3'), 'level line while adjusting');
+  await sleep(1700);
+  assert.ok(!(await texts()).some((t) => t.startsWith('level')), 'the line disappears after a moment');
 }));

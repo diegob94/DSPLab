@@ -69,3 +69,31 @@ test('on desktop the drawer buttons are hidden', async () => {
   assert.equal(await visible(page, '#palette'), true);
   await ctx.close();
 });
+
+// the toolbar row is a fixed 44px: if its buttons wrap their text they grow taller and get clipped
+for (const width of [360, 320]) {
+  test(`on a ${width}px phone the toolbar buttons stay on one line and inside the bar`, async () => {
+    const ctx = await app.browser.newContext({ viewport: { width, height: 740 }, isMobile: true, hasTouch: true });
+    const page = await ctx.newPage();
+    try {
+      await page.goto(app.url);
+      const m = await page.evaluate(() => {
+        const bar = document.querySelector('#toolbar').getBoundingClientRect();
+        const items = [...document.querySelectorAll('#toolbar button, #toolbar select')].filter((el) => getComputedStyle(el).display !== 'none');
+        return {
+          bar: bar.height,
+          items: items.map((el) => { const r = el.getBoundingClientRect(); return { id: el.id, top: r.top, bottom: r.bottom, right: r.right }; }),
+          overflow: document.documentElement.scrollWidth > innerWidth,
+        };
+      });
+      for (const it of m.items) {
+        assert.ok(it.top >= 0 && it.bottom <= m.bar, `#${it.id} (${it.top}..${it.bottom}) fits in the ${m.bar}px bar`);
+        assert.ok(it.right <= width, `#${it.id} ends inside the screen`);
+      }
+      assert.equal(new Set(m.items.map((it) => it.bottom - it.top)).size, 1, 'buttons and the Examples menu have the same height');
+      assert.equal(m.overflow, false);
+    } finally {
+      await ctx.close();
+    }
+  });
+}

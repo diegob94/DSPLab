@@ -33,6 +33,17 @@ function portRow(dir, name, nodeId, color) {
   return row;
 }
 
+// inputs on the left and outputs on the right, side by side so an output can sit level with the first input
+function portsEl(node, def) {
+  const ports = h('div', { className: 'ports' });
+  for (const dir of ['in', 'out']) {
+    const names = portNames(def, dir === 'in' ? 'inputs' : 'outputs', node.params);
+    if (!names.length) continue;
+    ports.append(h('div', { className: `ports-${dir}` }, ...names.map((name) => portRow(dir, name, node.id, def.portColor && def.portColor(name)))));
+  }
+  return ports;
+}
+
 function renderNode(node, def) {
   const el = h('div', { className: 'node' });
   el.style.setProperty('--cat', CATEGORIES[def.category]);
@@ -42,11 +53,7 @@ function renderNode(node, def) {
   const title = h('div', { className: 'node-title', textContent: def.title });
   el.append(title);
 
-  for (const dir of ['in', 'out']) {
-    for (const name of portNames(def, dir === 'in' ? 'inputs' : 'outputs', node.params)) {
-      el.append(portRow(dir, name, node.id, def.portColor && def.portColor(name)));
-    }
-  }
+  el.append(portsEl(node, def));
 
   const body = h('div', { className: 'node-body' });
   if (def.ui) { node.view = def.ui(node); body.append(node.view.el); }
@@ -89,10 +96,7 @@ export function initNodes() {
   });
   // the number of input ports changed: re-render them
   on('ports', (node) => {
-    const def = BLOCKS[node.type];
-    node.el.querySelectorAll('.port-row.in').forEach((row) => row.remove());
-    const names = portNames(def, 'inputs', node.params);
-    node.el.querySelector('.node-title').after(...names.map((name) => portRow('in', name, node.id, def.portColor && def.portColor(name))));
+    node.el.querySelector('.ports').replaceWith(portsEl(node, BLOCKS[node.type]));
     redrawEdges();
   });
   on('selection', (sel) => {
