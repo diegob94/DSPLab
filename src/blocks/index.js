@@ -4,6 +4,7 @@
  * Each block describes its ports, its parameters (rendered as widgets
  * in the node) and how it maps onto Web Audio nodes:
  *   build(ctx, params) -> { inputs: {port: AudioNode}, outputs: {port: AudioNode}, update(params), dispose() }
+ * build() is also given the model node as a third argument (to keep per-node data, e.g. a recording, across rebuilds).
  * build() may also return onConnect(port), called when an edge feeds that input port.
  * `inputs` may be a function of the params (a block with a configurable number of ports); a
  * parameter flagged `ports: true` rebuilds the node's ports when it changes, and a select's
@@ -12,6 +13,8 @@
  * displayed (read-only) on the node itself.
  * A block may also define an async setup(ctx, inUse), awaited before the first build (e.g. to register
  * an AudioWorklet module); inUse says whether the diagram has a node of this type.
+ * A block may also define actions: [{ label(node), busy(node), run(node) }], buttons shown in the properties panel
+ * (run returns a promise; when it settles the engine calls update() on the live block, see the 'data' event).
  * A block may also define ui(node) -> { el, draw(inst) }: a view shown inside the
  * node and redrawn every animation frame (inst is the built instance, or undefined
  * while the engine is stopped).
@@ -21,6 +24,8 @@ import { audioSource } from './audio-source.js';
 import { audioSink } from './audio-sink.js';
 import { oscilloscope } from './oscilloscope.js';
 import { mathOperator } from './math-operator.js';
+import { fftPlot } from './fft-plot.js';
+import { audioRecorder } from './audio-recorder.js';
 
 export const CATEGORIES = {
   'Source blocks': 'var(--source)',
@@ -34,4 +39,6 @@ export const BLOCKS = {
   audio_sink: audioSink,
   oscilloscope,
   math_operator: mathOperator,
+  fft_plot: fftPlot,
+  audio_recorder: audioRecorder,
 };
