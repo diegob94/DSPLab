@@ -1,7 +1,7 @@
 import { messageOutput, bitMessage } from './message.js';
 
 export const symbolTiming = {
-  title: 'Symbol Timing Recovery',
+  title: 'Symbol Recovery',
   category: 'Processing blocks',
   inputs: ['in'],
   outputs: ['msg'],

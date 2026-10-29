@@ -178,7 +178,7 @@ The sinc pulse is cut off 4 symbols to each side of its peak. Changing a setting
 
 Shown on the block: Pulse and Baud rate.
 
-**Symbol Timing Recovery**: samples a digital-looking signal (like the output of a matched filter) at the
+**Symbol Recovery**: samples a digital-looking signal (like the output of a matched filter) at the
 right instants and returns the bits. Input: `in` (audio). Output: `msg`.
 
 It runs a simple phase-locked loop: an oscillator that ticks once per symbol (at the baud rate you set) looks
@@ -234,7 +234,7 @@ Shown on the block: Frequency and Loop bandwidth.
 
 It follows the top and bottom of the signal over a short window; while the difference (the peak-to-peak
 swing) is above the threshold the signal passes unchanged, otherwise the output is exact zeros. It turns
-the noise between bursts into silence, which Symbol Timing Recovery recognises.
+the noise between bursts into silence, which Symbol Recovery recognises.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|

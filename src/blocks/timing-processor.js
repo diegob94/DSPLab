@@ -1,4 +1,4 @@
-// AudioWorklet processor behind Symbol Timing Recovery: runs the PLL (timing-core.js) on the input and
+// AudioWorklet processor behind Symbol Recovery: runs the PLL (timing-core.js) on the input and
 // posts the recovered bits to the main thread, a batch per render quantum that produced any.
 import { SymbolTimer } from './timing-core.js';
 
