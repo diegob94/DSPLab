@@ -8,7 +8,7 @@ after(async () => { await app.close(); });
 
 // feeds bits to a Message Deserializer and returns what it sends
 const run = (page, params, bits) => page.evaluate(([params, bits]) => {
-  const blk = dsplab.BLOCKS.message_deserialize.build({}, { preamble: '', ...params });
+  const blk = dsplab.BLOCKS.message_deserialize.build({}, { preambleType: 'text', preamble: '', ...params });
   const got = [];
   blk.outputs.msg.connect({ receive: (m) => got.push(m) });
   bits.forEach((b) => blk.inputs.msg.receive([[b]]));
@@ -64,6 +64,14 @@ test('the preamble can be found at any bit offset, and its bits are not in the m
   for (const pad of [0, 3, 7]) {
     const { got } = await run(page, { rows: 8, cols: 1, preamble: 'U' }, [...Array(pad).fill(1), ...bitsOf('U'), ...bitsOf('Z')]);
     assert.deepEqual(byteRows(got), ['01011010'], `pad ${pad}`);
+  }
+}));
+
+test('the preamble can be given as hex or as bits: 0xFF is eight ones', () => withApp(app, async (page) => {
+  const stream = [0, 0, ...Array(8).fill(1), ...bitsOf('Z')];
+  for (const [preambleType, preamble] of [['hex', 'FF'], ['hex', '0xff'], ['bits', '1111 1111']]) {
+    const { got } = await run(page, { rows: 8, cols: 1, preambleType, preamble }, stream);
+    assert.deepEqual(byteRows(got), ['01011010'], `${preambleType} ${preamble}`);
   }
 }));
 

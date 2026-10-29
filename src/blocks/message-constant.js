@@ -1,8 +1,12 @@
-import { messageOutput, textToBits, freezeBits } from './message.js';
+import { messageOutput, textToBits, bytesToBits, hexToBytes, freezeBits } from './message.js';
 
-// The message a Message Constant holds: text as 8 x N, or bits as 1 x N (anything but 0 and 1 is ignored,
-// so '1011 0111' works). null when it would be empty.
+// The message a Message Constant holds: text as 8 x N; hex bytes as 8 x N too (so 'FF' joins with text);
+// or bits as 1 x N (anything but 0 and 1 is ignored, so '1011 0111' works). null when it would be empty.
 export function constantMessage(type, value) {
+  if (type === 'hex') {
+    const bytes = hexToBytes(value);
+    return bytes.length ? bytesToBits(bytes) : null;
+  }
   if (type === 'bits') {
     const bits = [...value].filter((c) => c === '0' || c === '1').map(Number);
     return bits.length ? freezeBits([bits]) : null;
@@ -20,7 +24,7 @@ export const messageConstant = {
   messagePorts: ['msg'],
   constantMessage,
   params: [
-    { key: 'type',    label: 'Type',    show: true, type: 'select', options: ['text', 'bits'], default: 'text' },
+    { key: 'type',    label: 'Type',    show: true, type: 'select', options: ['text', 'hex', 'bits'], default: 'text' },
     { key: 'message', label: 'Message', show: true, type: 'text', default: 'hello' },
   ],
   build(ctx, p) {

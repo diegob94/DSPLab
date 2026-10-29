@@ -1,9 +1,13 @@
 import { h } from '../dom.js';
-import { messageOutput, freezeBits, shapeOf, textToBits } from './message.js';
+import { messageOutput, freezeBits, shapeOf, textToBits, bytesToBits, hexToBytes } from './message.js';
 import { bitStream } from './message-serialize.js';
 
-// The bits of a preamble text, as the Message Serializer would send them.
-const preambleBits = (text) => (text ? bitStream(textToBits(text)) : []);
+// The bits of a preamble, as the Message Serializer would send them: text (UTF-8), hex bytes, or bits as typed.
+function preambleBits(type, value) {
+  if (type === 'bits') return [...value].filter((c) => c === '0' || c === '1').map(Number);
+  if (type === 'hex') return hexToBytes(value).length ? bitStream(bytesToBits(hexToBytes(value))) : [];
+  return value ? bitStream(textToBits(value)) : [];
+}
 
 // Collects 1 x 1 messages into rows x cols messages, filling column by column (the inverse of the
 // Message Serializer): with 8 x 1 every 8 bits make one byte, most significant first.
@@ -18,11 +22,12 @@ export const messageDeserialize = {
   params: [
     { key: 'rows', label: 'Rows',    show: true, type: 'range', min: 1, max: 64, step: 1, default: 8 },
     { key: 'cols', label: 'Columns', show: true, type: 'range', min: 1, max: 4096, step: 1, default: 1 },
+    { key: 'preambleType', label: 'Preamble type', type: 'select', options: ['text', 'hex', 'bits'], default: 'text' },
     { key: 'preamble', label: 'Preamble', show: true, type: 'text', default: '' },
   ],
   build(ctx, p) {
     let { rows, cols } = p;
-    let preamble = preambleBits(p.preamble);
+    let preamble = preambleBits(p.preambleType, p.preamble);
     const out = messageOutput();
     let bits = [];          // the message being collected
     let recent = [];        // the last preamble.length bits, while looking for the preamble
@@ -56,7 +61,7 @@ export const messageDeserialize = {
       outputs: { msg: out },
       // a new size or preamble makes the bits collected so far useless
       update(p) {
-        const next = preambleBits(p.preamble);
+        const next = preambleBits(p.preambleType, p.preamble);
         if (p.rows !== rows || p.cols !== cols || next.join() !== preamble.join()) { rows = p.rows; cols = p.cols; preamble = next; reset(); inst.status = idle(); }
       },
       dispose() { out.disconnect(); },

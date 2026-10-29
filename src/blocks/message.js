@@ -23,9 +23,16 @@ export const isBits = (m) => Array.isArray(m) && m.length > 0 && Array.isArray(m
 
 export const shapeOf = (m) => `${m.length}x${m[0].length}`;
 
-export function textToBits(text) {
-  const bytes = new TextEncoder().encode(text);
-  return freezeBits(Array.from({ length: 8 }, (_, i) => Array.from(bytes, (b) => (b >> (7 - i)) & 1)));
+// bytes -> an 8 x N message, one column per byte
+export const bytesToBits = (bytes) => freezeBits(Array.from({ length: 8 }, (_, i) => Array.from(bytes, (b) => (b >> (7 - i)) & 1)));
+
+export const textToBits = (text) => bytesToBits(new TextEncoder().encode(text));
+
+// 'AA 55' or '0xAA 0x55' -> [0xAA, 0x55]: 0x prefixes and anything that isn't a hex digit are ignored,
+// and a last lone digit is dropped
+export function hexToBytes(hex) {
+  const digits = [...hex.replace(/0x/gi, ' ')].filter((c) => /[0-9a-fA-F]/.test(c)).join('');
+  return Array.from({ length: digits.length >> 1 }, (_, i) => parseInt(digits.slice(2 * i, 2 * i + 2), 16));
 }
 
 export const isByteMessage = (m) => isBits(m) && m.length === 8;

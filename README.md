@@ -317,13 +317,14 @@ message applies at once, without restarting the clock.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
-| Type | *text*: sent as an 8 × N message; *bits*: sent as a 1 × N row of bits | text, bits | text |
-| Message | The text, or the bits (every character other than `0` and `1` is ignored, so `1011 0111` works) | up to 100 characters | hello |
+| Type | *text*: sent as an 8 × N message (UTF-8); *hex*: bytes, also sent as 8 × N; *bits*: sent as a 1 × N row of bits | text, hex, bits | text |
+| Message | The text; the bytes in hexadecimal (`FF`, `AA 55` or `0xAA 0x55`: spaces, commas and `0x` are ignored, and a last lone digit is dropped); or the bits (every character other than `0` and `1` is ignored, so `1011 0111` works) | up to 100 characters | hello |
 
 It sends again whenever you change what it holds, and sends nothing while it is empty. Because it sends
 only once it is meant for blocks that remember what they receive, such as the `a` input of Message
-Concatenate (a preamble); to repeat a message use a Message Strobe. A *bits* message is 1 row high, so to
-join it to a text (8 rows) put a Message Reshape in between.
+Concatenate (a preamble); to repeat a message use a Message Strobe. To put a byte that no text can spell,
+like `0xFF`, in front of a text, use *hex*: it is 8 rows high like the text, so the two join by columns. A *bits*
+message is 1 row high, so to join it to a text put a Message Reshape in between (or use *hex*).
 
 Shown on the block: Type and Message.
 
@@ -378,15 +379,16 @@ first, which Message Debug prints as a character.
 |---|---|---|---|
 | Rows | Rows of the output message | 1 – 64 | 8 |
 | Columns | Columns of the output message | 1 – 4096 | 1 |
-| Preamble | Text whose bits mark where a message starts (empty: no framing) | up to 100 characters | empty |
+| Preamble type | How *Preamble* is written: *text* (UTF-8), *hex* (bytes, like `FF` or `AA 55`) or *bits* (like `11111111`) | text, hex, bits | text |
+| Preamble | What marks where a message starts, in that notation (empty: no framing) | up to 100 characters | empty |
 
 Messages that aren't 1 × 1 are ignored. Changing a setting drops the bits collected so far, and so does
 pressing Run.
 
-With the *Preamble* empty the block counts bits from the first one it receives, so after a Symbol Timing
+With the *Preamble* empty the block counts bits from the first one it receives, so after a Symbol
 Recovery (which can output stray bits before and after a burst) the bytes may be shifted and the text read as
-garbage. With a preamble it ignores the stream until it sees the preamble's bits (the text as the Message
-Serializer sends it, 8 bits per character), at any bit offset, then collects one message of Rows × Columns
+garbage. With a preamble it ignores the stream until it sees the preamble's bits (as the Message
+Serializer sends them: 8 bits per character or byte), at any bit offset, then collects one message of Rows × Columns
 bits (the preamble itself is not in it) and goes back to looking. Pick a preamble that is unlikely to appear
 by chance in the data, such as two or three characters. The block shows what it is doing: *Looking for the
 preamble*, how many bits it has collected, or the size it last sent.

@@ -15,6 +15,24 @@ test('text is an 8 x N message, bits are a 1 x N message that ignores everything
   assert.equal(await make(page, 'bits', 'abc'), null);
 }));
 
+test('hex is a row of bytes, 8 x N like text, so it can be joined with text; non-hex characters are ignored', () => withApp(app, async (page) => {
+  assert.deepEqual(await make(page, 'hex', 'FF'), [[1], [1], [1], [1], [1], [1], [1], [1]]);
+  assert.deepEqual(await make(page, 'hex', 'AA, 55'), [[1, 0], [0, 1], [1, 0], [0, 1], [1, 0], [0, 1], [1, 0], [0, 1]]);   // 0xAA = 10101010, 0x55 = 01010101
+  assert.equal(await make(page, 'hex', 'F'), null, 'a lone digit is not a byte');
+}));
+
+test('0xFF in front of a text joins by columns (1 x 8 bits would not)', () => withApp(app, async (page) => {
+  const got = await page.evaluate(() => {
+    const cat = dsplab.BLOCKS.message_concatenate;
+    const c = dsplab.BLOCKS.message_constant.constantMessage;
+    return [cat.concat(c('hex', 'FF'), c('text', 'hello'), 'columns'), cat.concat(c('bits', '11111111'), c('text', 'hello'), 'columns')];
+  });
+  assert.equal(got[0].length, 8);
+  assert.equal(got[0][0].length, 6);
+  assert.deepEqual(got[0].map((r) => r[0]), [1, 1, 1, 1, 1, 1, 1, 1]);
+  assert.equal(got[1], null);
+}));
+
 test('it sends once after the cables are wired, and again only when the message changes', () => withApp(app, async (page) => {
   for (const t of ['Message Constant', 'Message Debug']) await addFromPalette(page, t);
   await page.evaluate(() => {
