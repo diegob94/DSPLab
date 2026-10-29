@@ -27,6 +27,7 @@ import { oscilloscope } from './oscilloscope.js';
 import { mathOperator } from './math-operator.js';
 import { messageStrobe } from './message-strobe.js';
 import { messageDebug } from './message-debug.js';
+import { messageReshape } from './message-reshape.js';
 
 export const CATEGORIES = {
   'Source blocks': 'var(--source)',
@@ -43,4 +44,5 @@ export const BLOCKS = {
   math_operator: mathOperator,
   message_strobe: messageStrobe,
   message_debug: messageDebug,
+  message_reshape: messageReshape,
 };

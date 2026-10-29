@@ -197,6 +197,20 @@ empty on every Run.
 A message of any other shape, or any message when *Decode* is off, is printed as its bits: the size,
 then the rows separated by `/`, like `2x3  101 / 011`. Control characters in decoded text are shown as `·`.
 
+**Message Reshape**: changes the rows and columns of a message without changing its bits, like
+`numpy.reshape`. The bits are read row by row and laid out again in the new shape, so a 1 × 100 message can
+become 10 × 10 and back. Input: `msg`. Output: `msg`.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Rows | Rows of the output, or −1 to work it out from Columns | −1, 1 – 4096 | 1 |
+| Columns | Columns of the output, or −1 to work it out from Rows | −1, 1 – 4096 | −1 |
+
+Messages have at most two dimensions. The defaults flatten any message into a single row. Rows × columns
+must equal the number of bits, and only one of them can be −1. If it doesn't fit, the message is **dropped**
+(numpy would raise an error) and the block shows what it could not do, like `3x3 can't be 2 x -1`. The
+block also shows the last change, like `8x5 → 2x20`.
+
 ## Recipes
 
 **Hear a tone.** Wave Generator → Audio Sink (this is the starting diagram). Press Run and move the

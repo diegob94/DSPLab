@@ -138,6 +138,7 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
   background: #0d0f12; border: 1px solid var(--border); border-radius: 4px;
   white-space: pre; text-overflow: ellipsis;
 }
+.msg-status { width: 220px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .scope { display: block; width: 220px; height: 130px; border: 1px solid var(--border); border-radius: 4px; }
 
 /* properties panel */
