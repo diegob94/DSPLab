@@ -191,16 +191,35 @@ halfway between the levels the loop sees at symbol instants, 0 otherwise.
 |---|---|---|---|
 | Baud rate | Nominal symbol rate, the loop's starting frequency | 50 – 20000 (logarithmic) | 1000 baud |
 | Loop bandwidth | How fast the loop reacts, as a fraction of the baud rate: higher locks sooner but is noisier | 0.001 – 0.1 (logarithmic) | 0.005 |
-| Squelch | Peak-to-peak swing below which the signal counts as silence and nothing is sent | 0 – 1 | 0.1 |
+
+Silence is a signal that doesn't change at all: if the input stays perfectly flat for more than 32 symbols the
+block sends nothing (and forgets the signal's levels, to start afresh with the next burst); it also sends
+nothing until the signal first moves. A real signal with noise is never flat, so put a **Squelch** block
+in front of this one to turn the noise between bursts into exact zeros.
 
 Limits: it needs transitions to lock, so a long run of identical bits is held by the loop's memory rather than
-tracked. It cannot tell a silence from zeros in a signal that rests at 0, so a few zeros follow the end of a
-unipolar burst until the level estimate fades below the squelch. The ticks are placed by linear interpolation,
-which is fine from about 4 samples per symbol up. A pure sinc pulse has long tails that make the detector noisy,
-so use a low loop bandwidth with it. Starting from a symbol boundary it may take a while to leave; square
-pulses lock quickly.
+tracked, and a run longer than 32 symbols is taken for silence. A few zeros (up to 32) follow the end of a
+burst before it notices. The ticks are placed by linear interpolation, which is fine from about 4 samples per
+symbol up. A pure sinc pulse has long tails that make the detector noisy, so use a low loop bandwidth with
+it. Starting from a symbol boundary it may take a while to leave; square pulses lock quickly.
 
 Shown on the block: Baud rate.
+
+**Squelch**: a gate that mutes a signal while it is too weak. Input: `in`. Output: `out`.
+
+It follows the top and bottom of the signal over a short window; while the difference (the peak-to-peak
+swing) is above the threshold the signal passes unchanged, otherwise the output is exact zeros. It turns
+the noise between bursts into silence, which Symbol Timing Recovery recognises.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Threshold | Peak-to-peak swing above which the signal passes | 0 – 1 | 0.1 |
+| Window | Time over which the block forgets the signal's top and bottom, so how long it takes to close after the signal ends (and about how long to open) | 1 – 500 ms (logarithmic) | 20 ms |
+
+Set the threshold between the noise and the signal. Too high and weak symbols are cut; too low and the gate never
+closes. An unconnected input gives silence.
+
+Shown on the block: Threshold.
 
 ### Sink blocks
 
@@ -268,6 +287,20 @@ a message it receives; it builds a new one.
 
 It only sends while the audio is running, and sends nothing while the text is empty. Editing the
 message applies at once, without restarting the clock.
+
+**Message Constant**: holds a fixed message and sends it once, when the audio starts. Output: `msg`.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Type | *text*: sent as an 8 × N message; *bits*: sent as a 1 × N row of bits | text, bits | text |
+| Message | The text, or the bits (every character other than `0` and `1` is ignored, so `1011 0111` works) | up to 100 characters | hello |
+
+It sends again whenever you change what it holds, and sends nothing while it is empty. Because it sends
+only once it is meant for blocks that remember what they receive, such as the `a` input of Message
+Concatenate (a preamble); to repeat a message use a Message Strobe. A *bits* message is 1 row high, so to
+join it to a text (8 rows) put a Message Reshape in between.
+
+Shown on the block: Type and Message.
 
 **Message Debug**: prints the messages it receives, one per line, each with the time (in seconds of
 audio) at which it arrived. Input: `msg`. It reads *Stopped* while the audio is off, and the log starts

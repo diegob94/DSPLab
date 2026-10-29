@@ -7,11 +7,13 @@
 // two: mid-sample times the change between this symbol and the last one. At a transition the mid-sample
 // should sit on the decision level, so any other value means the strobes are early or late. A PI loop
 // filter turns that error into a phase correction (proportional) and a frequency correction (integral).
+const FLAT = 1e-6;   // a change smaller than this counts as no change
+
 export class SymbolTimer {
-  constructor({ sampleRate, baud, bandwidth = 0.005, squelch = 0.1, onBit }) {
+  constructor({ sampleRate, baud, bandwidth = 0.005, onBit }) {
     this.sampleRate = sampleRate;
     this.onBit = onBit;
-    this.squelch = squelch;
+    this.flat = Infinity; // samples for which the input hasn't changed: starts "silent" so nothing is sent before a signal
     this.set(baud, bandwidth);
     this.phase = 0;
     this.freq = 0;        // correction to the NCO step found by the loop (cycles per sample)
@@ -39,6 +41,11 @@ export class SymbolTimer {
   process(input) {
     for (let n = 0; n < input.length; n++) {
       const x = input[n];
+      // Silence is a signal that doesn't move at all (what a Squelch block leaves when it closes) for more
+      // than 32 symbols: nothing is sent, and the level followers start again from the next signal.
+      this.flat = Math.abs(x - this.prev) > FLAT ? 0 : this.flat + 1;
+      const silent = this.flat * this.step > 32;
+      if (silent) this.hi = this.lo = this.top = this.bottom = x;
       this.hi = x > this.hi ? x : this.hi + (x - this.hi) * this.decay;
       this.lo = x < this.lo ? x : this.lo + (x - this.lo) * this.decay;
       const w = this.step + this.freq;
@@ -48,7 +55,7 @@ export class SymbolTimer {
       if (this.phase >= 1) {
         const y = this.prev + ((1 - before) / w) * (x - this.prev);
         const amp = this.hi - this.lo;
-        if (amp > this.squelch) {
+        if (!silent && amp > FLAT) {
           // The decision level sits halfway between the levels seen at symbol instants, not between the
           // waveform's extremes: a sinc overshoots, which would push the level up and misread zeros.
           this.top = y > this.top ? y : this.top + (y - this.top) * 0.03;

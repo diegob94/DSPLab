@@ -46,13 +46,20 @@ test('it tracks a transmitter whose clock is 0.1 % fast or slow', async () => {
   for (const ppm of [1000, -1000]) assert.equal(await recover({ pulse: 'square', baud: 1000, delay: 5, ppm }), 1, `${ppm} ppm`);
 });
 
-test('it stays quiet on silence, and on a signal below the squelch', async () => {
+test('it is quiet on silence, talks while a signal moves, and goes quiet again once it stays flat', async () => {
   const { SymbolTimer } = await import('../src/blocks/timing-core.js');
   const n = [];
   const t = new SymbolTimer({ sampleRate: 48000, baud: 1000, onBit: (b) => n.push(b) });
   t.process(new Float32Array(48000));
-  t.process(Float32Array.from({ length: 48000 }, (_, i) => (Math.floor(i / 48) % 2) * 0.05));
-  assert.equal(n.length, 0);
+  assert.equal(n.length, 0, 'silence from the start');
+  t.process(Float32Array.from({ length: 48 * 100 }, (_, i) => Math.floor(i / 48) % 2));   // 100 symbols of 0101...
+  assert.ok(n.length >= 90 && n.length <= 100, `${n.length} bits for 100 symbols`);
+  const sent = n.length;
+  t.process(new Float32Array(48000));   // flat again
+  assert.ok(n.length - sent <= 34, `at most 32 more symbols before it notices: ${n.length - sent}`);
+  const again = n.length;
+  t.process(new Float32Array(48000));
+  assert.equal(n.length, again, 'and then nothing');
 });
 
 test('Symbol Timing Recovery: audio in, message out; a full chain recovers what the serializer sent', () => withApp(app, async (page) => {

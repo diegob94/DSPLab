@@ -5,13 +5,10 @@ import { SymbolTimer } from './timing-core.js';
 class TimingRecovery extends AudioWorkletProcessor {
   constructor(options) {
     super();
-    const { baud, bandwidth, squelch } = options.processorOptions;
+    const { baud, bandwidth } = options.processorOptions;
     this.bits = [];
-    this.timer = new SymbolTimer({ sampleRate, baud, bandwidth, squelch, onBit: (b) => this.bits.push(b) });
-    this.port.onmessage = ({ data }) => {
-      this.timer.squelch = data.squelch;
-      this.timer.set(data.baud, data.bandwidth);
-    };
+    this.timer = new SymbolTimer({ sampleRate, baud, bandwidth, onBit: (b) => this.bits.push(b) });
+    this.port.onmessage = ({ data }) => this.timer.set(data.baud, data.bandwidth);
   }
 
   process(inputs) {
