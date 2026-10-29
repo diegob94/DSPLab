@@ -8,7 +8,6 @@ const inputNames = (p) => Array.from({ length: p.channels }, (_, i) => `ch${i + 
 const AUTO_HZ = 100;      // sweep rate of the free-running ("auto") trigger
 const DIV_X = 10, DIV_Y = 8;   // graticule divisions
 const LEVEL_SHOWN_MS = 1500;   // how long the trigger level line stays after it was last changed
-const num = (v) => String(Number(v.toPrecision(3)));
 
 export const oscilloscope = {
   title: 'Oscilloscope',
@@ -20,7 +19,7 @@ export const oscilloscope = {
     { key: 'channels', label: 'Inputs',     type: 'select', options: [1, 2, 3, 4, 5, 6, 7, 8], ports: true, default: 2 },
     { key: 'trigger',  label: 'Trigger',    show: true, type: 'select', options: (p) => ['auto', ...inputNames(p)], default: 'auto' },
     { key: 'level',    label: 'Trig level', type: 'range', min: -1, max: 1, step: 0.01, default: 0 },
-    { key: 'timespan', label: 'Time span',  show: true, type: 'range', scale: 'log', min: 1, max: 1000, unit: 'ms', default: 10 },
+    { key: 'xdiv',     label: 'X / div',    show: true, type: 'range', scale: 'log', min: 0.1, max: 100, unit: 'ms', default: 1 },
     { key: 'ydiv',     label: 'Y / div',    show: true, type: 'range', scale: 'log', min: 0.01, max: 2, default: 0.25 },
   ],
   // the capture processor must be registered before build() can create the worklet node
@@ -128,7 +127,7 @@ export const oscilloscope = {
         g.strokeStyle = '#3a4350';
         g.beginPath(); g.moveTo(0, H / 2 + .5); g.lineTo(W, H / 2 + .5); g.stroke();
 
-        const { timespan, trigger, level, ydiv } = node.params;
+        const { xdiv, trigger, level, ydiv } = node.params;
         const pxPerUnit = (H / DIV_Y) / ydiv;
         const yOf = (v) => Math.min(H, Math.max(0, H / 2 - v * pxPerUnit));
 
@@ -136,10 +135,7 @@ export const oscilloscope = {
         g.font = '10px system-ui, sans-serif';
         g.textBaseline = 'alphabetic';
         g.textAlign = 'left';
-        g.fillText(inst ? `trigger ${trigger}` : 'Stopped', 6, 14);
-        g.textAlign = 'right';
-        g.fillText(`${num(timespan / DIV_X)} ms/div · ${num(ydiv)}/div`, W - 6, H - 5);
-        g.textAlign = 'left';
+        if (!inst) g.fillText('Stopped', 6, 14);
 
         // the trigger level, drawn for a moment after it was changed (also while stopped)
         if (level !== lastLevel) { lastLevel = level; levelShownAt = performance.now(); }
@@ -155,7 +151,7 @@ export const oscilloscope = {
         if (!inst) return;
 
         g.lineWidth = 1.5;
-        inst.sample(timespan, level, trigger).forEach((data, k) => {
+        inst.sample(xdiv * DIV_X, level, trigger).forEach((data, k) => {
           if (!data || data.length < 2) return;
           g.strokeStyle = SCOPE_COLORS[k % SCOPE_COLORS.length];
           g.beginPath();

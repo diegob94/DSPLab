@@ -145,11 +145,10 @@ only draws while the audio is running (otherwise it reads *Stopped*).
 | Inputs | How many channels (inputs) the block has | 1 – 8 | 2 |
 | Trigger | What starts each sweep: `auto` (free-running 100 Hz) or a channel | `auto`, `ch1` … `chN` | auto |
 | Trig level | Level the trigger channel must cross going upwards (ignored by `auto`) | −1 – 1 | 0 |
-| Time span | How much time fits on the screen | 1 ms – 1000 ms (logarithmic) | 10 ms |
+| X / div | Time per horizontal division (10 divisions, so the screen shows ten times this) | 0.1 ms – 100 ms (logarithmic) | 1 ms |
 | Y / div | Signal units per vertical division (8 divisions), shared by all channels | 0.01 – 2 (logarithmic) | 0.25 |
 
-Shown on the block: Trigger, Time span and Y / div. The screen has 10 × 8 divisions and prints the
-value of one division in the corner (e.g. `1 ms/div · 0.25/div`; X per division is the Time span ÷ 10).
+Shown on the block: Trigger, X / div and Y / div. The screen has 10 × 8 divisions.
 While you change *Trig level* a dashed line shows it on the screen for a moment.
 
 - **Trigger `auto`** (the default) starts a sweep every 1/100 s on the audio clock, whatever the signal does
@@ -164,7 +163,7 @@ While you change *Trig level* a dashed line shows it on the screen for a moment.
 - Channels without a cable aren't drawn.
 - If you reduce *Inputs*, cables on the channels that disappear are removed, and the trigger returns to
   `auto` if its channel is gone.
-- At long time spans a fast signal fills the screen as a solid band (440 cycles in 1 s can't be told
+- At long time scales (X / div of tens of ms) a fast signal fills the screen as a solid band (440 cycles in 1 s can't be told
   apart in 220 pixels). Use a slow signal, or a shorter span, to see the shape. The band's outline is
   the signal's envelope, which is useful on its own (see *Beats* below).
 
@@ -180,12 +179,12 @@ several inputs). Press Run. The default 10 ms span shows about four cycles of 44
 2 Hz square wave that swings between 0 and 1, so the tone switches on and off. The scope shows the keyed
 signal (`ch1`) against the square wave (`ch2`, the trigger).
 
-**Compare two waves.** Add a second Wave Generator and connect it to `ch2`. Set the scope's Time span to
-5 ms, both generators to 1000 Hz, one to *sine* and the other to *square*, and set *Trigger* to `ch2`:
+**Compare two waves.** Add a second Wave Generator and connect it to `ch2`. Set the scope's X / div to
+0.5 ms, both generators to 1000 Hz, one to *sine* and the other to *square*, and set *Trigger* to `ch2`:
 both traces start where the square wave rises, and you see how the sine lines up with it.
 
 **Beats.** Two generators at 440 Hz and 444 Hz, both into a Math Operator set to *add*, whose output goes
-to an Audio Sink and to an Oscilloscope with a Time span of 1000 ms. You hear the tone swell four times a
+to an Audio Sink and to an Oscilloscope with X / div set to 100 ms. You hear the tone swell four times a
 second, and the scope's band shows four lobes.
 
 **Ring modulation.** Same wiring, but set the second generator to 5 Hz and the Math Operator to

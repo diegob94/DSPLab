@@ -26,7 +26,7 @@ export const EXAMPLES = [
         { id: 2, type: 'wave_generator', x: 20, y: 330, params: { waveform: 'square', frequency: 2, offset: 0.5 } },
         { id: 3, type: 'math_operator', x: 290, y: 170, params: { operation: 'multiply' } },
         { id: 4, type: 'audio_sink', x: 570, y: 40, params: {} },
-        { id: 5, type: 'oscilloscope', x: 570, y: 260, params: { channels: 2, trigger: 'ch2', level: 0.5, timespan: 1000 } },
+        { id: 5, type: 'oscilloscope', x: 570, y: 260, params: { channels: 2, trigger: 'ch2', level: 0.5, xdiv: 100 } },
       ],
       edges: [
         edge(1, 'out', 3, 'a'), edge(2, 'out', 3, 'b'),
@@ -42,7 +42,7 @@ export const EXAMPLES = [
       version: 1, pan: { x: 0, y: 0 }, zoom: 1,
       nodes: [
         { id: 1, type: 'audio_source', x: 40, y: 80, params: {} },
-        { id: 2, type: 'oscilloscope', x: 380, y: 60, params: { channels: 1, timespan: 50 } },
+        { id: 2, type: 'oscilloscope', x: 380, y: 60, params: { channels: 1, xdiv: 5 } },
       ],
       edges: [edge(1, 'out', 2, 'ch1')],
     },
