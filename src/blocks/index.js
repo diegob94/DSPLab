@@ -32,6 +32,7 @@ import { messageStrobe } from './message-strobe.js';
 import { messageDebug } from './message-debug.js';
 import { messageReshape } from './message-reshape.js';
 import { messageSerialize } from './message-serialize.js';
+import { messageDeserialize } from './message-deserialize.js';
 import { pulseShaper } from './pulse-shaper.js';
 import { symbolTiming } from './symbol-timing.js';
 import { fftPlot } from './fft-plot.js';
@@ -55,6 +56,7 @@ export const BLOCKS = {
   message_debug: messageDebug,
   message_reshape: messageReshape,
   message_serialize: messageSerialize,
+  message_deserialize: messageDeserialize,
   pulse_shaper: pulseShaper,
   symbol_timing: symbolTiming,
   fft_plot: fftPlot,

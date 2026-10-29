@@ -13,10 +13,10 @@ export function messageOutput() {
 // The message format: a 2-D array of bits, rows x columns (m[row][col], every entry 0 or 1).
 // Messages are shared by every block they reach, so they are frozen: build a new one instead of editing.
 // Text travels as 8 x N: one column per byte of its UTF-8, most significant bit in row 0.
-const freeze = (rows) => Object.freeze(rows.map((r) => Object.freeze(r)));
+export const freezeBits = (rows) => Object.freeze(rows.map((r) => Object.freeze(r)));
 
 // A 1 x 1 message: one symbol.
-export const bitMessage = (b) => freeze([[b]]);
+export const bitMessage = (b) => freezeBits([[b]]);
 
 export const isBits = (m) => Array.isArray(m) && m.length > 0 && Array.isArray(m[0]) && m[0].length > 0
   && m.every((row) => Array.isArray(row) && row.length === m[0].length && row.every((b) => b === 0 || b === 1));
@@ -25,7 +25,7 @@ export const shapeOf = (m) => `${m.length}x${m[0].length}`;
 
 export function textToBits(text) {
   const bytes = new TextEncoder().encode(text);
-  return freeze(Array.from({ length: 8 }, (_, i) => Array.from(bytes, (b) => (b >> (7 - i)) & 1)));
+  return freezeBits(Array.from({ length: 8 }, (_, i) => Array.from(bytes, (b) => (b >> (7 - i)) & 1)));
 }
 
 export const isByteMessage = (m) => isBits(m) && m.length === 8;
@@ -44,5 +44,5 @@ export function reshape(m, rows, cols) {
   if (rows === -1 && cols > 0 && total % cols === 0) rows = total / cols;
   else if (cols === -1 && rows > 0 && total % rows === 0) cols = total / rows;
   if (!(rows > 0 && cols > 0 && rows * cols === total)) return null;
-  return freeze(Array.from({ length: rows }, (_, i) => flat.slice(i * cols, (i + 1) * cols)));
+  return freezeBits(Array.from({ length: rows }, (_, i) => flat.slice(i * cols, (i + 1) * cols)));
 }

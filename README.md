@@ -309,6 +309,25 @@ Shaper) does its own timing. A message that arrives while another is going out i
 
 Shown on the block: Baud rate.
 
+**Message Deserializer**: collects single bits back into messages, the inverse of the Message Serializer.
+Input: `msg`. Output: `msg`.
+
+Every 1 × 1 message adds a bit; when there are *Rows* × *Columns* of them the block sends one message of that
+size, filled column by column. With the defaults (8 × 1) every 8 bits make one byte, most significant bit
+first, which Message Debug prints as a character.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Rows | Rows of the output message | 1 – 64 | 8 |
+| Columns | Columns of the output message | 1 – 4096 | 1 |
+
+Messages that aren't 1 × 1 are ignored. Changing the size drops the bits collected so far, and so does
+pressing Run. The block does not look for where a byte starts: it counts bits from the first one it receives,
+so after a Symbol Timing Recovery (which can output a few stray bits before and after a burst) the bytes may
+be shifted and the text read as garbage. The block shows how many bits it has collected, or the size it last sent.
+
+Shown on the block: Rows and Columns.
+
 ## Recipes
 
 **Hear a tone.** Wave Generator → Audio Sink (this is the starting diagram). Press Run and move the
