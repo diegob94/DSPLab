@@ -211,6 +211,28 @@ must equal the number of bits, and only one of them can be −1. If it doesn't f
 (numpy would raise an error) and the block shows what it could not do, like `3x3 can't be 2 x -1`. The
 block also shows the last change, like `8x5 → 2x20`.
 
+**Message Serialize**: turns a message into a waveform you can play or look at. Input: `msg`
+(message). Output: `out` (audio).
+
+Each bit becomes one *symbol*: a one is `+1` and a zero `−1` (or `0`, see *Levels*), and the sequence of
+symbols is convolved with a pulse shape, sampled at the audio sample rate. When a message arrives the
+block sends its waveform **once** and then falls silent until the next message. A message that arrives
+while the previous one is still playing is added on top of it.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Pulse | Shape of each symbol: *square* holds the level for the whole symbol; *sinc* is a band-limited pulse that crosses zero at the other symbols' centres | square, sinc | square |
+| Baud rate | Symbols per second (a message of 8 bits at 1000 baud lasts 8 ms) | 50 – 20000 (logarithmic) | 1000 baud |
+| Levels | *bipolar*: 0 → −1, 1 → +1; *unipolar*: 0 → 0, 1 → +1 | bipolar, unipolar | bipolar |
+| Amplitude | Peak level of the output | 0 – 1 | 0.5 |
+| Read | Order of the bits: *columns* goes column by column (byte by byte for an 8 × N message, most significant bit first); *rows* goes row by row | columns, rows | columns |
+
+The sinc pulse is cut off 4 symbols to each side of its peak, and the waveform has 4 symbols of silence-to-ringing
+before and after the message so the ends of the pulse aren't chopped. With a square pulse the waveform lasts
+exactly as many symbols as the message has bits. Changing a setting applies to the next message.
+
+Shown on the block: Pulse and Baud rate.
+
 ## Recipes
 
 **Hear a tone.** Wave Generator → Audio Sink (this is the starting diagram). Press Run and move the
@@ -273,7 +295,7 @@ Things to know:
 
 Undo/redo, copy and paste, selecting several blocks at once, zooming the canvas, exporting or importing
 diagrams as files, a divide operation, and audio inputs from a microphone or file. Blocks are a short
-list for now (one generator, one operator, two sinks, two message blocks).
+list for now (one generator, one operator, two sinks, four message blocks).
 
 ## For developers
 

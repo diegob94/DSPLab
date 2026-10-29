@@ -28,6 +28,7 @@ import { mathOperator } from './math-operator.js';
 import { messageStrobe } from './message-strobe.js';
 import { messageDebug } from './message-debug.js';
 import { messageReshape } from './message-reshape.js';
+import { messageSerialize } from './message-serialize.js';
 
 export const CATEGORIES = {
   'Source blocks': 'var(--source)',
@@ -45,4 +46,5 @@ export const BLOCKS = {
   message_strobe: messageStrobe,
   message_debug: messageDebug,
   message_reshape: messageReshape,
+  message_serialize: messageSerialize,
 };
