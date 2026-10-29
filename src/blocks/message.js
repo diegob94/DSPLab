@@ -15,6 +15,9 @@ export function messageOutput() {
 // Text travels as 8 x N: one column per byte of its UTF-8, most significant bit in row 0.
 const freeze = (rows) => Object.freeze(rows.map((r) => Object.freeze(r)));
 
+// A 1 x 1 message: one symbol.
+export const bitMessage = (b) => freeze([[b]]);
+
 export const isBits = (m) => Array.isArray(m) && m.length > 0 && Array.isArray(m[0]) && m[0].length > 0
   && m.every((row) => Array.isArray(row) && row.length === m[0].length && row.every((b) => b === 0 || b === 1));
 
