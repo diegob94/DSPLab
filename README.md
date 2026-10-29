@@ -166,19 +166,23 @@ While you change *Trig level* a dashed line shows it on the screen for a moment.
 
 ### Message blocks
 
-Messages are discrete events (a number at a given moment) rather than a continuous signal. Their ports
-are **square** and blue, and they travel on their own cables: a message port can only be connected to
-another message port, never to an audio one.
+Messages are discrete events (a piece of text at a given moment) rather than a continuous signal.
+Their ports are **square**, and they travel on their own cables: a message port can only be connected
+to another message port, never to an audio one.
 
-**Message Strobe**: sends the same number again and again. Output: `msg`.
+**Message Strobe**: sends the same text again and again. Output: `msg`.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
 | Period | Time between messages | 10 ms – 10 s (logarithmic) | 1000 ms |
-| Value | The number sent | −1000 – 1000 | 1 |
+| Message | The text sent | up to 100 characters | hello |
 
-It only sends while the audio is running. There are no blocks that receive messages yet, so for now
-this one has nothing to talk to.
+It only sends while the audio is running. Editing the message applies at once, without restarting the clock.
+
+**Message Debug**: prints the messages it receives, one per line, each with the time (in seconds of
+audio) at which it arrived. Input: `msg`. Setting: **Lines**, how many of the newest messages are kept
+on the block (4, 8 or 16; default 8). It reads *Stopped* while the audio is off, and the log starts
+empty on every Run.
 
 ## Recipes
 
@@ -242,7 +246,7 @@ Things to know:
 
 Undo/redo, copy and paste, selecting several blocks at once, zooming the canvas, exporting or importing
 diagrams as files, a divide operation, and audio inputs from a microphone or file. Blocks are a short
-list for now (one generator, one operator, two sinks, one message source).
+list for now (one generator, one operator, two sinks, two message blocks).
 
 ## For developers
 

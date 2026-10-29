@@ -8,20 +8,23 @@ export const messageStrobe = {
   messagePorts: ['msg'],
   params: [
     { key: 'period', label: 'Period', show: true, type: 'range', scale: 'log', min: 10, max: 10000, step: 1, unit: 'ms', default: 1000 },
-    { key: 'value',  label: 'Value',  show: true, type: 'range', min: -1000, max: 1000, step: 1, default: 1 },
+    { key: 'message', label: 'Message', show: true, type: 'text', default: 'hello' },
   ],
   build(ctx, p) {
     const msg = messageOutput();
     let timer = null;
-    let value = p.value;
-    const start = (period) => {
+    let message = p.message;
+    let period = null;
+    const start = (ms) => {
       clearInterval(timer);
-      timer = setInterval(() => msg.send(value), period);
+      period = ms;
+      timer = setInterval(() => msg.send(message), ms);
     };
     start(p.period);
     return {
       outputs: { msg },
-      update(p) { value = p.value; start(p.period); },
+      // retyping the message must not restart the clock
+      update(p) { message = p.message; if (p.period !== period) start(p.period); },
       dispose() { clearInterval(timer); msg.disconnect(); },
     };
   },
