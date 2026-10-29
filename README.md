@@ -166,23 +166,36 @@ While you change *Trig level* a dashed line shows it on the screen for a moment.
 
 ### Message blocks
 
-Messages are discrete events (a piece of text at a given moment) rather than a continuous signal.
-Their ports are **square**, and they travel on their own cables: a message port can only be connected
-to another message port, never to an audio one.
+Messages are discrete events rather than a continuous signal. Their ports are **square**, and they
+travel on their own cables: a message port can only be connected to another message port, never to an
+audio one.
 
-**Message Strobe**: sends the same text again and again. Output: `msg`.
+A message is a table of ones and zeros with some rows and some columns. Text travels as **8 × N**: one
+column per byte (UTF-8, so `é` takes two columns), with the most significant bit in the top row. For
+example `A` (0x41) is the single column `0 1 0 0 0 0 0 1`, read from top to bottom. A block never edits
+a message it receives; it builds a new one.
+
+**Message Strobe**: sends the same text, as an 8 × N message, again and again. Output: `msg`.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
 | Period | Time between messages | 10 ms – 10 s (logarithmic) | 1000 ms |
 | Message | The text sent | up to 100 characters | hello |
 
-It only sends while the audio is running. Editing the message applies at once, without restarting the clock.
+It only sends while the audio is running, and sends nothing while the text is empty. Editing the
+message applies at once, without restarting the clock.
 
 **Message Debug**: prints the messages it receives, one per line, each with the time (in seconds of
-audio) at which it arrived. Input: `msg`. Setting: **Lines**, how many of the newest messages are kept
-on the block (4, 8 or 16; default 8). It reads *Stopped* while the audio is off, and the log starts
+audio) at which it arrived. Input: `msg`. It reads *Stopped* while the audio is off, and the log starts
 empty on every Run.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Lines | How many of the newest messages stay on the block | 4, 8, 16 | 8 |
+| Decode | Turn an 8 × N message back into text | on, off | on |
+
+A message of any other shape, or any message when *Decode* is off, is printed as its bits: the size,
+then the rows separated by `/`, like `2x3  101 / 011`. Control characters in decoded text are shown as `·`.
 
 ## Recipes
 

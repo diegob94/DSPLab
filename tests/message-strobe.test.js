@@ -6,6 +6,9 @@ let app;
 before(async () => { app = await launch(); });
 after(async () => { await app.close(); });
 
+// the app's own message helpers, from the same module instance the page uses
+const toText = (page, bits) => page.evaluate(async (bits) => (await import('./src/blocks/message.js')).bitsToText(bits), bits);
+
 const nodeOf = (page, type) => page.evaluate((type) => [...dsplab.graph.nodes.values()].find((n) => n.type === type).id, type);
 
 // subscribes to the strobe's output and collects what it sends in window.got
@@ -14,7 +17,7 @@ const listen = (page, id) => page.evaluate((id) => {
   dsplab.engine.live.get(id).outputs.msg.connect({ receive: (m) => window.got.push(m) });
 }, id);
 
-test('a running strobe sends its message as a string every period and stops with the engine', () => withApp(app, async (page) => {
+test('a running strobe sends its text as an 8 x N array of bits every period and stops with the engine', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Message Strobe');
   const id = await nodeOf(page, 'message_strobe');
   await page.evaluate((id) => {
@@ -27,7 +30,9 @@ test('a running strobe sends its message as a string every period and stops with
   await sleep(300);
   const got = await page.evaluate(() => window.got);
   assert.ok(got.length >= 5, `only ${got.length} messages in 300 ms`);
-  assert.ok(got.every((m) => m === 'ping 1'));
+  assert.ok(got.every((m) => m.length === 8 && m.every((row) => row.length === 6)), 'every message is 8 x 6 (one column per byte)');
+  assert.equal(await toText(page, got[0]), 'ping 1');
+  assert.deepEqual(got[0].map((row) => row[0]), [0, 1, 1, 1, 0, 0, 0, 0], "first column is 'p' = 0x70, most significant bit first");
   await page.evaluate(() => dsplab.engine.stop());
   const n = await page.evaluate(() => window.got.length);
   await sleep(100);
@@ -45,7 +50,8 @@ test('retyping the message while running applies live, without a rebuild', () =>
   await sleep(200);
   const got = await page.evaluate(() => window.got);
   assert.ok(got.length >= 3);
-  assert.equal(got[got.length - 1], 'héllo wörld');
+  assert.equal(got[got.length - 1][0].length, 'héllo wörld'.length + 2, 'UTF-8: two bytes for each of é and ö');
+  assert.equal(await toText(page, got[got.length - 1]), 'héllo wörld');
   assert.equal(await page.locator('.node:has-text("Message Strobe") .kv:has-text("Message") b').textContent(), 'héllo wörld');
 }));
 
