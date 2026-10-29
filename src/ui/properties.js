@@ -24,6 +24,8 @@ function paramWidget(node, p) {
   if (p.type === 'select') {
     input = h('select', { id });
     optionsOf(p, node.params).forEach((o) => input.append(h('option', { value: o, textContent: o })));
+  } else if (p.type === 'text') {
+    input = h('input', { id, type: 'text', maxLength: p.maxLength || 100 });
   } else if (log) {
     input = h('input', { id, type: 'range', min: 0, max: 1, step: 0.001 });
   } else {
@@ -42,7 +44,10 @@ function paramWidget(node, p) {
 
   input.addEventListener('pointerdown', (e) => e.stopPropagation());
   input.addEventListener('input', () => {
-    setParam(node, p.key, p.type === 'select' ? optionsOf(p, node.params)[input.selectedIndex] : fromSlider(parseFloat(input.value)));
+    const value = p.type === 'select' ? optionsOf(p, node.params)[input.selectedIndex]
+      : p.type === 'text' ? input.value
+      : fromSlider(parseFloat(input.value));
+    setParam(node, p.key, value);
     if (number) number.value = node.params[p.key];
   });
   if (number) {
