@@ -227,8 +227,8 @@ while the previous one is still playing is added on top of it.
 | Amplitude | Peak level of the output | 0 – 1 | 0.5 |
 | Read | Order of the bits: *columns* goes column by column (byte by byte for an 8 × N message, most significant bit first); *rows* goes row by row | columns, rows | columns |
 
-The sinc pulse is cut off 4 symbols to each side of its peak, and the waveform has 4 symbols of silence-to-ringing
-before and after the message so the ends of the pulse aren't chopped. With a square pulse the waveform lasts
+The sinc pulse is cut off 4 symbols to each side of its peak, and the waveform has 4 extra symbols before and
+after the message that hold the pulse's ringing, so its ends aren't chopped. With a square pulse the waveform lasts
 exactly as many symbols as the message has bits. Changing a setting applies to the next message.
 
 Shown on the block: Pulse and Baud rate.
