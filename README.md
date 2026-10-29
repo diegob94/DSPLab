@@ -46,7 +46,7 @@ You start with a **Wave Generator** already connected to an **Audio Sink**. Pres
   values, read-only; you change them here.
 - **Toolbar** (top): Run/Stop, delete, the **Examples** menu, and the audio status (the sample rate while
   running).
-- **Examples** (toolbar): *Simple tone* (the starting diagram), *ASK modulation* and *Audio source scope* (microphone → oscilloscope). Picking one replaces
+- **Examples** (toolbar): *Simple tone* (the starting diagram), *ASK modulation*, *ASK receiver* (microphone → carrier recovery → message) and *Audio source scope* (microphone → oscilloscope). Picking one replaces
   the current diagram, so it asks for confirmation first (unless the canvas is empty); it can't be undone,
   because the autosave overwrites the old diagram.
 
@@ -420,6 +420,14 @@ several inputs). Press Run. The default 10 ms span shows about four cycles of 44
 **Amplitude-shift keying.** Pick *ASK modulation* in the Examples menu: a 440 Hz sine is multiplied by a
 2 Hz square wave that swings between 0 and 1, so the tone switches on and off. The scope shows the keyed
 signal (`ch1`) against the square wave (`ch2`, the trigger).
+
+**Receive an ASK message.** Pick *ASK receiver* in the Examples menu and press Run (it asks for the
+microphone). The Audio Source feeds a Carrier Recovery, which rebuilds a clean 440 Hz carrier; a Math Operator
+set to *multiply* mixes it with the signal, so the keyed bursts come out at baseband; the Filter (low-pass,
+517 Hz) removes the double-frequency term, the Squelch silences the gaps, Symbol Recovery samples the symbols at
+1000 baud and the Message Deserializer waits for the preamble `ddd` and collects the 5 characters that follow,
+which Message Debug prints. It expects a transmitter that sends that at 1000 baud on a 440 Hz carrier. The
+example is only a starting point: nobody has tried it here with a real microphone.
 
 **Compare two waves.** Add a second Wave Generator and connect it to `ch2`. Set the scope's X / div to
 0.5 ms, both generators to 1000 Hz, one to *sine* and the other to *square*, and set *Trigger* to `ch2`:
