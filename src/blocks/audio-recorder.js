@@ -4,25 +4,35 @@
 import { h } from '../dom.js';
 
 const recordings = new WeakMap();   // node -> { data: Float32Array, rate }
-const recording = new WeakMap();    // node -> { startedAt } while the microphone is being recorded
+const recording = new WeakMap();    // node -> { startedAt, released, stop } while the microphone is being recorded
 
 const WIDTH = 220, HEIGHT = 44;
 
-// microphone -> MediaRecorder for `seconds` -> decoded mono samples
-async function capture(seconds) {
+const MAX_SECONDS = 10;     // a hold longer than this stops by itself
+const MIN_SECONDS = 0.2;    // a shorter hold is a stray click: the previous sample is kept
+
+// microphone -> MediaRecorder until st.stop() -> decoded mono samples (null if released too soon)
+async function capture(st) {
   // raw signal, as in the Audio Source
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
   });
   try {
+    if (st.released) return null;   // let go while the browser was still opening the microphone
     const rec = new MediaRecorder(stream);
     const chunks = [];
     rec.ondataavailable = (e) => chunks.push(e.data);
     const stopped = new Promise((resolve, reject) => { rec.onstop = resolve; rec.onerror = (e) => reject(e.error); });
+    st.startedAt = performance.now();
     rec.start();
-    await new Promise((r) => setTimeout(r, seconds * 1000));
+    await new Promise((resolve) => {
+      st.stop = resolve;
+      setTimeout(resolve, audioRecorder.maxSeconds * 1000);
+    });
+    const seconds = (performance.now() - st.startedAt) / 1000;
     rec.stop();
     await stopped;
+    if (seconds < MIN_SECONDS) return null;
     const rate = 44100;   // decodeAudioData resamples to the context's rate; the engine resamples on playback
     const decoded = await new OfflineAudioContext(1, 1, rate).decodeAudioData(await new Blob(chunks).arrayBuffer());
     return { data: decoded.getChannelData(0).slice(), rate };
@@ -36,23 +46,30 @@ export const audioRecorder = {
   category: 'Source blocks',
   inputs: [],
   outputs: ['out'],
+  maxSeconds: MAX_SECONDS,
   params: [
-    { key: 'length', label: 'Record length', show: true, type: 'range', min: 0.5, max: 10, step: 0.5, unit: 's', default: 2 },
-    { key: 'gap',    label: 'Pause', show: true, type: 'range', min: 0, max: 10, step: 0.1, unit: 's', default: 1 },
-    { key: 'gain',   label: 'Gain', type: 'range', min: 0, max: 2, step: 0.01, default: 1 },
+    { key: 'gap',  label: 'Pause', show: true, type: 'range', min: 0, max: 10, step: 0.1, unit: 's', default: 1 },
+    { key: 'gain', label: 'Gain', type: 'range', min: 0, max: 2, step: 0.01, default: 1 },
   ],
-  // buttons of the properties panel; run() returns a promise, busy() says whether it is still going
+  // press-and-hold button of the properties panel: records while it is held, up to maxSeconds
   actions: [{
-    label: (node) => recording.has(node) ? 'Recording…' : recordings.has(node) ? 'Record again' : 'Record',
-    busy: (node) => recording.has(node),
-    async run(node) {
+    label: (node) => recording.has(node) ? 'Recording… (release to stop)' : recordings.has(node) ? 'Hold to record again' : 'Hold to record',
+    async press(node) {
       if (recording.has(node)) return;
-      recording.set(node, { startedAt: performance.now() });
+      const st = { startedAt: performance.now(), released: false, stop: null };
+      recording.set(node, st);
       try {
-        recordings.set(node, await capture(node.params.length));
+        const rec = await capture(st);
+        if (rec) recordings.set(node, rec);
       } finally {
         recording.delete(node);
       }
+    },
+    release(node) {
+      const st = recording.get(node);
+      if (!st) return;
+      st.released = true;
+      if (st.stop) st.stop();
     },
   }],
   build(ctx, p, node) {
@@ -100,7 +117,7 @@ export const audioRecorder = {
       el,
       draw() {
         const rec = recordings.get(node), now = recording.get(node);
-        const s = now ? `● Recording… ${Math.min(node.params.length, (performance.now() - now.startedAt) / 1000).toFixed(1)} / ${node.params.length} s`
+        const s = now ? `● Recording… ${Math.min(audioRecorder.maxSeconds, (performance.now() - now.startedAt) / 1000).toFixed(1)} / ${audioRecorder.maxSeconds} s`
           : rec ? `Sample ${(rec.data.length / rec.rate).toFixed(1)} s`
           : 'No sample: select the block and press Record';
         if (s !== status) { status = s; text.textContent = s; text.classList.toggle('recording', !!now); }

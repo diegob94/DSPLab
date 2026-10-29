@@ -71,24 +71,32 @@ function paramWidget(node, p) {
   return wrap;
 }
 
-// a block's button (e.g. Record): shows the block's label, is disabled while the action runs, and
-// tells the model when it is done so the live block can pick up the result
+// a block's press-and-hold button (e.g. Record): the action runs while it is held. When it
+// settles the model is told, so the live block can pick up the result
 function actionButton(node, a) {
   const button = h('button', { className: 'action', type: 'button' });
-  const refresh = () => {
-    button.textContent = a.label(node);
-    button.disabled = a.busy(node);
-  };
+  const refresh = () => { button.textContent = a.label(node); };
   refresh();
-  button.addEventListener('click', () => {
-    const done = a.run(node);
+  const press = () => {
+    const done = a.press(node);
     refresh();
     done.catch((err) => alert(`${a.label(node)}: ${err.message || err}`)).then(() => {
       dataChanged(node);
       const sel = getSelection();
       if (sel && sel.kind === 'node' && sel.id === node.id) renderProps();
     });
+  };
+  const release = () => a.release(node);
+  button.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    if (e.button !== 0) return;
+    button.setPointerCapture(e.pointerId);   // so the release is seen wherever the pointer ends up
+    press();
   });
+  for (const ev of ['pointerup', 'pointercancel']) button.addEventListener(ev, release);
+  button.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); press(); } });
+  button.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') release(); });
+  button.addEventListener('blur', release);
   return button;
 }
 

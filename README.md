@@ -120,17 +120,18 @@ Shown on the block: Gain.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
-| Record length | How long the **Record** button records | 0.5 – 10 s | 2 s |
 | Pause | Silence between the end of one play and the start of the next | 0 – 10 s | 1 s |
 | Gain | Output level | 0 – 2 | 1 |
 
-Select the block and press **Record** in the properties panel (the button reads *Record again* once there is a
-sample). The browser asks for microphone permission the first time. It works whether or not the audio is
+Select the block and **hold down** the *Hold to record* button in the properties panel: it records for as long
+as you hold it (the Space or Enter key works too), up to 10 s, and stops by itself after that. A hold shorter
+than a fifth of a second is ignored and keeps the previous sample; recording again replaces it. The browser
+asks for microphone permission the first time. It works whether or not the audio is
 running; if it is, the new sample starts looping at once. The node shows the recorded waveform. The sample is
 kept in memory only: it is not saved with the diagram, so after a reload you have to record again. Changing
 *Pause* restarts the loop. Wear headphones if the loop goes to an Audio Sink.
 
-Shown on the block: Record length and Pause.
+Shown on the block: Pause.
 
 ### Processing blocks
 

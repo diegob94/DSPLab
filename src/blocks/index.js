@@ -13,8 +13,8 @@
  * displayed (read-only) on the node itself.
  * A block may also define an async setup(ctx, inUse), awaited before the first build (e.g. to register
  * an AudioWorklet module); inUse says whether the diagram has a node of this type.
- * A block may also define actions: [{ label(node), busy(node), run(node) }], buttons shown in the properties panel
- * (run returns a promise; when it settles the engine calls update() on the live block, see the 'data' event).
+ * A block may also define actions: [{ label(node), press(node), release(node) }], press-and-hold buttons in the properties
+ * panel (press returns a promise that settles when the action is over; then the engine calls update() on the live block, see the 'data' event).
  * A block may also define ui(node) -> { el, draw(inst) }: a view shown inside the
  * node and redrawn every animation frame (inst is the built instance, or undefined
  * while the engine is stopped).
