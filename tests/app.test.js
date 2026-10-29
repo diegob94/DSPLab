@@ -77,3 +77,10 @@ test('blocks can be dragged by their title', () => withApp(app, async (page) => 
   assert.equal(Math.round(after.x - before.x), 60);
   assert.equal(Math.round(after.y - before.y), 60);
 }));
+
+test('a block\'s output sits level with its first input instead of on a row of its own', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Math Operator');
+  const y = (sel) => page.locator(`.node:has-text("Math Operator") ${sel}`).evaluate((el) => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; });
+  assert.equal(await y('.port.out'), await y('.port.in[data-port="a"]'));
+  assert.ok(await y('.port.in[data-port="b"]') > await y('.port.in[data-port="a"]'), 'b is below a');
+}));
