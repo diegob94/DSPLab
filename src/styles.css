@@ -140,6 +140,10 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
 }
 .msg-status { width: 220px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .scope { display: block; width: 220px; height: 130px; border: 1px solid var(--border); border-radius: 4px; }
+.rec-status { color: var(--muted); font-size: 11px; margin-bottom: 4px; }
+.rec-status.recording { color: #ff7b72; }
+.rec-wave { display: block; width: 220px; height: 44px; border: 1px solid var(--border); border-radius: 4px; }
+#props button.action { margin: 4px 0 8px; width: 100%; }
 
 /* properties panel */
 #props {

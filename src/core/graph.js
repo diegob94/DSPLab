@@ -125,3 +125,8 @@ export function hasPort(nodeId, port, dir) {
   const node = graph.nodes.get(nodeId);
   return !!node && portNames(BLOCKS[node.type], dir === 'in' ? 'inputs' : 'outputs', node.params).includes(port);
 }
+
+// a block's runtime data changed (e.g. a new recording): the engine refreshes the live block, nothing is saved
+export function dataChanged(node) {
+  emit('data', node);
+}

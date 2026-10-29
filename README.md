@@ -116,6 +116,23 @@ added while running stays silent until you press Stop and Run again.
 
 Shown on the block: Gain.
 
+**Audio Recorder**: records a sample from your microphone and plays it in a loop. Output: `out`.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Pause | Silence between the end of one play and the start of the next | 0 – 10 s | 1 s |
+| Gain | Output level | 0 – 2 | 1 |
+
+Select the block and **hold down** the *Hold to record* button in the properties panel: it records for as long
+as you hold it (the Space or Enter key works too), up to 10 s, and stops by itself after that. A hold shorter
+than a fifth of a second is ignored and keeps the previous sample; recording again replaces it. The browser
+asks for microphone permission the first time. It works whether or not the audio is
+running; if it is, the new sample starts looping at once. The node shows the recorded waveform. The sample is
+kept in memory only: it is not saved with the diagram, so after a reload you have to record again. Changing
+*Pause* restarts the loop. Wear headphones if the loop goes to an Audio Sink.
+
+Shown on the block: Pause.
+
 ### Processing blocks
 
 **Math Operator**: combines two signals sample by sample. Inputs: `a`, `b`. Output: `out`.
@@ -128,6 +145,19 @@ Shown on the block: Gain.
 
 An unconnected input is 0, so `add` with only `a` connected passes `a` through, `multiply` with `b`
 open gives silence, and `subtract` with only `b` connected inverts it.
+
+**Filter**: a low-pass or high-pass filter (second order, 12 dB per octave). Input: `in`. Output: `out`.
+
+| Setting | Range | Default |
+|---|---|---|
+| Type | lowpass, highpass | lowpass |
+| Cutoff | 10 – 20000 Hz | 1000 Hz |
+| Q | 0.1 – 20 | 0.707 |
+
+Low-pass keeps what is below the cutoff and attenuates what is above; high-pass does the opposite. At
+the cutoff the level is −3 dB (with Q = 0.707). Raising Q adds a resonant peak at the cutoff.
+
+Shown on the block: Type and Cutoff.
 
 ### Sink blocks
 
@@ -163,6 +193,17 @@ While you change *Trig level* a dashed line shows it on the screen for a moment.
 - At long time scales (X / div of tens of ms) a fast signal fills the screen as a solid band (440 cycles in 1 s can't be told
   apart in 220 pixels). Use a slow signal, or a shorter span, to see the shape. The band's outline is
   the signal's envelope, which is useful on its own (see *Beats* below).
+
+**FFT Plot**: shows the spectrum (level in dB against frequency) of a signal, live. Input: `in`. It only
+draws while the audio is running.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Window size | Samples analysed at once. Bigger = finer frequency resolution (bin width = sample rate / size) but slower to react | 256 – 32768 | 2048 |
+| Freq. axis | Frequency axis from 0 to half the sample rate, linear or logarithmic (20 Hz up) | linear, log | linear |
+
+The vertical axis goes from 0 dB (full scale) down to −100 dB. The loudest frequency is printed in the corner
+as *peak … Hz*. Shown on the block: Window size and Freq. axis.
 
 ### Message blocks
 

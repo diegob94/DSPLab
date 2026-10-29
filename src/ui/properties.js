@@ -3,7 +3,7 @@ import { BLOCKS, CATEGORIES } from '../blocks/index.js';
 import { $, h } from '../dom.js';
 import { on } from '../core/events.js';
 import { optionsOf } from '../core/params.js';
-import { graph, getSelection, setParam, syncParams, rebuildPorts } from '../core/graph.js';
+import { graph, getSelection, setParam, syncParams, rebuildPorts, dataChanged } from '../core/graph.js';
 import { clamp } from '../util.js';
 
 const propsBody = $('#props-body');
@@ -76,6 +76,35 @@ function paramWidget(node, p) {
   return wrap;
 }
 
+// a block's press-and-hold button (e.g. Record): the action runs while it is held. When it
+// settles the model is told, so the live block can pick up the result
+function actionButton(node, a) {
+  const button = h('button', { className: 'action', type: 'button' });
+  const refresh = () => { button.textContent = a.label(node); };
+  refresh();
+  const press = () => {
+    const done = a.press(node);
+    refresh();
+    done.catch((err) => alert(`${a.label(node)}: ${err.message || err}`)).then(() => {
+      dataChanged(node);
+      const sel = getSelection();
+      if (sel && sel.kind === 'node' && sel.id === node.id) renderProps();
+    });
+  };
+  const release = () => a.release(node);
+  button.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    if (e.button !== 0) return;
+    button.setPointerCapture(e.pointerId);   // so the release is seen wherever the pointer ends up
+    press();
+  });
+  for (const ev of ['pointerup', 'pointercancel']) button.addEventListener(ev, release);
+  button.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); press(); } });
+  button.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') release(); });
+  button.addEventListener('blur', release);
+  return button;
+}
+
 function renderProps() {
   const selection = getSelection();
   propsBody.replaceChildren();
@@ -97,8 +126,9 @@ function renderProps() {
   const head = h('div', { className: 'props-head', textContent: def.title });
   head.style.setProperty('--cat', CATEGORIES[def.category]);
   propsBody.append(head, h('div', { className: 'props-cat', textContent: def.category }));
-  if (!def.params.length) return hint('This block has no properties.');
+  if (!def.params.length && !def.actions) return hint('This block has no properties.');
   for (const p of def.params) propsBody.append(paramWidget(node, p));
+  for (const a of def.actions || []) propsBody.append(actionButton(node, a));
 }
 
 export function initProperties() {
