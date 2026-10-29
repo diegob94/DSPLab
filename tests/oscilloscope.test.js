@@ -50,7 +50,7 @@ async function wireScope(page) {
 test('defaults to two inputs; trigger options follow the inputs', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
   assert.deepEqual(await portNames(page), ['ch1', 'ch2']);
-  assert.deepEqual(await triggerOptions(page), ['ch1', 'ch2']);
+  assert.deepEqual(await triggerOptions(page), ['auto', 'ch1', 'ch2']);
   const colours = await page.locator('.node:has-text("Oscilloscope") .port-label').evaluateAll((els) => els.map((e) => e.style.color));
   assert.equal(new Set(colours).size, 2, 'each channel has its own colour');
 }));
@@ -70,7 +70,7 @@ test('changing the number of inputs adds and removes ports', () => withApp(app, 
   await addFromPalette(page, 'Oscilloscope');
   await setInputs(page, 4);
   assert.deepEqual(await portNames(page), ['ch1', 'ch2', 'ch3', 'ch4']);
-  assert.equal((await triggerOptions(page)).length, 4);
+  assert.equal((await triggerOptions(page)).length, 5, 'auto + 4 channels');
   assert.equal(await panelControl(page, 'Inputs').inputValue(), '4');
   await setInputs(page, 8);
   assert.equal((await portNames(page)).length, 8);
@@ -92,7 +92,7 @@ test('shrinking drops cables on removed ports and resets a trigger that no longe
     trigger: scope.params.trigger,
     shownOnNode: scope.el.querySelector('[data-key=trigger]').textContent,
   }));
-  assert.deepEqual(state, { ports: ['ch1'], trigger: 'ch1', shownOnNode: 'ch1' });
+  assert.deepEqual(state, { ports: ['ch1'], trigger: 'auto', shownOnNode: 'auto' });
   assert.equal(await page.locator('#wires path.edge').count(), 2, 'no orphan wires (gen->sink, gen->ch1)');
 }));
 
@@ -187,6 +187,82 @@ test('the trigger level is honoured', () => withApp(app, async (page) => {
 
 test('trace colours, trigger and time span are shown on the node', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
-  assert.deepEqual(await page.locator('.node:has-text("Oscilloscope") .kv').allTextContents(), ['Triggerch1', 'Time span10 ms']);
+  assert.deepEqual(await page.locator('.node:has-text("Oscilloscope") .kv').allTextContents(), ['Triggerauto', 'Time span10 ms', 'Y / div0.25']);
   assert.equal(await page.locator('#props .param').count(), 5);
+}));
+
+// a free-running 100 Hz sine (exactly one cycle per auto sweep) next to a 440 Hz one, both on the scope
+const wireTwoTones = (page) => page.evaluate(() => {
+  const gens = [...dsplab.graph.nodes.values()].filter((n) => n.type === 'wave_generator');
+  window.scope = dsplab.addNode('oscilloscope', 300, 300);
+  const sink = [...dsplab.graph.nodes.values()].find((n) => n.type === 'audio_sink');
+  dsplab.removeNode(sink.id);
+  const second = dsplab.addNode('wave_generator', 100, 400, { params: { frequency: 100 } });
+  dsplab.addEdge({ node: second.id, port: 'out' }, { node: scope.id, port: 'ch1' });
+  dsplab.addEdge({ node: gens[0].id, port: 'out' }, { node: scope.id, port: 'ch2' });
+});
+
+// first sample of ch1 / ch2 over `frames` snapshots, with a given trigger and level
+const firstSamples = (page, trigger, level) => page.evaluate(async ([trigger, level]) => {
+  const inst = dsplab.engine.live.get(scope.id);
+  const rows = [];
+  for (let i = 0; i < 12; i++) {
+    const w = inst.sample(10, level, trigger);
+    rows.push([w[0][0], w[1][0]]);
+    await new Promise((r) => setTimeout(r, 37));
+  }
+  const spread = (k) => Math.max(...rows.map((r) => r[k])) - Math.min(...rows.map((r) => r[k]));
+  return { ch1: spread(0), ch2: spread(1) };
+}, [trigger, level]);
+
+test('auto trigger sweeps at 100 Hz whatever the trigger level: a 100 Hz signal holds still, a 440 Hz one does not', () => withApp(app, async (page) => {
+  await wireTwoTones(page);
+  await startAudio(page);
+  await sleep(500);
+  for (const level of [-0.9, 0, 0.9]) {
+    const r = await firstSamples(page, 'auto', level);
+    assert.ok(r.ch1 < 0.03, `100 Hz sine starts at the same phase every sweep (level ${level}): spread ${r.ch1}`);
+    assert.ok(r.ch2 > 0.2, `440 Hz sine is not synchronised (level ${level}): spread ${r.ch2}`);
+  }
+}));
+
+test('auto is the default trigger', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  assert.equal(await panelControl(page, 'Trigger').inputValue(), 'auto');
+}));
+
+test('the scope draws X and Y per division on the screen', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  // the canvas is the only place the text goes, so check the numbers the drawing is based on
+  const calls = await page.evaluate(() => {
+    const node = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
+    const texts = [];
+    const ctx = node.view.el.getContext('2d');
+    const orig = ctx.fillText.bind(ctx);
+    ctx.fillText = (t, ...rest) => { texts.push(t); return orig(t, ...rest); };
+    node.params.timespan = 50;
+    node.params.ydiv = 0.5;
+    node.view.draw(undefined);
+    return texts;
+  });
+  assert.ok(calls.includes('5 ms/div · 0.5/div'), calls.join(' | '));
+}));
+
+test('the trigger level line is drawn while the level is being changed, and goes away again', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  const texts = () => page.evaluate(async () => {
+    const node = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
+    const ctx = node.view.el.getContext('2d');
+    const seen = [];
+    const orig = ctx.fillText.bind(ctx);
+    ctx.fillText = (t, ...rest) => { seen.push(t); return orig(t, ...rest); };
+    await new Promise((r) => setTimeout(r, 100));   // a few animation frames
+    ctx.fillText = orig;
+    return seen;
+  });
+  assert.ok(!(await texts()).some((t) => t.startsWith('level')), 'no level line until it is touched');
+  await setRange(panelControl(page, 'Trig level'), 0.3);
+  assert.ok((await texts()).includes('level 0.3'), 'level line while adjusting');
+  await sleep(1700);
+  assert.ok(!(await texts()).some((t) => t.startsWith('level')), 'the line disappears after a moment');
 }));

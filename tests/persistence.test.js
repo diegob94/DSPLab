@@ -108,7 +108,7 @@ test('saved data is sanitised: bad values reset, unknown blocks/ports dropped, o
   assert.deepEqual(state.nodes[0].params, { waveform: 'sine', frequency: 440, amplitude: 0.25, offset: 0 });
   assert.deepEqual(state.pan, { x: 0, y: 0 });
   const scope = state.nodes[2].params;
-  assert.deepEqual([scope.channels, scope.trigger, scope.level], [2, 'ch1', 1]);
+  assert.deepEqual([scope.channels, scope.trigger, scope.level], [2, 'auto', 1]);
 }, {
   seed: {
     version: 1,

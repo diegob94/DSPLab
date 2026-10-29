@@ -143,14 +143,19 @@ only draws while the audio is running (otherwise it reads *Stopped*).
 | Setting | What it does | Range | Default |
 |---|---|---|---|
 | Inputs | How many channels (inputs) the block has | 1 – 8 | 2 |
-| Trigger | Which channel starts each sweep | `ch1` … `chN` | ch1 |
-| Trig level | Level the trigger channel must cross going upwards | −1 – 1 | 0 |
+| Trigger | What starts each sweep: `auto` (free-running 100 Hz) or a channel | `auto`, `ch1` … `chN` | auto |
+| Trig level | Level the trigger channel must cross going upwards (ignored by `auto`) | −1 – 1 | 0 |
 | Time span | How much time fits on the screen | 1 ms – 1000 ms (logarithmic) | 10 ms |
-| Scale | Vertical zoom, shared by all channels | 0.1× – 10× (logarithmic) | 1× |
+| Y / div | Signal units per vertical division (8 divisions), shared by all channels | 0.01 – 2 (logarithmic) | 0.25 |
 
-Shown on the block: Trigger and Time span.
+Shown on the block: Trigger, Time span and Y / div. The screen has 10 × 8 divisions and prints the
+value of one division in the corner (e.g. `1 ms/div · 0.25/div`; X per division is the Time span ÷ 10).
+While you change *Trig level* a dashed line shows it on the screen for a moment.
 
-- **Trigger.** Each sweep starts where the trigger channel rises through *Trig level*, and every
+- **Trigger `auto`** (the default) starts a sweep every 1/100 s on the audio clock, whatever the signal does
+  and whatever *Trig level* says. A signal whose frequency is a multiple of 100 Hz holds still; any other
+  drifts across the screen. Pick a channel to synchronise to the signal itself.
+- **Trigger on a channel.** Each sweep starts where the trigger channel rises through *Trig level*, and every
   channel is drawn from that same instant, so a repeating signal holds still and channels can be
   compared. The trigger channel can be any of them, which lets you synchronise to a clean reference
   while looking at a messy signal.
@@ -158,7 +163,7 @@ Shown on the block: Trigger and Time span.
   without synchronisation.
 - Channels without a cable aren't drawn.
 - If you reduce *Inputs*, cables on the channels that disappear are removed, and the trigger returns to
-  `ch1` if its channel is gone.
+  `auto` if its channel is gone.
 - At long time spans a fast signal fills the screen as a solid band (440 cycles in 1 s can't be told
   apart in 220 pixels). Use a slow signal, or a shorter span, to see the shape. The band's outline is
   the signal's envelope, which is useful on its own (see *Beats* below).
@@ -217,7 +222,7 @@ Things to know:
 | No sound | Did you press **Run**? Is the Wave Generator connected to an Audio Sink? Check Amplitude, Volume, your system volume and that the tab isn't muted |
 | Scope says *Stopped* | Press Run; it only draws while the audio is running |
 | Scope draws a flat line | The channel has no cable, or the signal is silent (e.g. a Math Operator with an input open) |
-| Trace jitters | The trigger channel has no cable or never crosses *Trig level*, so the sweep is not synchronised |
+| Trace jitters | Trigger is `auto` (it only locks signals that are a multiple of 100 Hz), or the trigger channel has no cable or never crosses *Trig level* |
 | Distorted sound | The signal exceeds ±1: lower the amplitudes |
 | "Audio error" in the toolbar | The browser couldn't start audio; reload and press Run again |
 
