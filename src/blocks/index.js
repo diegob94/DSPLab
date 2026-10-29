@@ -21,6 +21,7 @@ import { audioSource } from './audio-source.js';
 import { audioSink } from './audio-sink.js';
 import { oscilloscope } from './oscilloscope.js';
 import { mathOperator } from './math-operator.js';
+import { filter } from './filter.js';
 
 export const CATEGORIES = {
   'Source blocks': 'var(--source)',
@@ -34,4 +35,5 @@ export const BLOCKS = {
   audio_sink: audioSink,
   oscilloscope,
   math_operator: mathOperator,
+  filter,
 };
