@@ -1,7 +1,7 @@
 // Toolbar: Run / Stop, Delete selected, the Examples menu and the audio status.
 import { $ } from '../dom.js';
 import { on } from '../core/events.js';
-import { deleteSelection } from '../core/graph.js';
+import { graph, deleteSelection } from '../core/graph.js';
 import { engine } from '../core/engine.js';
 import { loadDiagram } from '../core/persistence.js';
 import { EXAMPLES } from '../core/examples.js';
@@ -39,7 +39,8 @@ function initExamples() {
   for (const ex of EXAMPLES) menu.append(new Option(ex.title, ex.id));
   menu.addEventListener('change', () => {
     const ex = EXAMPLES.find((e) => e.id === menu.value);
-    if (ex) loadDiagram(ex.diagram);
+    // loading replaces the diagram (and the autosave), so ask unless there is nothing to lose
+    if (ex && (!graph.nodes.size || confirm(`Replace the current diagram with "${ex.title}"? This can't be undone.`))) loadDiagram(ex.diagram);
     menu.selectedIndex = 0;
     menu.blur();
   });

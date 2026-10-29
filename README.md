@@ -47,7 +47,8 @@ You start with a **Wave Generator** already connected to an **Audio Sink**. Pres
 - **Toolbar** (top): Run/Stop, delete, the **Examples** menu, and the audio status (the sample rate while
   running).
 - **Examples** (toolbar): *Simple tone* (the starting diagram), *ASK modulation* and *Audio source scope* (microphone → oscilloscope). Picking one replaces
-  the current diagram, so it can't be undone (the old diagram is overwritten by the autosave).
+  the current diagram, so it asks for confirmation first (unless the canvas is empty); it can't be undone,
+  because the autosave overwrites the old diagram.
 
 ### On a phone
 
