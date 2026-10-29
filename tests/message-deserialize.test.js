@@ -8,7 +8,7 @@ after(async () => { await app.close(); });
 
 // feeds bits to a Message Deserializer and returns what it sends
 const run = (page, params, bits) => page.evaluate(([params, bits]) => {
-  const blk = dsplab.BLOCKS.message_deserialize.build({}, params);
+  const blk = dsplab.BLOCKS.message_deserialize.build({}, { preamble: '', ...params });
   const got = [];
   blk.outputs.msg.connect({ receive: (m) => got.push(m) });
   bits.forEach((b) => blk.inputs.msg.receive([[b]]));
@@ -48,6 +48,34 @@ test('changing the size drops the bits collected so far', () => withApp(app, asy
     return out;
   });
   assert.deepEqual(got, [[[0], [1]]]);
+}));
+
+// bits of a text, as the Message Serializer sends them
+const bitsOf = (text) => Array.from(new TextEncoder().encode(text), (b) => b.toString(2).padStart(8, '0')).join('').split('').map(Number);
+const byteRows = (got) => got.map((m) => m.map((r) => r[0]).join(''));
+
+test('with a preamble it ignores everything until the preamble, then collects one message and looks again', () => withApp(app, async (page) => {
+  const stream = [1, 0, 0, 1, 1, ...bitsOf('~~'), ...bitsOf('A'), 0, 0, 1, ...bitsOf('~~'), ...bitsOf('B')];
+  const { got } = await run(page, { rows: 8, cols: 1, preamble: '~~' }, stream);
+  assert.deepEqual(byteRows(got), ['01000001', '01000010']);
+}));
+
+test('the preamble can be found at any bit offset, and its bits are not in the message', () => withApp(app, async (page) => {
+  for (const pad of [0, 3, 7]) {
+    const { got } = await run(page, { rows: 8, cols: 1, preamble: 'U' }, [...Array(pad).fill(1), ...bitsOf('U'), ...bitsOf('Z')]);
+    assert.deepEqual(byteRows(got), ['01011010'], `pad ${pad}`);
+  }
+}));
+
+test('an empty preamble means no framing; changing the preamble restarts the search', () => withApp(app, async (page) => {
+  const { got } = await run(page, { rows: 8, cols: 1, preamble: '' }, [1, 1, 1, 1, 1, 1, 1, 1]);
+  assert.equal(got.length, 1);
+  const status = await page.evaluate(() => {
+    const blk = dsplab.BLOCKS.message_deserialize.build({}, { rows: 2, cols: 1, preamble: '' });
+    blk.update({ rows: 2, cols: 1, preamble: 'U' });
+    return blk.status;
+  });
+  assert.equal(status, 'Looking for the preamble');
 }));
 
 test('a whole chain shows text in Message Debug', () => withApp(app, async (page) => {

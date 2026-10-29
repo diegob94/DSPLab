@@ -33,6 +33,7 @@ import { messageDebug } from './message-debug.js';
 import { messageReshape } from './message-reshape.js';
 import { messageSerialize } from './message-serialize.js';
 import { messageDeserialize } from './message-deserialize.js';
+import { messageConcatenate } from './message-concatenate.js';
 import { pulseShaper } from './pulse-shaper.js';
 import { symbolTiming } from './symbol-timing.js';
 import { fftPlot } from './fft-plot.js';
@@ -57,6 +58,7 @@ export const BLOCKS = {
   message_reshape: messageReshape,
   message_serialize: messageSerialize,
   message_deserialize: messageDeserialize,
+  message_concatenate: messageConcatenate,
   pulse_shaper: pulseShaper,
   symbol_timing: symbolTiming,
   fft_plot: fftPlot,

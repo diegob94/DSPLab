@@ -1,8 +1,14 @@
 import { h } from '../dom.js';
-import { messageOutput, freezeBits, shapeOf } from './message.js';
+import { messageOutput, freezeBits, shapeOf, textToBits } from './message.js';
+import { bitStream } from './message-serialize.js';
+
+// The bits of a preamble text, as the Message Serializer would send them.
+const preambleBits = (text) => (text ? bitStream(textToBits(text)) : []);
 
 // Collects 1 x 1 messages into rows x cols messages, filling column by column (the inverse of the
 // Message Serializer): with 8 x 1 every 8 bits make one byte, most significant first.
+// With a preamble it first waits for that bit pattern in the stream and collects the message that follows it,
+// then goes back to waiting; this is what puts the bytes in the right place after a timing recovery.
 export const messageDeserialize = {
   title: 'Message Deserializer',
   category: 'Message blocks',
@@ -12,28 +18,47 @@ export const messageDeserialize = {
   params: [
     { key: 'rows', label: 'Rows',    show: true, type: 'range', min: 1, max: 64, step: 1, default: 8 },
     { key: 'cols', label: 'Columns', show: true, type: 'range', min: 1, max: 4096, step: 1, default: 1 },
+    { key: 'preamble', label: 'Preamble', show: true, type: 'text', default: '' },
   ],
   build(ctx, p) {
     let { rows, cols } = p;
+    let preamble = preambleBits(p.preamble);
     const out = messageOutput();
-    let bits = [];
+    let bits = [];          // the message being collected
+    let recent = [];        // the last preamble.length bits, while looking for the preamble
+    let locked = !preamble.length;
+    const reset = () => { bits = []; recent = []; locked = !preamble.length; };
+    const idle = () => (preamble.length ? 'Looking for the preamble' : 'Waiting for bits');
     const inst = {
-      status: 'Waiting for bits',
+      status: idle(),
       inputs: { msg: { receive(m) {
         if (!Array.isArray(m) || m.length !== 1 || !Array.isArray(m[0]) || m[0].length !== 1) return;
         const b = m[0][0];
         if (b !== 0 && b !== 1) return;
+        if (!locked) {
+          recent.push(b);
+          if (recent.length > preamble.length) recent.shift();
+          if (recent.length === preamble.length && recent.every((v, i) => v === preamble[i])) {
+            locked = true;
+            recent = [];
+            inst.status = `Preamble found, 0 / ${rows * cols} bits`;
+          }
+          return;
+        }
         bits.push(b);
         const need = rows * cols;
         if (bits.length < need) { inst.status = `${bits.length} / ${need} bits`; return; }
         const msg = freezeBits(Array.from({ length: rows }, (_, i) => Array.from({ length: cols }, (_, j) => bits[j * rows + i])));
-        bits = [];
+        reset();
         inst.status = `sent ${shapeOf(msg)}`;
         out.send(msg);
       } } },
       outputs: { msg: out },
-      // a new size makes the bits collected so far useless
-      update(p) { if (p.rows !== rows || p.cols !== cols) bits = []; ({ rows, cols } = p); },
+      // a new size or preamble makes the bits collected so far useless
+      update(p) {
+        const next = preambleBits(p.preamble);
+        if (p.rows !== rows || p.cols !== cols || next.join() !== preamble.join()) { rows = p.rows; cols = p.cols; preamble = next; reset(); inst.status = idle(); }
+      },
       dispose() { out.disconnect(); },
     };
     return inst;

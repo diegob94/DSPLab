@@ -320,13 +320,36 @@ first, which Message Debug prints as a character.
 |---|---|---|---|
 | Rows | Rows of the output message | 1 – 64 | 8 |
 | Columns | Columns of the output message | 1 – 4096 | 1 |
+| Preamble | Text whose bits mark where a message starts (empty: no framing) | up to 100 characters | empty |
 
-Messages that aren't 1 × 1 are ignored. Changing the size drops the bits collected so far, and so does
-pressing Run. The block does not look for where a byte starts: it counts bits from the first one it receives,
-so after a Symbol Timing Recovery (which can output a few stray bits before and after a burst) the bytes may
-be shifted and the text read as garbage. The block shows how many bits it has collected, or the size it last sent.
+Messages that aren't 1 × 1 are ignored. Changing a setting drops the bits collected so far, and so does
+pressing Run.
 
-Shown on the block: Rows and Columns.
+With the *Preamble* empty the block counts bits from the first one it receives, so after a Symbol Timing
+Recovery (which can output stray bits before and after a burst) the bytes may be shifted and the text read as
+garbage. With a preamble it ignores the stream until it sees the preamble's bits (the text as the Message
+Serializer sends it, 8 bits per character), at any bit offset, then collects one message of Rows × Columns
+bits (the preamble itself is not in it) and goes back to looking. Pick a preamble that is unlikely to appear
+by chance in the data, such as two or three characters. The block shows what it is doing: *Looking for the
+preamble*, how many bits it has collected, or the size it last sent.
+
+Shown on the block: Rows, Columns and Preamble.
+
+**Message Concatenate**: joins two messages. Inputs: `a`, `b`. Output: `msg`.
+
+It remembers the last message that arrived at `a` and, every time one arrives at `b`, sends `a` followed by
+`b`. To put a preamble in front of a payload, feed the preamble (a Message Strobe, say) to `a` and the payload
+to `b`: the payload's clock sets the pace and the preamble is repeated in front of each one. Nothing is sent
+until something has arrived at `a`.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Join | *columns*: `b` goes after `a` side by side (both need the same rows, so two 8 × N texts make a longer text); *rows*: `b` goes below `a` (both need the same columns) | columns, rows | columns |
+
+If the shapes don't fit, the message is dropped and the block says so, like `2x1 and 1x1 can't join by columns`.
+It shows the last join, like `8x2 + 8x5 → 8x7`.
+
+Shown on the block: Join.
 
 ## Recipes
 
