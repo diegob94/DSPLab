@@ -90,6 +90,7 @@ for (const width of [360, 320]) {
         assert.ok(it.top >= 0 && it.bottom <= m.bar, `#${it.id} (${it.top}..${it.bottom}) fits in the ${m.bar}px bar`);
         assert.ok(it.right <= width, `#${it.id} ends inside the screen`);
       }
+      assert.equal(new Set(m.items.map((it) => it.bottom - it.top)).size, 1, 'buttons and the Examples menu have the same height');
       assert.equal(m.overflow, false);
     } finally {
       await ctx.close();

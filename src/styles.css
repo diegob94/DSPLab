@@ -48,6 +48,7 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
   background: var(--panel-2); border: 1px solid var(--border);
   border-radius: 5px; padding: 5px 8px; cursor: pointer;
 }
+#toolbar button, #toolbar select { height: 32px; box-sizing: border-box; }   /* same height for all, whatever the font */
 #examples:hover { border-color: var(--accent); }
 #run.running { background: var(--danger); border-color: var(--danger); color: #fff; }
 #status { color: var(--muted); margin-left: auto; }
@@ -171,7 +172,7 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
   #toolbar h1 { display: none; }
   #toolbar button { padding: 7px 8px; }
   #delete .long { display: none; }
-  #examples { padding: 7px 6px; font-size: 16px; min-width: 0; max-width: 7em; }
+  #examples { padding: 0 6px; min-width: 0; width: 8.5em; }   /* fixed: its widest option would make it too wide */
   #status { display: none; }
   .drawer-toggle { display: block; }
   #toolbar #show-palette { margin-left: auto; }
