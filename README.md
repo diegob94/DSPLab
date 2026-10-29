@@ -395,19 +395,24 @@ preamble*, how many bits it has collected, or the size it last sent.
 
 Shown on the block: Rows, Columns and Preamble.
 
-**Message Concatenate**: joins two messages. Inputs: `a`, `b`. Output: `msg`.
+**Message Concatenate**: joins messages one after the other. Inputs: `a`, `b`, and up to `h` (set with
+*Inputs*). Output: `msg`.
 
-It remembers the last message that arrived at `a` and, every time one arrives at `b`, sends `a` followed by
-`b`. To put a preamble in front of a payload, feed the preamble (a Message Strobe, say) to `a` and the payload
-to `b`: the payload's clock sets the pace and the preamble is repeated in front of each one. Nothing is sent
-until something has arrived at `a`.
+Every input except the last remembers the latest message that arrived there; every time one arrives at the
+**last** input, the block sends them all joined in the order of the inputs (`a`, then `b`, and so on). To
+put a preamble in front of a payload, feed the preamble (a Message Constant, say) to `a` and the payload to
+`b`: the payload's clock sets the pace and the preamble is repeated in front of each one. With three inputs
+you can add a trailer after the payload, or a preamble and a header, feeding the one that sets the pace to `c`.
+Nothing is sent until every input has received something; the block shows which one it is still waiting for.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
-| Join | *columns*: `b` goes after `a` side by side (both need the same rows, so two 8 × N texts make a longer text); *rows*: `b` goes below `a` (both need the same columns) | columns, rows | columns |
+| Inputs | How many messages are joined | 2 – 8 | 2 |
+| Join | *columns*: each message goes after the previous one side by side (all need the same rows, so 8 × N texts make a longer text); *rows*: each goes below the previous one (all need the same columns) | columns, rows | columns |
 
-If the shapes don't fit, the message is dropped and the block says so, like `2x1 and 1x1 can't join by columns`.
-It shows the last join, like `8x2 + 8x5 → 8x7`.
+If two of them don't fit, the message is dropped and the block says which two, like
+`2x1 and 1x1 can't join by columns`. It shows the last join, like `8x2 + 8x5 → 8x7`. Changing *Inputs*
+keeps the cables on the ports that remain (`a`, `b`...) and drops those on removed ones.
 
 Shown on the block: Join.
 
