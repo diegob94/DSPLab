@@ -3,7 +3,7 @@ import { $ } from '../dom.js';
 import { on } from '../core/events.js';
 import { graph, deleteSelection } from '../core/graph.js';
 import { engine } from '../core/engine.js';
-import { loadDiagram } from '../core/persistence.js';
+import { loadDiagram, exportJson, importJson, isDiagramJson } from '../core/persistence.js';
 import { EXAMPLES } from '../core/examples.js';
 
 const runBtn = $('#run');
@@ -46,7 +46,47 @@ function initExamples() {
   });
 }
 
+// Shows a short message on a button, then restores its label.
+function flash(btn, text) {
+  const label = btn.dataset.label ||= btn.textContent;
+  btn.textContent = text;
+  clearTimeout(btn.flashTimer);
+  btn.flashTimer = setTimeout(() => { btn.textContent = label; }, 1500);
+}
+
+// Copy / Paste move the whole diagram as JSON through the system clipboard. If the browser denies
+// clipboard access, a prompt lets the user copy or paste the text by hand.
+function initClipboard() {
+  const copyBtn = $('#copy');
+  const pasteBtn = $('#paste');
+
+  copyBtn.addEventListener('click', async () => {
+    const text = exportJson();
+    try {
+      await navigator.clipboard.writeText(text);
+      flash(copyBtn, 'Copied');
+    } catch (err) {
+      prompt('The clipboard is not available. Copy the diagram from here:', text);
+    }
+  });
+
+  pasteBtn.addEventListener('click', async () => {
+    let text;
+    try {
+      text = await navigator.clipboard.readText();
+    } catch (err) {
+      text = prompt('The clipboard is not available. Paste the diagram here:');
+      if (text === null) return;
+    }
+    // check before asking, so a bad paste never costs the user a confirmation
+    if (!isDiagramJson(text)) { flash(pasteBtn, 'Not a diagram'); return; }
+    if (graph.nodes.size && !confirm("Replace the current diagram with the one from the clipboard? This can't be undone.")) return;
+    flash(pasteBtn, importJson(text) ? 'Pasted' : 'Not a diagram');
+  });
+}
+
 export function initToolbar() {
+  initClipboard();
   initDrawers();
   initExamples();
   delBtn.addEventListener('click', deleteSelection);

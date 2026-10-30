@@ -59,6 +59,26 @@ export function loadDiagram(data) {
   return true;
 }
 
+// Clipboard format: the same JSON as the autosave, pretty-printed so it stays readable in a text file.
+export function exportJson() {
+  return JSON.stringify(serialize(), null, 2);
+}
+
+// True when the text parses as a diagram this version can load (shape only; loadDiagram still sanitizes).
+export function isDiagramJson(text) {
+  try {
+    const data = JSON.parse(text);
+    return !!data && data.version === 1 && Array.isArray(data.nodes) && Array.isArray(data.edges);
+  } catch (err) { return false; }
+}
+
+// Parses text produced by exportJson and loads it. Returns false (diagram untouched) when it isn't usable.
+export function importJson(text) {
+  let data;
+  try { data = JSON.parse(text); } catch (err) { return false; }
+  return loadDiagram(data);
+}
+
 // returns false when there is nothing usable saved, so the caller can load the starter graph
 export function restore() {
   let data;
