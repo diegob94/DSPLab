@@ -280,7 +280,7 @@ While you change *Trig level* a dashed line shows it on the screen for a moment.
   while looking at a messy signal.
 - **Trig mode.** *auto*: if the trigger channel has no cable, or never crosses the level, the newest
   samples are drawn without synchronisation. *normal*: the screen only updates on a trigger; until one
-  comes the last sweep stays (a blank screen if there has been none). *single*: waits for the first
+  comes the last sweep stays (while there is none the screen reads *Waiting for trigger*). *single*: waits for the first
   trigger after it is armed, then holds that sweep. It is armed by choosing the mode, by changing the
   trigger channel, level or X / div, and by pressing Run again.
 - The screen can span up to 10 s (X / div 1000 ms); the scope keeps 20 s of history.

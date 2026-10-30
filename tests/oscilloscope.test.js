@@ -192,7 +192,7 @@ test('trace colours, trigger, X / div and Y / div are shown on the node', () => 
   assert.equal(await page.locator('#props .param').count(), 6);
 }));
 
-test('the screen carries no text besides "Stopped" and the trigger level line (the settings are on the node)', () => withApp(app, async (page) => {
+test('the screen carries no text besides "Stopped", "Waiting for trigger" and the trigger level line (the settings are on the node)', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
   const draw = (running) => page.evaluate((running) => {
     const node = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
@@ -206,6 +206,8 @@ test('the screen carries no text besides "Stopped" and the trigger level line (t
   }, running);
   assert.deepEqual(await draw(false), ['Stopped']);
   assert.deepEqual(await draw(true), []);
+  await panelControl(page, 'Trig mode').selectOption('normal');
+  assert.deepEqual(await draw(true), ['Waiting for trigger'], 'nothing to show until the trigger fires');
 }));
 
 test('the trigger level line is drawn while the level is being changed, and goes away again', () => withApp(app, async (page) => {

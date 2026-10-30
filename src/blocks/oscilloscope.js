@@ -166,7 +166,10 @@ export const oscilloscope = {
         if (!inst) return;
 
         g.lineWidth = 1.5;
-        inst.sample(xdiv * DIV_X, level, trigger, mode).forEach((data, k) => {
+        const sweeps = inst.sample(xdiv * DIV_X, level, trigger, mode);
+        // normal / single leave the screen empty until the trigger fires
+        if (mode !== 'auto' && sweeps.every((d) => !d)) g.fillText('Waiting for trigger', 6, 14);
+        sweeps.forEach((data, k) => {
           if (!data || data.length < 2) return;
           g.strokeStyle = SCOPE_COLORS[k % SCOPE_COLORS.length];
           g.beginPath();
