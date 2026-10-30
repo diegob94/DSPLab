@@ -8,9 +8,10 @@ import { clamp } from '../util.js';
 
 const propsBody = $('#props-body');
 
-function paramWidget(node, p) {
+// idPrefix keeps ids unique when the same block is edited in two places at once (panel + big screen)
+export function paramWidget(node, p, idPrefix = 'p') {
   const wrap = h('div', { className: 'param' });
-  const id = `p${node.id}-${p.key}`;
+  const id = `${idPrefix}${node.id}-${p.key}`;
   wrap.append(h('label', { htmlFor: id, textContent: p.label }));
 
   // log sliders move over 0..1 and map to [min, max] exponentially

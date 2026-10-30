@@ -197,7 +197,7 @@ test('the screen carries no text besides "Stopped" and the trigger level line (t
   const draw = (running) => page.evaluate((running) => {
     const node = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
     const texts = [];
-    const ctx = node.view.el.getContext('2d');
+    const ctx = node.view.el.querySelector('canvas').getContext('2d');
     const orig = ctx.fillText.bind(ctx);
     ctx.fillText = (t, ...rest) => { texts.push(t); return orig(t, ...rest); };
     node.view.draw(running ? { sample: () => [] } : undefined);
@@ -212,7 +212,7 @@ test('the trigger level line is drawn while the level is being changed, and goes
   await addFromPalette(page, 'Oscilloscope');
   const texts = () => page.evaluate(async () => {
     const node = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
-    const ctx = node.view.el.getContext('2d');
+    const ctx = node.view.el.querySelector('canvas').getContext('2d');
     const seen = [];
     const orig = ctx.fillText.bind(ctx);
     ctx.fillText = (t, ...rest) => { seen.push(t); return orig(t, ...rest); };
@@ -225,4 +225,54 @@ test('the trigger level line is drawn while the level is being changed, and goes
   assert.ok((await texts()).includes('level 0.3'), 'level line while adjusting');
   await sleep(1700);
   assert.ok(!(await texts()).some((t) => t.startsWith('level')), 'the line disappears after a moment');
+}));
+
+// ---- big screen ----
+
+const openBig = async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  await page.evaluate(() => {
+    window.scope = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
+    dsplab.addEdge({ node: [...dsplab.graph.nodes.values()][0].id, port: 'out' }, { node: scope.id, port: 'ch1' });
+  });
+  await page.click('.node:has-text("Oscilloscope") .scope-expand');
+};
+
+test('the expand button opens a window with the waveform left of the settings; Esc and × close it', () => withApp(app, async (page) => {
+  await openBig(page);
+  const view = await page.locator('.screen-canvas').boundingBox();
+  const side = await page.locator('.screen-side').boundingBox();
+  assert.ok(view.x + view.width <= side.x + 1, 'waveform on the left, options on the right');
+  assert.ok(view.width > 400 && view.height > 300, `big canvas ${view.width}x${view.height}`);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('.screen-window').count(), 0);
+  await page.click('.node:has-text("Oscilloscope") .scope-expand');
+  await page.click('.screen-close');
+  assert.equal(await page.locator('.screen-window').count(), 0);
+}));
+
+test('the big window edits the block and draws the live trace', () => withApp(app, async (page) => {
+  await startAudio(page);   // first: the window covers the toolbar
+  await openBig(page);
+  await sleep(600);
+  const lit = () => page.evaluate(() => {
+    const c = document.querySelector('canvas.screen-canvas');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] > 200 && d[i + 1] > 120 && d[i + 2] < 120) n++;
+    return n;
+  });
+  assert.ok(await lit() > 500, 'trace drawn in the big canvas');
+  await page.locator('.screen-side .param:has(label:text-is("X / div")) input[type=number]').fill('5');
+  await page.locator('.screen-side .param:has(label:text-is("X / div")) input[type=number]').press('Enter');
+  assert.equal(await page.evaluate(() => scope.params.xdiv), 5);
+  // changing the inputs re-renders the trigger choices inside the window
+  await setRange(page.locator('.screen-side .param:has(label:text-is("Inputs")) select'), '4');
+  assert.deepEqual(await page.locator('.screen-side .param:has(label:text-is("Trigger")) option').allTextContents(), ['ch1', 'ch2', 'ch3', 'ch4']);
+}));
+
+test('Delete while the window is open does not remove the block behind it', () => withApp(app, async (page) => {
+  await openBig(page);
+  await page.keyboard.press('Delete');
+  assert.equal(await page.evaluate(() => dsplab.graph.nodes.has(scope.id)), true);
 }));

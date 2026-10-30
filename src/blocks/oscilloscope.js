@@ -1,4 +1,4 @@
-import { h } from '../dom.js';
+import { h, svgEl } from '../dom.js';
 
 // trace / port colours of the oscilloscope channels
 const SCOPE_COLORS = ['#f2a65a', '#4dd0e1', '#8bd17c', '#e57fd0', '#f5d76e', '#7aa7ff', '#ff7b72', '#b5e853'];
@@ -103,74 +103,87 @@ export const oscilloscope = {
     };
   },
   ui(node) {
-    const W = 220, H = 130, dpr = window.devicePixelRatio || 1;
-    const el = h('canvas', { className: 'scope', width: W * dpr, height: H * dpr });
-    const g = el.getContext('2d');
+    const W0 = 220, H0 = 130, dpr = window.devicePixelRatio || 1;
+    const canvas = h('canvas', { className: 'scope', width: W0 * dpr, height: H0 * dpr });
+    const g0 = canvas.getContext('2d');
+    // the corner button asks the UI for the big screen (a DOM event, as blocks never import ui/)
+    const expand = h('button', { className: 'scope-expand', type: 'button', title: 'Big screen', ariaLabel: 'Big screen' });
+    expand.append(svgEl('svg', { viewBox: '0 0 16 16', width: 12, height: 12, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.6 }));
+    expand.firstChild.append(svgEl('path', { d: 'M6 2H2v4M10 2h4v4M6 14H2v-4M10 14h4v-4' }));
+    expand.addEventListener('pointerdown', (e) => e.stopPropagation());
+    expand.addEventListener('click', () => window.dispatchEvent(new CustomEvent('dsplab:screen', { detail: node })));
+    const el = h('div', { className: 'scope-wrap' }, canvas, expand);
     let lastLevel = node.params.level, levelShownAt = -Infinity;
+
+    // draws the screen into a W x H area of g (the block's small canvas or the big window's)
+    function paint(g, W, H, inst, fontPx = 10) {
+      g.fillStyle = '#0d0f12';
+      g.fillRect(0, 0, W, H);
+      g.lineWidth = 1;
+      g.strokeStyle = '#242a33';
+      g.beginPath();
+      for (let i = 1; i < DIV_X; i++) { g.moveTo(Math.round(i * W / DIV_X) + .5, 0); g.lineTo(Math.round(i * W / DIV_X) + .5, H); }
+      for (let i = 1; i < DIV_Y; i++) { g.moveTo(0, Math.round(i * H / DIV_Y) + .5); g.lineTo(W, Math.round(i * H / DIV_Y) + .5); }
+      g.stroke();
+      g.strokeStyle = '#3a4350';
+      g.beginPath(); g.moveTo(0, H / 2 + .5); g.lineTo(W, H / 2 + .5); g.stroke();
+
+      const { xdiv, trigger, level, ydiv } = node.params;
+      const pxPerUnit = (H / DIV_Y) / ydiv;
+      const yOf = (v) => Math.min(H, Math.max(0, H / 2 - v * pxPerUnit));
+
+      g.fillStyle = '#6b7482';
+      g.font = `${fontPx}px system-ui, sans-serif`;
+      g.textBaseline = 'alphabetic';
+      g.textAlign = 'left';
+      if (!inst) g.fillText('Stopped', 6, 14);
+
+      // the trigger level, drawn for a moment after it was changed (also while stopped)
+      if (level !== lastLevel) { lastLevel = level; levelShownAt = performance.now(); }
+      if (performance.now() - levelShownAt < LEVEL_SHOWN_MS) {
+        const ly = Math.round(yOf(level)) + .5;
+        g.strokeStyle = g.fillStyle = SCOPE_COLORS[(parseInt(trigger.slice(2), 10) - 1) % SCOPE_COLORS.length];
+        g.setLineDash([4, 3]);
+        g.beginPath(); g.moveTo(0, ly); g.lineTo(W, ly); g.stroke();
+        g.setLineDash([]);
+        g.fillText(`level ${level}`, 6, ly < 28 ? ly + 12 : ly - 4);
+      }
+      if (!inst) return;
+
+      g.lineWidth = 1.5;
+      inst.sample(xdiv * DIV_X, level, trigger).forEach((data, k) => {
+        if (!data || data.length < 2) return;
+        g.strokeStyle = SCOPE_COLORS[k % SCOPE_COLORS.length];
+        g.beginPath();
+        if (data.length <= 4 * W) {
+          for (let i = 0; i < data.length; i++) {
+            const x = i * (W - 1) / (data.length - 1);
+            if (i) g.lineTo(x, yOf(data[i])); else g.moveTo(x, yOf(data[i]));
+          }
+        } else {
+          // many samples per pixel: draw each column's lowest and highest sample, in time order
+          for (let x = 0; x < W; x++) {
+            const end = Math.floor((x + 1) * data.length / W);
+            let lo = Infinity, hi = -Infinity, iLo = 0, iHi = 0;
+            for (let i = Math.floor(x * data.length / W); i < end; i++) {
+              if (data[i] < lo) { lo = data[i]; iLo = i; }
+              if (data[i] > hi) { hi = data[i]; iHi = i; }
+            }
+            const [first, last] = iLo < iHi ? [lo, hi] : [hi, lo];
+            if (x) g.lineTo(x, yOf(first)); else g.moveTo(x, yOf(first));
+            g.lineTo(x, yOf(last));
+          }
+        }
+        g.stroke();
+      });
+    }
     return {
       el,
       draw(inst) {
-        g.setTransform(dpr, 0, 0, dpr, 0, 0);
-        g.fillStyle = '#0d0f12';
-        g.fillRect(0, 0, W, H);
-        g.lineWidth = 1;
-        g.strokeStyle = '#242a33';
-        g.beginPath();
-        for (let i = 1; i < DIV_X; i++) { g.moveTo(Math.round(i * W / DIV_X) + .5, 0); g.lineTo(Math.round(i * W / DIV_X) + .5, H); }
-        for (let i = 1; i < DIV_Y; i++) { g.moveTo(0, Math.round(i * H / DIV_Y) + .5); g.lineTo(W, Math.round(i * H / DIV_Y) + .5); }
-        g.stroke();
-        g.strokeStyle = '#3a4350';
-        g.beginPath(); g.moveTo(0, H / 2 + .5); g.lineTo(W, H / 2 + .5); g.stroke();
-
-        const { xdiv, trigger, level, ydiv } = node.params;
-        const pxPerUnit = (H / DIV_Y) / ydiv;
-        const yOf = (v) => Math.min(H, Math.max(0, H / 2 - v * pxPerUnit));
-
-        g.fillStyle = '#6b7482';
-        g.font = '10px system-ui, sans-serif';
-        g.textBaseline = 'alphabetic';
-        g.textAlign = 'left';
-        if (!inst) g.fillText('Stopped', 6, 14);
-
-        // the trigger level, drawn for a moment after it was changed (also while stopped)
-        if (level !== lastLevel) { lastLevel = level; levelShownAt = performance.now(); }
-        if (performance.now() - levelShownAt < LEVEL_SHOWN_MS) {
-          const ly = Math.round(yOf(level)) + .5;
-          g.strokeStyle = g.fillStyle = SCOPE_COLORS[(parseInt(trigger.slice(2), 10) - 1) % SCOPE_COLORS.length];
-          g.setLineDash([4, 3]);
-          g.beginPath(); g.moveTo(0, ly); g.lineTo(W, ly); g.stroke();
-          g.setLineDash([]);
-          g.fillText(`level ${level}`, 6, ly < 28 ? ly + 12 : ly - 4);
-        }
-        if (!inst) return;
-
-        g.lineWidth = 1.5;
-        inst.sample(xdiv * DIV_X, level, trigger).forEach((data, k) => {
-          if (!data || data.length < 2) return;
-          g.strokeStyle = SCOPE_COLORS[k % SCOPE_COLORS.length];
-          g.beginPath();
-          if (data.length <= 4 * W) {
-            for (let i = 0; i < data.length; i++) {
-              const x = i * (W - 1) / (data.length - 1);
-              if (i) g.lineTo(x, yOf(data[i])); else g.moveTo(x, yOf(data[i]));
-            }
-          } else {
-            // many samples per pixel: draw each column's lowest and highest sample, in time order
-            for (let x = 0; x < W; x++) {
-              const end = Math.floor((x + 1) * data.length / W);
-              let lo = Infinity, hi = -Infinity, iLo = 0, iHi = 0;
-              for (let i = Math.floor(x * data.length / W); i < end; i++) {
-                if (data[i] < lo) { lo = data[i]; iLo = i; }
-                if (data[i] > hi) { hi = data[i]; iHi = i; }
-              }
-              const [first, last] = iLo < iHi ? [lo, hi] : [hi, lo];
-              if (x) g.lineTo(x, yOf(first)); else g.moveTo(x, yOf(first));
-              g.lineTo(x, yOf(last));
-            }
-          }
-          g.stroke();
-        });
+        g0.setTransform(dpr, 0, 0, dpr, 0, 0);
+        paint(g0, W0, H0, inst);
       },
+      paint,
     };
   },
 };
