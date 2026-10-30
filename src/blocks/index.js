@@ -43,6 +43,7 @@ import { fftPlot } from './fft-plot.js';
 import { audioRecorder } from './audio-recorder.js';
 import { filter } from './filter.js';
 import { agc } from './agc.js';
+import { matchedFilter } from './matched-filter.js';
 
 export const CATEGORIES = {
   'Source blocks': 'var(--source)',
@@ -72,4 +73,5 @@ export const BLOCKS = {
   audio_recorder: audioRecorder,
   filter,
   agc,
+  matched_filter: matchedFilter,
 };
