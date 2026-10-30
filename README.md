@@ -183,6 +183,24 @@ The sinc pulse is cut off 4 symbols to each side of its peak. Changing a setting
 
 Shown on the block: Pulse and Baud rate.
 
+**Matched Filter**: the receiver's counterpart of the Pulse Shaper: it correlates the input with the pulse, which
+gives the best signal-to-noise ratio at the instant a symbol is sampled. Input: `in`. Output: `out`.
+
+It is an FIR filter whose impulse response is the pulse (both shapes are symmetric, so reversing it in time
+changes nothing), scaled so that a symbol sent with amplitude A comes out with a peak of A. With the *square*
+pulse it is an integrate-and-dump: each output sample is the average of the last symbol; the peak falls at the end
+of the symbol. With *sinc* the peak comes 4 symbols after the pulse's centre (the filter's delay). Put it before
+Symbol Recovery, with the same pulse and baud rate as the Pulse Shaper.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Pulse | Shape to match | square, sinc | square |
+| Baud rate | Symbols per second | 50 – 20000 (logarithmic) | 1000 baud |
+
+Changing a setting rebuilds the filter and may click.
+
+Shown on the block: Pulse and Baud rate.
+
 **Symbol Recovery**: samples a digital-looking signal (like the output of a matched filter) at the
 right instants and returns the bits. Input: `in` (audio). Output: `msg`.
 
