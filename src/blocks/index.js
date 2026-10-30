@@ -42,6 +42,7 @@ import { carrierRecovery } from './carrier-recovery.js';
 import { fftPlot } from './fft-plot.js';
 import { audioRecorder } from './audio-recorder.js';
 import { filter } from './filter.js';
+import { agc } from './agc.js';
 
 export const CATEGORIES = {
   'Source blocks': 'var(--source)',
@@ -70,4 +71,5 @@ export const BLOCKS = {
   fft_plot: fftPlot,
   audio_recorder: audioRecorder,
   filter,
+  agc,
 };
