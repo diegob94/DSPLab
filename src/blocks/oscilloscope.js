@@ -22,6 +22,7 @@ export const oscilloscope = {
     { key: 'level',    label: 'Trig level', type: 'range', min: -1, max: 1, step: 0.01, default: 0 },
     { key: 'holdoff',  label: 'Holdoff',    type: 'range', min: 0, max: HOLDOFF_MAX_MS, step: 0.1, unit: 'ms', default: 0 },
     { key: 'xdiv',     label: 'X / div',    show: true, type: 'range', scale: 'log', min: 0.1, max: 1000, unit: 'ms', default: 1 },
+    { key: 'xpos',     label: 'X position', type: 'range', min: -10000, max: 10000, step: 0.1, unit: 'ms', default: 0 },
     { key: 'ydiv',     label: 'Y / div',    show: true, type: 'range', scale: 'log', min: 0.01, max: 2, default: 0.25 },
   ],
   // the capture processor must be registered before build() can create the worklet node
@@ -89,10 +90,14 @@ export const oscilloscope = {
       //          by choosing the mode and again by changing the trigger, level, holdoff or time base.
       // Holdoff: after a trigger, crossings closer than `holdoffMs` are ignored, so a signal with
       // several crossings per repetition (a burst, a two-tone) locks onto one of them.
-      sample(spanMs, level = 0, trigger = names[0], mode = 'auto', holdoffMs = 0) {
+      // X position: the time shown at the left edge, relative to the trigger (negative = earlier,
+      // so the signal before the trigger is on screen); limited to the 20 s that are kept.
+      sample(spanMs, level = 0, trigger = names[0], mode = 'auto', holdoffMs = 0, xposMs = 0) {
         const n = Math.min(Math.round(spanMs * ctx.sampleRate / 1000), maxWindow);
         const hold = Math.round(holdoffMs * ctx.sampleRate / 1000);
-        const key = [mode, trigger, level, n, hold].join();
+        const shift = Math.round(xposMs * ctx.sampleRate / 1000);
+        const ahead = Math.max(shift, 0);               // samples a trigger needs after its window, on top of n
+        const key = [mode, trigger, level, n, hold, shift].join();
         if (key !== heldKey) { heldKey = key; held = null; armedAt = written; }
         if (held && mode === 'single') return held;
 
@@ -106,7 +111,7 @@ export const oscilloscope = {
             // single ignores crossings that were already in the buffer when it was armed
             const min = mode === 'single' ? Math.max(1, armedAt - (written - cap) - base) : 1;
             // newest crossing that still leaves a full window after it
-            for (let i = len - n - 1; i >= min; i--) {
+            for (let i = len - n - ahead - 1; i >= min; i--) {
               if (search[i - 1] < level && search[i] >= level) { start = base + i; break; }
             }
           } else {
@@ -124,7 +129,7 @@ export const oscilloscope = {
             // newest one that still leaves a full window after it (and, in single, came after arming)
             for (let k = tk.hits.length - 1; k >= 0; k--) {
               const at = tk.hits[k];
-              if (at + n <= written && (mode !== 'single' || at >= armedAt)) { start = at - oldest; break; }
+              if (at + ahead + n <= written && (mode !== 'single' || at >= armedAt)) { start = at - oldest; break; }
             }
           }
         }
@@ -132,6 +137,7 @@ export const oscilloscope = {
           if (mode === 'auto') start = cap - n;
           else return held || names.map(() => null);
         }
+        start = Math.min(Math.max(start + shift, 0), cap - n);
         const out = names.map((_, c) => {
           if (!connected[c]) return null;
           read(rings[c], start, n, windows[c]);
@@ -174,7 +180,7 @@ export const oscilloscope = {
       g.strokeStyle = '#3a4350';
       g.beginPath(); g.moveTo(0, H / 2 + .5); g.lineTo(W, H / 2 + .5); g.stroke();
 
-      const { xdiv, trigger, mode, level, holdoff, ydiv } = node.params;
+      const { xdiv, trigger, mode, level, holdoff, xpos, ydiv } = node.params;
       const pxPerUnit = (H / DIV_Y) / ydiv;
       const yOf = (v) => Math.min(H, Math.max(0, H / 2 - v * pxPerUnit));
 
@@ -186,7 +192,7 @@ export const oscilloscope = {
         // the value at each division line: time along the bottom, level up the right side
         const num = (v) => String(+v.toPrecision(3));
         for (let i = 0; i <= DIV_X; i++) {
-          const t = i * xdiv;
+          const t = xpos + i * xdiv;
           g.textAlign = i === 0 ? 'left' : i === DIV_X ? 'right' : 'center';
           g.fillText(t >= 1000 ? `${num(t / 1000)} s` : `${num(t)} ms`, Math.min(Math.max(i * W / DIV_X, 4), W - 4), H - 5);
         }
@@ -209,7 +215,7 @@ export const oscilloscope = {
       // likewise the holdoff: a vertical line that far from the start of the sweep, where triggers are accepted again
       if (holdoff !== lastHoldoff) { lastHoldoff = holdoff; holdoffShownAt = performance.now(); }
       if (performance.now() - holdoffShownAt < LEVEL_SHOWN_MS) {
-        const hx = Math.round(Math.min(holdoff / (xdiv * DIV_X), 1) * (W - 1)) + .5;
+        const hx = Math.round(Math.min(Math.max((holdoff - xpos) / (xdiv * DIV_X), 0), 1) * (W - 1)) + .5;
         g.strokeStyle = g.fillStyle = SCOPE_COLORS[(parseInt(trigger.slice(2), 10) - 1) % SCOPE_COLORS.length];
         g.setLineDash([4, 3]);
         g.beginPath(); g.moveTo(hx, 0); g.lineTo(hx, H); g.stroke();
@@ -222,7 +228,7 @@ export const oscilloscope = {
       if (!inst) return;
 
       g.lineWidth = 1.5;
-      const sweeps = inst.sample(xdiv * DIV_X, level, trigger, mode, holdoff);
+      const sweeps = inst.sample(xdiv * DIV_X, level, trigger, mode, holdoff, xpos);
       // normal / single leave the screen empty until the trigger fires
       if (mode !== 'auto' && sweeps.every((d) => !d)) g.fillText('Waiting for trigger', 6, 14);
       sweeps.forEach((data, k) => {
@@ -251,9 +257,41 @@ export const oscilloscope = {
         g.stroke();
       });
     }
+    // pan and zoom in time on the big screen; set(key, value) applies a parameter change
+    function attach(canvas, set) {
+      canvas.style.cursor = 'grab';
+      canvas.style.touchAction = 'none';
+      // dragging moves the waveform with the pointer, so the time at the left edge moves the other way
+      canvas.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        canvas.setPointerCapture(e.pointerId);
+        canvas.style.cursor = 'grabbing';
+        const x0 = e.clientX, pos0 = node.params.xpos, spanMs = node.params.xdiv * DIV_X;
+        const move = (ev) => set('xpos', pos0 - (ev.clientX - x0) / canvas.clientWidth * spanMs);
+        const up = () => {
+          canvas.style.cursor = 'grab';
+          canvas.removeEventListener('pointermove', move);
+          canvas.removeEventListener('pointerup', up);
+          canvas.removeEventListener('pointercancel', up);
+        };
+        canvas.addEventListener('pointermove', move);
+        canvas.addEventListener('pointerup', up);
+        canvas.addEventListener('pointercancel', up);
+      });
+      // the wheel changes X / div (up = zoom in), keeping the time under the pointer where it is
+      canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const frac = (e.clientX - canvas.getBoundingClientRect().left) / canvas.clientWidth;
+        const { xdiv, xpos } = node.params;
+        const at = xpos + frac * xdiv * DIV_X;
+        set('xdiv', xdiv * Math.exp(e.deltaY * 0.0015));
+        set('xpos', at - frac * node.params.xdiv * DIV_X);
+      }, { passive: false });
+    }
     return {
       el,
       titleButton: expand,
+      attach,
       draw(inst) {
         g0.setTransform(dpr, 0, 0, dpr, 0, 0);
         paint(g0, W0, H0, inst);

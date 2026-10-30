@@ -3,7 +3,8 @@
 import { BLOCKS } from '../blocks/index.js';
 import { h } from '../dom.js';
 import { on } from '../core/events.js';
-import { graph } from '../core/graph.js';
+import { setParam } from '../core/graph.js';
+import { validParam } from '../core/params.js';
 import { engine } from '../core/engine.js';
 import { paramWidget } from './properties.js';
 
@@ -36,6 +37,14 @@ function openScreen(node) {
   root.addEventListener('wheel', (e) => e.stopPropagation());
   close.addEventListener('click', closeScreen);
   renderOptions(side, node);
+  // gestures on the view (pan, zoom) change the block's params; the settings are redrawn to show them
+  if (node.view.attach) {
+    node.view.attach(canvas, (key, value) => {
+      const p = def.params.find((q) => q.key === key);
+      setParam(node, key, validParam(p, Number(value.toPrecision(5)), node.params));
+      renderOptions(side, node);
+    });
+  }
   document.body.append(root);
   open = { node, side, root, opener: document.activeElement, raf: 0 };
 
