@@ -44,7 +44,7 @@ You start with a **Wave Generator** already connected to an **Audio Sink**. Pres
 - **Block palette** (right): the available blocks, grouped by category.
 - **Properties** (left): every setting of the selected block. Blocks themselves only show their key
   values, read-only; you change them here.
-- **Toolbar** (top): Run/Stop, delete, **Copy** / **Paste** (the diagram as JSON), the **Examples** menu, and the audio status (the sample rate while
+- **Toolbar** (top): Run/Stop, delete, **Share** (copies a link to the diagram), the **Examples** menu, and the audio status (the sample rate while
   running).
 - **Examples** (toolbar): *Simple tone* (the starting diagram), *ASK modulation*, *ASK receiver* (microphone → carrier recovery → message) and *Audio source scope* (microphone → oscilloscope). Picking one replaces
   the current diagram, so it asks for confirmation first (unless the canvas is empty); it can't be undone,
@@ -462,11 +462,13 @@ Things to know:
 
 - The saved diagram belongs to **one browser and one address**. `localhost:8000` and `localhost:9000` are
   different places, and so are two browsers.
-- Clearing the site's data erases it. There is no file export or import yet, but you can move a diagram
-  through the clipboard: **Copy** (toolbar) puts the whole diagram on the clipboard as JSON, and **Paste**
-  replaces the current diagram with JSON from the clipboard (it asks first unless the canvas is empty, and
-  says "Not a diagram" if the text isn't one). Keep the JSON in any text file as a backup, or send it to
-  someone. If the browser denies clipboard access, a dialog lets you copy or paste the text by hand.
+- Clearing the site's data erases it. There is no file export or import, but you can move a diagram
+  with a link: **Share** (toolbar) copies a link that contains the whole diagram (compressed, in the part of
+  the address after `#`, which is never sent to a server). Open it in any browser, or paste it into
+  the address bar of an open DSPLab tab, to get the same blocks, settings and cables. If the current
+  diagram has blocks it asks before replacing it, and it says so if the link isn't a valid diagram. Keep
+  the link in a note as a backup. Very large diagrams make long links that some chat apps cut off. If the
+  browser denies clipboard access, a dialog lets you copy the link by hand.
 - To start over, delete all the blocks (an empty diagram is remembered too). There is no "new diagram"
   button yet, so the starting Wave Generator → Audio Sink diagram only comes back in a browser profile
   or address that has never saved one (for example a private window). Removing the saved entry by hand

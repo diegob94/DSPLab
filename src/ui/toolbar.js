@@ -1,9 +1,10 @@
-// Toolbar: Run / Stop, Delete selected, the Examples menu and the audio status.
+// Toolbar: Run / Stop, Delete selected, Share (a link with the diagram), the Examples menu and the audio status.
 import { $ } from '../dom.js';
 import { on } from '../core/events.js';
 import { graph, deleteSelection } from '../core/graph.js';
 import { engine } from '../core/engine.js';
-import { loadDiagram, exportJson, importJson, isDiagramJson } from '../core/persistence.js';
+import { loadDiagram, isDiagram } from '../core/persistence.js';
+import { shareUrl, decodeDiagram, diagramFromHash } from '../core/share.js';
 import { EXAMPLES } from '../core/examples.js';
 
 const runBtn = $('#run');
@@ -54,39 +55,37 @@ function flash(btn, text) {
   btn.flashTimer = setTimeout(() => { btn.textContent = label; }, 1500);
 }
 
-// Copy / Paste move the whole diagram as JSON through the system clipboard. If the browser denies
-// clipboard access, a prompt lets the user copy or paste the text by hand.
-function initClipboard() {
-  const copyBtn = $('#copy');
-  const pasteBtn = $('#paste');
-
-  copyBtn.addEventListener('click', async () => {
-    const text = exportJson();
+// Share copies a link that contains the whole diagram. If the browser denies clipboard access, a
+// prompt lets the user copy the link by hand.
+function initShare() {
+  const btn = $('#share');
+  btn.addEventListener('click', async () => {
+    const url = await shareUrl();
     try {
-      await navigator.clipboard.writeText(text);
-      flash(copyBtn, 'Copied');
+      await navigator.clipboard.writeText(url);
+      flash(btn, 'Link copied');
     } catch (err) {
-      prompt('The clipboard is not available. Copy the diagram from here:', text);
+      prompt('The clipboard is not available. Copy the link from here:', url);
     }
   });
+  // pasting a shared link into a tab that is already open only changes the hash
+  window.addEventListener('hashchange', openSharedLink);
+}
 
-  pasteBtn.addEventListener('click', async () => {
-    let text;
-    try {
-      text = await navigator.clipboard.readText();
-    } catch (err) {
-      text = prompt('The clipboard is not available. Paste the diagram here:');
-      if (text === null) return;
-    }
-    // check before asking, so a bad paste never costs the user a confirmation
-    if (!isDiagramJson(text)) { flash(pasteBtn, 'Not a diagram'); return; }
-    if (graph.nodes.size && !confirm("Replace the current diagram with the one from the clipboard? This can't be undone.")) return;
-    flash(pasteBtn, importJson(text) ? 'Pasted' : 'Not a diagram');
-  });
+// Loads the diagram in the URL hash ("#d=..."), if any, then removes the hash so that reloading
+// doesn't replace later edits. Asks first when it would replace a diagram that has blocks.
+export async function openSharedLink() {
+  const encoded = diagramFromHash();
+  if (encoded === null) return false;
+  history.replaceState(null, '', location.pathname + location.search);
+  const data = await decodeDiagram(encoded);
+  if (!isDiagram(data)) { alert('This link does not contain a valid diagram.'); return false; }
+  if (graph.nodes.size && !confirm("Replace the current diagram with the one in this link? This can't be undone.")) return false;
+  return loadDiagram(data);
 }
 
 export function initToolbar() {
-  initClipboard();
+  initShare();
   initDrawers();
   initExamples();
   delBtn.addEventListener('click', deleteSelection);

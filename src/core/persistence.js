@@ -32,10 +32,13 @@ function save() {
 for (const event of ['changed', 'param', 'moved', 'pan']) on(event, save);
 window.addEventListener('pagehide', saveNow);
 
+// Shape check only; loadDiagram still sanitizes the contents.
+export const isDiagram = (data) => !!data && data.version === 1 && Array.isArray(data.nodes) && Array.isArray(data.edges);
+
 // Replaces the diagram with a saved one. Returns false (leaving the diagram alone) when the data
 // is not usable. Saved data is never trusted: unknown blocks, bad numbers and dangling cables are dropped.
 export function loadDiagram(data) {
-  if (!data || data.version !== 1 || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) return false;
+  if (!isDiagram(data)) return false;
 
   restoring = true;
   try {
@@ -57,26 +60,6 @@ export function loadDiagram(data) {
   select(null);
   saveNow();
   return true;
-}
-
-// Clipboard format: the same JSON as the autosave, pretty-printed so it stays readable in a text file.
-export function exportJson() {
-  return JSON.stringify(serialize(), null, 2);
-}
-
-// True when the text parses as a diagram this version can load (shape only; loadDiagram still sanitizes).
-export function isDiagramJson(text) {
-  try {
-    const data = JSON.parse(text);
-    return !!data && data.version === 1 && Array.isArray(data.nodes) && Array.isArray(data.edges);
-  } catch (err) { return false; }
-}
-
-// Parses text produced by exportJson and loads it. Returns false (diagram untouched) when it isn't usable.
-export function importJson(text) {
-  let data;
-  try { data = JSON.parse(text); } catch (err) { return false; }
-  return loadDiagram(data);
 }
 
 // returns false when there is nothing usable saved, so the caller can load the starter graph
