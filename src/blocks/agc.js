@@ -1,5 +1,5 @@
 export const agc = {
-  title: 'AGC',
+  title: 'Automatic Gain Control',
   category: 'Processing blocks',
   inputs: ['in'],
   outputs: ['out'],

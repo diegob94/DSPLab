@@ -42,10 +42,10 @@ test('max gain stops silence and noise from being amplified without limit', asyn
   assert.ok((await run({}, new Float32Array(4800))).every((v) => v === 0), 'silence stays silent');
 });
 
-test('AGC has an audio input and output, and accepts live changes while running', () => withApp(app, async (page) => {
-  await addFromPalette(page, 'AGC');
-  assert.equal(await page.locator('.node:has-text("AGC") .port.in').count(), 1);
-  assert.equal(await page.locator('.node:has-text("AGC") .port.out').count(), 1);
+test('Automatic Gain Control has an audio input and output, and accepts live changes while running', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Automatic Gain Control');
+  assert.equal(await page.locator('.node:has-text("Automatic Gain Control") .port.in').count(), 1);
+  assert.equal(await page.locator('.node:has-text("Automatic Gain Control") .port.out').count(), 1);
   assert.equal(await page.evaluate(() => dsplab.BLOCKS.agc.category), 'Processing blocks');
   await startAudio(page);
   await page.evaluate(() => dsplab.select({ kind: 'node', id: [...dsplab.graph.nodes.values()].find((n) => n.type === 'agc').id }));

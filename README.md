@@ -251,7 +251,7 @@ closes. An unconnected input gives silence.
 
 Shown on the block: Threshold.
 
-**AGC**: automatic gain control, which keeps a signal at a steady level whether it arrives weak or strong.
+**Automatic Gain Control** (AGC): keeps a signal at a steady level whether it arrives weak or strong.
 Input: `in`. Output: `out`.
 
 It follows the signal's peak level and multiplies the signal by the gain that brings that level to the
