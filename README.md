@@ -183,6 +183,24 @@ The sinc pulse is cut off 4 symbols to each side of its peak. Changing a setting
 
 Shown on the block: Pulse and Baud rate.
 
+**Matched Filter**: the receiver's counterpart of the Pulse Shaper: it correlates the input with the pulse, which
+gives the best signal-to-noise ratio at the instant a symbol is sampled. Input: `in`. Output: `out`.
+
+It is an FIR filter whose impulse response is the pulse (both shapes are symmetric, so reversing it in time
+changes nothing), scaled so that a symbol sent with amplitude A comes out with a peak of A. With the *square*
+pulse it is an integrate-and-dump: each output sample is the average of the last symbol; the peak falls at the end
+of the symbol. With *sinc* the peak comes 4 symbols after the pulse's centre (the filter's delay). Put it before
+Symbol Recovery, with the same pulse and baud rate as the Pulse Shaper.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Pulse | Shape to match | square, sinc | square |
+| Baud rate | Symbols per second | 50 – 20000 (logarithmic) | 1000 baud |
+
+Changing a setting rebuilds the filter and may click.
+
+Shown on the block: Pulse and Baud rate.
+
 **Symbol Recovery**: samples a digital-looking signal (like the output of a matched filter) at the
 right instants and returns the bits. Input: `in` (audio). Output: `msg`.
 
@@ -250,6 +268,27 @@ Set the threshold between the noise and the signal. Too high and weak symbols ar
 closes. An unconnected input gives silence.
 
 Shown on the block: Threshold.
+
+**Automatic Gain Control** (AGC): keeps a signal at a steady level whether it arrives weak or strong.
+Input: `in`. Output: `out`.
+
+It follows the signal's peak level and multiplies the signal by the gain that brings that level to the
+target. It rises to a louder signal within the attack time and recovers slowly after a quieter one over the
+release time, so the gain does not pump on every cycle.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Target | Peak level the output settles at | 0.01 – 1 | 0.5 |
+| Attack | How fast the level estimate (and so the gain) reacts to a louder signal | 0.1 – 100 ms (logarithmic) | 5 ms |
+| Release | How fast the gain recovers after the signal gets quieter | 10 – 5000 ms (logarithmic) | 500 ms |
+| Max gain | Most the block will amplify, so silence and noise are not boosted without limit | 0 – 60 dB | 40 dB |
+
+Make the release much longer than one period of the lowest frequency you care about, or the gain follows the
+waveform and distorts it. A short attack can let a sudden loud burst through at full level for a moment.
+Modulation that carries information in its amplitude is flattened by this block. An unconnected input gives
+silence.
+
+Shown on the block: Target.
 
 ### Sink blocks
 
