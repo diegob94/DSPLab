@@ -22,6 +22,10 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Ships Chromium and its system libraries, so there is nothing to install per run. The tag
+    # must match the "playwright" version in package.json (pinned exactly); bump them together.
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,7 +33,6 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
       - run: npm test
 
   deploy:
