@@ -212,11 +212,11 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
 /* a view's button in the title bar (the oscilloscope's big screen) */
 .node-title:has(.title-button) { display: flex; align-items: center; justify-content: space-between; }
 .title-button {
-  width: 22px; height: 22px; padding: 0; margin: -2px -4px -2px 8px;
+  width: 28px; height: 24px; padding: 0; margin: -2px -4px -2px 8px;
   display: flex; align-items: center; justify-content: center;
-  background: transparent; border-color: transparent; color: #0b0d10; border-radius: 4px;
+  background: #0b0d10; color: #fff; border: 1px solid #0b0d10; border-radius: 5px;
 }
-.title-button:hover { background: #0b0d1026; border-color: #0b0d1055; }
+.title-button:hover { background: #fff; color: #0b0d10; border-color: #fff; }
 
 /* big screen: a window over the diagram, the view on the left and the settings on the right */
 .screen-backdrop {

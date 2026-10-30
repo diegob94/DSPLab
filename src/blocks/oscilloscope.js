@@ -142,7 +142,7 @@ export const oscilloscope = {
     const g0 = el.getContext('2d');
     // the title-bar button asks the UI for the big screen (a DOM event, as blocks never import ui/)
     const expand = h('button', { className: 'title-button', type: 'button', title: 'Big screen', ariaLabel: 'Big screen' });
-    expand.append(svgEl('svg', { viewBox: '0 0 16 16', width: 12, height: 12, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.6 }));
+    expand.append(svgEl('svg', { viewBox: '0 0 16 16', width: 16, height: 16, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.8 }));
     expand.firstChild.append(svgEl('path', { d: 'M6 2H2v4M10 2h4v4M6 14H2v-4M10 14h4v-4' }));
     expand.addEventListener('pointerdown', (e) => e.stopPropagation());
     expand.addEventListener('click', () => window.dispatchEvent(new CustomEvent('dsplab:screen', { detail: node })));
