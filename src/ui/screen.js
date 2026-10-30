@@ -48,7 +48,7 @@ function openScreen(node) {
       canvas.height = Math.round(H * dpr);
     }
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    node.view.paint(g, W, H, engine.live.get(node.id), 12);
+    node.view.paint(g, W, H, engine.live.get(node.id), 12, true);
     open.raf = requestAnimationFrame(frame);
   })();
   close.focus();

@@ -313,7 +313,7 @@ only draws while the audio is running (otherwise it reads *Stopped*).
 
 Shown on the block: Trigger, Trig mode, X / div and Y / div. The screen has 10 × 8 divisions.
 The button in the block's top-right corner (title bar) opens a **big screen**: a window over the diagram with
-the waveform on the left and all the settings on the right. Close it with × , Esc or a click outside.
+the waveform on the left and all the settings on the right; its grid is labelled with the time and level of each division. Close it with × , Esc or a click outside.
 While you change *Trig level* a dashed line shows it on the screen for a moment.
 
 - **Trigger.** Each sweep starts where the trigger channel rises through *Trig level*, and every

@@ -376,3 +376,20 @@ test('the holdoff setting is in the panel, 0 to 1000 ms, default 0', () => withA
   const p = await page.evaluate(() => dsplab.BLOCKS.oscilloscope.params.find((q) => q.key === 'holdoff'));
   assert.deepEqual([p.min, p.max, p.unit], [0, 1000, 'ms']);
 }));
+
+test('the big screen labels every division with its time and level; the small one stays clean', () => withApp(app, async (page) => {
+  await openBig(page);
+  // record what the screen draws by wrapping fillText on the next frames
+  const texts = await page.evaluate(async () => {
+    const out = new Set();
+    const orig = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (t, ...r) { out.add([this.canvas.className, t].join('|')); return orig.call(this, t, ...r); };
+    await new Promise((r) => setTimeout(r, 200));
+    CanvasRenderingContext2D.prototype.fillText = orig;
+    return [...out];
+  });
+  const big = texts.filter((t) => t.startsWith('screen-canvas|')).map((t) => t.split('|')[1]);
+  const small = texts.filter((t) => t.startsWith('scope|')).map((t) => t.split('|')[1]);
+  for (const t of ['0 ms', '5 ms', '10 ms', '0.75', '-0.25', '-0.75']) assert.ok(big.includes(t), `big screen shows ${t}: ${big}`);
+  assert.deepEqual(small, ['Stopped']);
+}));
