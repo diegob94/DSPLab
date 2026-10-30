@@ -125,16 +125,15 @@ export const oscilloscope = {
   },
   ui(node) {
     const W0 = 220, H0 = 130, dpr = window.devicePixelRatio || 1;
-    const canvas = h('canvas', { className: 'scope', width: W0 * dpr, height: H0 * dpr });
-    const g0 = canvas.getContext('2d');
-    // the corner button asks the UI for the big screen (a DOM event, as blocks never import ui/)
-    const expand = h('button', { className: 'scope-expand', type: 'button', title: 'Big screen', ariaLabel: 'Big screen' });
+    const el = h('canvas', { className: 'scope', width: W0 * dpr, height: H0 * dpr });
+    const g0 = el.getContext('2d');
+    // the title-bar button asks the UI for the big screen (a DOM event, as blocks never import ui/)
+    const expand = h('button', { className: 'title-button', type: 'button', title: 'Big screen', ariaLabel: 'Big screen' });
     expand.append(svgEl('svg', { viewBox: '0 0 16 16', width: 12, height: 12, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.6 }));
     expand.firstChild.append(svgEl('path', { d: 'M6 2H2v4M10 2h4v4M6 14H2v-4M10 14h4v-4' }));
     expand.addEventListener('pointerdown', (e) => e.stopPropagation());
     expand.addEventListener('click', () => window.dispatchEvent(new CustomEvent('dsplab:screen', { detail: node })));
-    const el = h('div', { className: 'scope-wrap' }, canvas, expand);
-    let lastLevel = node.params.level, levelShownAt = -Infinity;
+        let lastLevel = node.params.level, levelShownAt = -Infinity;
 
     // draws the screen into a W x H area of g (the block's small canvas or the big window's)
     function paint(g, W, H, inst, fontPx = 10) {
@@ -203,6 +202,7 @@ export const oscilloscope = {
     }
     return {
       el,
+      titleButton: expand,
       draw(inst) {
         g0.setTransform(dpr, 0, 0, dpr, 0, 0);
         paint(g0, W0, H0, inst);

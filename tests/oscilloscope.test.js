@@ -197,7 +197,7 @@ test('the screen carries no text besides "Stopped", "Waiting for trigger" and th
   const draw = (running) => page.evaluate((running) => {
     const node = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
     const texts = [];
-    const ctx = node.view.el.querySelector('canvas').getContext('2d');
+    const ctx = node.view.el.getContext('2d');
     const orig = ctx.fillText.bind(ctx);
     ctx.fillText = (t, ...rest) => { texts.push(t); return orig(t, ...rest); };
     node.view.draw(running ? { sample: () => [] } : undefined);
@@ -214,7 +214,7 @@ test('the trigger level line is drawn while the level is being changed, and goes
   await addFromPalette(page, 'Oscilloscope');
   const texts = () => page.evaluate(async () => {
     const node = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
-    const ctx = node.view.el.querySelector('canvas').getContext('2d');
+    const ctx = node.view.el.getContext('2d');
     const seen = [];
     const orig = ctx.fillText.bind(ctx);
     ctx.fillText = (t, ...rest) => { seen.push(t); return orig(t, ...rest); };
@@ -298,7 +298,7 @@ const openBig = async (page) => {
     window.scope = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
     dsplab.addEdge({ node: [...dsplab.graph.nodes.values()][0].id, port: 'out' }, { node: scope.id, port: 'ch1' });
   });
-  await page.click('.node:has-text("Oscilloscope") .scope-expand');
+  await page.click('.node:has-text("Oscilloscope") .title-button');
 };
 
 test('the expand button opens a window with the waveform left of the settings; Esc and × close it', () => withApp(app, async (page) => {
@@ -309,7 +309,7 @@ test('the expand button opens a window with the waveform left of the settings; E
   assert.ok(view.width > 400 && view.height > 300, `big canvas ${view.width}x${view.height}`);
   await page.keyboard.press('Escape');
   assert.equal(await page.locator('.screen-window').count(), 0);
-  await page.click('.node:has-text("Oscilloscope") .scope-expand');
+  await page.click('.node:has-text("Oscilloscope") .title-button');
   await page.click('.screen-close');
   assert.equal(await page.locator('.screen-window').count(), 0);
 }));

@@ -209,14 +209,14 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
   .param input, .param select { padding: 6px 8px; font-size: 16px; }
 }
 
-/* oscilloscope: the corner button that opens the big screen */
-.scope-wrap { position: relative; width: 220px; }
-.scope-expand {
-  position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; padding: 0;
+/* a view's button in the title bar (the oscilloscope's big screen) */
+.node-title:has(.title-button) { display: flex; align-items: center; justify-content: space-between; }
+.title-button {
+  width: 22px; height: 22px; padding: 0; margin: -2px -4px -2px 8px;
   display: flex; align-items: center; justify-content: center;
-  background: #0d0f12cc; color: var(--muted); border-radius: 4px;
+  background: transparent; border-color: transparent; color: #0b0d10; border-radius: 4px;
 }
-.scope-expand:hover { color: var(--accent); }
+.title-button:hover { background: #0b0d1026; border-color: #0b0d1055; }
 
 /* big screen: a window over the diagram, the view on the left and the settings on the right */
 .screen-backdrop {

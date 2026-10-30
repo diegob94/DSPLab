@@ -311,7 +311,7 @@ only draws while the audio is running (otherwise it reads *Stopped*).
 | Y / div | Signal units per vertical division (8 divisions), shared by all channels | 0.01 – 2 (logarithmic) | 0.25 |
 
 Shown on the block: Trigger, Trig mode, X / div and Y / div. The screen has 10 × 8 divisions.
-The button in the screen's top-right corner opens a **big screen**: a window over the diagram with
+The button in the block's top-right corner (title bar) opens a **big screen**: a window over the diagram with
 the waveform on the left and all the settings on the right. Close it with × , Esc or a click outside.
 While you change *Trig level* a dashed line shows it on the screen for a moment.
 
