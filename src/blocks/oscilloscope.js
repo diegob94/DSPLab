@@ -19,6 +19,7 @@ export const oscilloscope = {
     { key: 'trigger',  label: 'Trigger',    show: true, type: 'select', options: (p) => inputNames(p), default: 'ch1' },
     { key: 'mode',     label: 'Trig mode',  show: true, type: 'select', options: ['auto', 'normal', 'single'], default: 'auto' },
     { key: 'level',    label: 'Trig level', type: 'range', min: -1, max: 1, step: 0.01, default: 0 },
+    { key: 'holdoff',  label: 'Holdoff',    type: 'range', min: 0, max: 1000, step: 0.1, unit: 'ms', default: 0 },
     { key: 'xdiv',     label: 'X / div',    show: true, type: 'range', scale: 'log', min: 0.1, max: 1000, unit: 'ms', default: 1 },
     { key: 'ydiv',     label: 'Y / div',    show: true, type: 'range', scale: 'log', min: 0.01, max: 2, default: 0.25 },
   ],
@@ -83,10 +84,13 @@ export const oscilloscope = {
       //  normal: only a trigger crossing updates the screen; until one comes, the last sweep stays
       //          (nothing at all if there is none yet).
       //  single: waits for the first crossing after it was armed, then keeps that sweep. It is armed
-      //          by choosing the mode and again by changing the trigger, level or time base.
-      sample(spanMs, level = 0, trigger = names[0], mode = 'auto') {
+      //          by choosing the mode and again by changing the trigger, level, holdoff or time base.
+      // Holdoff: after a trigger, crossings closer than `holdoffMs` are ignored, so a signal with
+      // several crossings per repetition (a burst, a two-tone) locks onto one of them.
+      sample(spanMs, level = 0, trigger = names[0], mode = 'auto', holdoffMs = 0) {
         const n = Math.min(Math.round(spanMs * ctx.sampleRate / 1000), maxWindow);
-        const key = [mode, trigger, level, n].join();
+        const hold = Math.round(holdoffMs * ctx.sampleRate / 1000);
+        const key = [mode, trigger, level, n, hold].join();
         if (key !== heldKey) { heldKey = key; held = null; armedAt = written; }
         if (held && mode === 'single') return held;
 
@@ -98,9 +102,18 @@ export const oscilloscope = {
           read(rings[t], base, len, search);
           // single ignores crossings that were already in the buffer when it was armed
           const min = mode === 'single' ? Math.max(1, armedAt - (written - cap) - base) : 1;
-          // newest crossing that still leaves a full window after it
-          for (let i = len - n - 1; i >= min; i--) {
-            if (search[i - 1] < level && search[i] >= level) { start = base + i; break; }
+          const crosses = (i) => search[i - 1] < level && search[i] >= level;
+          if (hold < 1) {
+            // newest crossing that still leaves a full window after it
+            for (let i = len - n - 1; i >= min; i--) {
+              if (crosses(i)) { start = base + i; break; }
+            }
+          } else {
+            // walk forward from the oldest data, re-arming `hold` samples after each trigger, and
+            // keep the newest trigger that still leaves a full window after it
+            for (let i = min, rearm = 0; i <= len - n - 1; i++) {
+              if (i >= rearm && crosses(i)) { start = base + i; rearm = i + hold; }
+            }
           }
         }
         if (start < 0) {
@@ -148,7 +161,7 @@ export const oscilloscope = {
       g.strokeStyle = '#3a4350';
       g.beginPath(); g.moveTo(0, H / 2 + .5); g.lineTo(W, H / 2 + .5); g.stroke();
 
-      const { xdiv, trigger, mode, level, ydiv } = node.params;
+      const { xdiv, trigger, mode, level, holdoff, ydiv } = node.params;
       const pxPerUnit = (H / DIV_Y) / ydiv;
       const yOf = (v) => Math.min(H, Math.max(0, H / 2 - v * pxPerUnit));
 
@@ -171,7 +184,7 @@ export const oscilloscope = {
       if (!inst) return;
 
       g.lineWidth = 1.5;
-      const sweeps = inst.sample(xdiv * DIV_X, level, trigger, mode);
+      const sweeps = inst.sample(xdiv * DIV_X, level, trigger, mode, holdoff);
       // normal / single leave the screen empty until the trigger fires
       if (mode !== 'auto' && sweeps.every((d) => !d)) g.fillText('Waiting for trigger', 6, 14);
       sweeps.forEach((data, k) => {

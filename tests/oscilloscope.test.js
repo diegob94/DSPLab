@@ -189,7 +189,7 @@ test('the trigger level is honoured', () => withApp(app, async (page) => {
 test('trace colours, trigger, X / div and Y / div are shown on the node', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
   assert.deepEqual(await page.locator('.node:has-text("Oscilloscope") .kv').allTextContents(), ['Triggerch1', 'Trig modeauto', 'X / div1 ms', 'Y / div0.25']);
-  assert.equal(await page.locator('#props .param').count(), 6);
+  assert.equal(await page.locator('#props .param').count(), 7);
 }));
 
 test('the screen carries no text besides "Stopped", "Waiting for trigger" and the trigger level line (the settings are on the node)', () => withApp(app, async (page) => {
@@ -338,4 +338,41 @@ test('Delete while the window is open does not remove the block behind it', () =
   await openBig(page);
   await page.keyboard.press('Delete');
   assert.equal(await page.evaluate(() => dsplab.graph.nodes.has(scope.id)), true);
+}));
+
+test('holdoff makes a signal with two crossings per period lock onto one of them', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  // 100 Hz + 300 Hz crosses 0.5 upwards twice per 10 ms period (at about 0.2 ms and 3.1 ms)
+  await page.evaluate(() => {
+    const gen = [...dsplab.graph.nodes.values()][0];
+    gen.params.frequency = 100;
+    window.scope = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
+    const gen3 = dsplab.addNode('wave_generator', 200, 420);
+    gen3.params.frequency = 300;
+    const sum = dsplab.addNode('math_operator', 400, 420);
+    dsplab.addEdge({ node: gen.id, port: 'out' }, { node: sum.id, port: 'a' });
+    dsplab.addEdge({ node: gen3.id, port: 'out' }, { node: sum.id, port: 'b' });
+    dsplab.addEdge({ node: sum.id, port: 'out' }, { node: scope.id, port: 'ch1' });
+  });
+  await startAudio(page);
+  await sleep(1400);
+  // spread of the sample 2.5 ms after the trigger over many frames: the same crossing every time gives no spread
+  const spread = (holdoff) => page.evaluate(async (holdoff) => {
+    const inst = dsplab.engine.live.get(scope.id);
+    const v = [];
+    for (let i = 0; i < 20; i++) {
+      v.push(inst.sample(5, 0.5, 'ch1', 'auto', holdoff)[0][110]);
+      await new Promise((r) => setTimeout(r, 37));
+    }
+    return Math.max(...v) - Math.min(...v);
+  }, holdoff);
+  assert.ok(await spread(0) > 0.3, 'without holdoff the trigger hops between the two crossings');
+  assert.ok(await spread(5) < 0.05, 'with a 5 ms holdoff it stays on one');
+}));
+
+test('the holdoff setting is in the panel, 0 to 1000 ms, default 0', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  assert.equal(await panelControl(page, 'Holdoff').inputValue(), '0');
+  const p = await page.evaluate(() => dsplab.BLOCKS.oscilloscope.params.find((q) => q.key === 'holdoff'));
+  assert.deepEqual([p.min, p.max, p.unit], [0, 1000, 'ms']);
 }));
