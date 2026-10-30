@@ -183,11 +183,11 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
     grid-template-columns: 1fr;
     grid-template-areas: "bar" "canvas" "props";
   }
-  #toolbar { gap: 6px; padding: 0 8px; }
+  #toolbar { gap: 4px; padding: 0 6px; }
   #toolbar h1 { display: none; }
-  #toolbar button { padding: 7px 8px; }
+  #toolbar button { padding: 7px 6px; }
   #delete .long { display: none; }
-  #examples { padding: 0 6px; min-width: 0; width: 8.5em; }   /* fixed: its widest option would make it too wide */
+  #examples { padding: 0 6px; min-width: 0; width: 6em; }   /* fixed: its widest option would make it too wide */
   #status { display: none; }
   .drawer-toggle { display: block; }
   #toolbar #show-palette { margin-left: auto; }

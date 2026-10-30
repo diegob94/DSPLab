@@ -32,10 +32,13 @@ function save() {
 for (const event of ['changed', 'param', 'moved', 'pan']) on(event, save);
 window.addEventListener('pagehide', saveNow);
 
+// Shape check only; loadDiagram still sanitizes the contents.
+export const isDiagram = (data) => !!data && data.version === 1 && Array.isArray(data.nodes) && Array.isArray(data.edges);
+
 // Replaces the diagram with a saved one. Returns false (leaving the diagram alone) when the data
 // is not usable. Saved data is never trusted: unknown blocks, bad numbers and dangling cables are dropped.
 export function loadDiagram(data) {
-  if (!data || data.version !== 1 || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) return false;
+  if (!isDiagram(data)) return false;
 
   restoring = true;
   try {

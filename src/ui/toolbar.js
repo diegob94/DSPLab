@@ -1,9 +1,10 @@
-// Toolbar: Run / Stop, Delete selected, the Examples menu and the audio status.
+// Toolbar: Run / Stop, Delete selected, Share (a link with the diagram), the Examples menu and the audio status.
 import { $ } from '../dom.js';
 import { on } from '../core/events.js';
 import { graph, deleteSelection } from '../core/graph.js';
 import { engine } from '../core/engine.js';
-import { loadDiagram } from '../core/persistence.js';
+import { loadDiagram, isDiagram } from '../core/persistence.js';
+import { shareUrl, decodeDiagram, diagramFromHash } from '../core/share.js';
 import { EXAMPLES } from '../core/examples.js';
 
 const runBtn = $('#run');
@@ -46,7 +47,45 @@ function initExamples() {
   });
 }
 
+// Shows a short message on a button, then restores its label.
+function flash(btn, text) {
+  const label = btn.dataset.label ||= btn.textContent;
+  btn.textContent = text;
+  clearTimeout(btn.flashTimer);
+  btn.flashTimer = setTimeout(() => { btn.textContent = label; }, 1500);
+}
+
+// Share copies a link that contains the whole diagram. If the browser denies clipboard access, a
+// prompt lets the user copy the link by hand.
+function initShare() {
+  const btn = $('#share');
+  btn.addEventListener('click', async () => {
+    const url = await shareUrl();
+    try {
+      await navigator.clipboard.writeText(url);
+      flash(btn, 'Link copied');
+    } catch (err) {
+      prompt('The clipboard is not available. Copy the link from here:', url);
+    }
+  });
+  // pasting a shared link into a tab that is already open only changes the hash
+  window.addEventListener('hashchange', openSharedLink);
+}
+
+// Loads the diagram in the URL hash ("#d=..."), if any, then removes the hash so that reloading
+// doesn't replace later edits. Asks first when it would replace a diagram that has blocks.
+export async function openSharedLink() {
+  const encoded = diagramFromHash();
+  if (encoded === null) return false;
+  history.replaceState(null, '', location.pathname + location.search);
+  const data = await decodeDiagram(encoded);
+  if (!isDiagram(data)) { alert('This link does not contain a valid diagram.'); return false; }
+  if (graph.nodes.size && !confirm("Replace the current diagram with the one in this link? This can't be undone.")) return false;
+  return loadDiagram(data);
+}
+
 export function initToolbar() {
+  initShare();
   initDrawers();
   initExamples();
   delBtn.addEventListener('click', deleteSelection);

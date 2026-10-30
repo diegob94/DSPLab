@@ -11,7 +11,7 @@ import { initNodes, refreshSummary, startRenderLoop } from './ui/nodes.js';
 import { initProperties } from './ui/properties.js';
 import { initPalette } from './ui/palette.js';
 import { initCanvas } from './ui/canvas.js';
-import { initToolbar } from './ui/toolbar.js';
+import { initToolbar, openSharedLink } from './ui/toolbar.js';
 
 initWires();
 initNodes();
@@ -22,6 +22,7 @@ initToolbar();
 startRenderLoop();
 
 if (!restore()) loadDiagram(EXAMPLES[0].diagram);
+openSharedLink();   // a shared link wins over the saved diagram (it asks first if that has blocks)
 
 // handle for the tests and for poking at the app from the browser console
 window.dsplab = {
