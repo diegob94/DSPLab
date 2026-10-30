@@ -122,13 +122,13 @@ test('a single input draws a 440 Hz sine: 4 cycles in 10 ms, peak 0.5', () => wi
   assert.ok(await lit() > 100, 'trace drawn while running');
 }));
 
-test('X / div goes from 0.1 ms to 100 ms, i.e. a 1 ms to 1 s screen', () => withApp(app, async (page) => {
+test('X / div goes from 0.1 ms to 1000 ms, i.e. a 1 ms to 10 s screen', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
   const slider = panelControl(page, 'X / div');
   const shown = () => page.locator('.node:has-text("Oscilloscope") [data-key=xdiv]').textContent();
   await setRange(slider, 1);
-  assert.equal(await page.evaluate(() => [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope').params.xdiv), 100);
-  assert.equal(await shown(), '100 ms');
+  assert.equal(await page.evaluate(() => [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope').params.xdiv), 1000);
+  assert.equal(await shown(), '1000 ms');
   await setRange(slider, 0);
   assert.equal(await shown(), '0.1 ms');
 }));
@@ -188,11 +188,11 @@ test('the trigger level is honoured', () => withApp(app, async (page) => {
 
 test('trace colours, trigger, X / div and Y / div are shown on the node', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
-  assert.deepEqual(await page.locator('.node:has-text("Oscilloscope") .kv').allTextContents(), ['Triggerch1', 'X / div1 ms', 'Y / div0.25']);
-  assert.equal(await page.locator('#props .param').count(), 5);
+  assert.deepEqual(await page.locator('.node:has-text("Oscilloscope") .kv').allTextContents(), ['Triggerch1', 'Trig modeauto', 'X / div1 ms', 'Y / div0.25']);
+  assert.equal(await page.locator('#props .param').count(), 6);
 }));
 
-test('the screen carries no text besides "Stopped" and the trigger level line (the settings are on the node)', () => withApp(app, async (page) => {
+test('the screen carries no text besides "Stopped", "Waiting for trigger" and the trigger level line (the settings are on the node)', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
   const draw = (running) => page.evaluate((running) => {
     const node = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
@@ -206,6 +206,8 @@ test('the screen carries no text besides "Stopped" and the trigger level line (t
   }, running);
   assert.deepEqual(await draw(false), ['Stopped']);
   assert.deepEqual(await draw(true), []);
+  await panelControl(page, 'Trig mode').selectOption('normal');
+  assert.deepEqual(await draw(true), ['Waiting for trigger'], 'nothing to show until the trigger fires');
 }));
 
 test('the trigger level line is drawn while the level is being changed, and goes away again', () => withApp(app, async (page) => {
@@ -225,6 +227,67 @@ test('the trigger level line is drawn while the level is being changed, and goes
   assert.ok((await texts()).includes('level 0.3'), 'level line while adjusting');
   await sleep(1700);
   assert.ok(!(await texts()).some((t) => t.startsWith('level')), 'the line disappears after a moment');
+}));
+
+test('the longest time span is 10 s (X / div up to 1000 ms)', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  const r = await page.evaluate(() => {
+    const scope = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
+    const max = dsplab.BLOCKS.oscilloscope.params.find((q) => q.key === 'xdiv').max;
+    return { max, sr: dsplab.engine.ctx ? dsplab.engine.ctx.sampleRate : 0, id: scope.id };
+  });
+  assert.equal(r.max, 1000);
+  await page.evaluate(() => {
+    const scope = [...dsplab.graph.nodes.values()].find((q) => q.type === 'oscilloscope');
+    dsplab.addEdge({ node: [...dsplab.graph.nodes.values()][0].id, port: 'out' }, { node: scope.id, port: 'ch1' });
+  });
+  await startAudio(page);
+  const n = await page.evaluate(() => {
+    const scope = [...dsplab.graph.nodes.values()].find((q) => q.type === 'oscilloscope');
+    const d = dsplab.engine.live.get(scope.id).sample(1e6, 0, 'ch1');
+    return { len: d.find(Boolean) ? d.find(Boolean).length : 0, sr: dsplab.engine.ctx.sampleRate };
+  });
+  assert.equal(n.len, n.sr * 10);
+}));
+
+test('trigger modes: auto falls back to the newest samples, normal shows nothing, single holds a sweep', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  await page.evaluate(() => {
+    window.scope = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
+    dsplab.addEdge({ node: [...dsplab.graph.nodes.values()][0].id, port: 'out' }, { node: scope.id, port: 'ch1' });
+  });
+  assert.equal(await panelControl(page, 'Trig mode').inputValue(), 'auto');
+  assert.deepEqual(await panelControl(page, 'Trig mode').locator('option').allTextContents(), ['auto', 'normal', 'single']);
+  await startAudio(page);
+  await sleep(1400);                       // start-up transients must be older than the searched history
+  // the screen redraws every frame with the node's own settings (10 ms span, ch1, its level and mode), and the
+  // state of normal / single lives in the block, so the probes below use the same arguments as the screen
+  const probe = (level, mode) => page.evaluate(async ([level, mode]) => {
+    const inst = dsplab.engine.live.get(scope.id);
+    const get = () => inst.sample(10, level, 'ch1', mode)[0];
+    const a = get();
+    await new Promise((r) => setTimeout(r, 250));
+    const b = get();
+    const head = (d) => d && Array.from(d.subarray(0, 8));
+    return { a: head(a), b: head(b) };
+  }, [level, mode]);
+  const level = panelControl(page, 'Trig level');
+
+  // level 1 is never reached by the 0.5 amplitude tone
+  await setRange(level, 1);
+  const auto = await probe(1, 'auto');
+  assert.ok(auto.a && auto.b, 'auto draws the newest samples');
+  await panelControl(page, 'Trig mode').selectOption('normal');
+  const normal = await probe(1, 'normal');
+  assert.equal(normal.b, null, 'normal without a trigger shows nothing');
+
+  await setRange(level, 0.25);
+  await panelControl(page, 'Trig mode').selectOption('single');
+  await probe(0.25, 'single');            // arms it (or the screen already did), then waits for a trigger
+  const held = await probe(0.25, 'single');
+  assert.ok(held.a, 'captured');
+  assert.deepEqual(held.a, held.b, 'and then held');
+  assert.ok(held.a[0] < held.a[7], 'on a rising slope');
 }));
 
 // ---- big screen ----
