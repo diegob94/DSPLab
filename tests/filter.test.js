@@ -30,6 +30,18 @@ test('high-pass attenuates below the cutoff and passes above it', () => withApp(
   assert.ok(await gainAt(page, 'highpass', 1000, 8000) > 0.95);
 }));
 
+test('band-pass passes the centre frequency and attenuates far from it', () => withApp(app, async (page) => {
+  assert.ok(await gainAt(page, 'bandpass', 1000, 1000) > 0.95);
+  assert.ok(await gainAt(page, 'bandpass', 1000, 100) < 0.2);
+  assert.ok(await gainAt(page, 'bandpass', 1000, 10000) < 0.2);
+}));
+
+test('notch removes the centre frequency and passes far from it', () => withApp(app, async (page) => {
+  assert.ok(await gainAt(page, 'notch', 1000, 1000) < 0.05);
+  assert.ok(await gainAt(page, 'notch', 1000, 100) > 0.95);
+  assert.ok(await gainAt(page, 'notch', 1000, 10000) > 0.95);
+}));
+
 test('Filter has input in and output out, in the Processing category', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Filter');
   const node = page.locator('.node:has-text("Filter")');
