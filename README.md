@@ -146,18 +146,23 @@ Shown on the block: Pause.
 An unconnected input is 0, so `add` with only `a` connected passes `a` through, `multiply` with `b`
 open gives silence, and `subtract` with only `b` connected inverts it.
 
-**Filter**: a low-pass or high-pass filter (second order, 12 dB per octave). Input: `in`. Output: `out`.
+**Filter**: a low-pass, high-pass, band-pass or band-reject (notch) filter (second order). Input: `in`. Output: `out`.
 
 | Setting | Range | Default |
 |---|---|---|
-| Type | lowpass, highpass | lowpass |
-| Cutoff | 10 – 20000 Hz | 1000 Hz |
+| Type | lowpass, highpass, bandpass, notch | lowpass |
+| Frequency | 10 – 20000 Hz | 1000 Hz |
 | Q | 0.1 – 20 | 0.707 |
 
 Low-pass keeps what is below the cutoff and attenuates what is above; high-pass does the opposite. At
-the cutoff the level is −3 dB (with Q = 0.707). Raising Q adds a resonant peak at the cutoff.
+the cutoff the level is −3 dB (with Q = 0.707). Raising Q adds a resonant peak at the cutoff
+(low/high-pass roll off at 12 dB per octave).
 
-Shown on the block: Type and Cutoff.
+Band-pass keeps a band around Frequency and attenuates everything else; notch (band-reject) does the
+opposite and removes that band. For both, Frequency is the centre of the band and Q sets how narrow it is
+(bandwidth ≈ Frequency / Q): raise Q for a narrower band.
+
+Shown on the block: Type and Frequency.
 
 **Pulse Shaper**: turns a stream of 1 × 1 messages (symbols) into a waveform you can play or look at.
 Input: `msg`. Output: `out` (audio).

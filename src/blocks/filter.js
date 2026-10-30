@@ -6,12 +6,13 @@ export const filter = {
   inputs: ['in'],
   outputs: ['out'],
   params: [
-    { key: 'type',      label: 'Type',      show: true, type: 'select', options: ['lowpass', 'highpass'], default: 'lowpass' },
-    { key: 'frequency', label: 'Cutoff',    show: true, type: 'range', scale: 'log', min: 10, max: 20000, unit: 'Hz', default: 1000 },
+    { key: 'type',      label: 'Type',      show: true, type: 'select', options: ['lowpass', 'highpass', 'bandpass', 'notch'], default: 'lowpass' },
+    { key: 'frequency', label: 'Frequency', show: true, type: 'range', scale: 'log', min: 10, max: 20000, unit: 'Hz', default: 1000 },
     { key: 'q',         label: 'Q',         type: 'range', min: 0.1, max: 20, step: 0.1, default: 0.707 },
   ],
   // One BiquadFilterNode (2nd order, 12 dB/octave). Q = 0.707 is a flat (Butterworth) response;
-  // higher values add a resonant peak at the cutoff.
+  // higher values add a resonant peak at the cutoff. For bandpass and notch (band-reject) the frequency
+  // is the centre of the band and Q sets its width (bandwidth = frequency / Q).
   build(ctx, p) {
     const f = ctx.createBiquadFilter();
     const update = (p) => {
