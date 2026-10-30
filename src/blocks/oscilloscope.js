@@ -32,11 +32,11 @@ export const oscilloscope = {
     const names = inputNames(p);
     const maxWindow = Math.ceil(ctx.sampleRate * 10); // longest time span: 10 s
     const cap = 2 * maxWindow;                        // history kept per channel: 20 s
-    const history = Math.ceil(ctx.sampleRate);        // how far back before the window a trigger is searched (plus the holdoff, so it can re-arm)
-    const searchMax = maxWindow + Math.ceil(ctx.sampleRate * (1 + HOLDOFF_MAX_MS / 1000));
-    const rings = names.map(() => new Float32Array(cap));
+    const history = Math.ceil(ctx.sampleRate);        // how far back before the window a trigger is searched
+        const rings = names.map(() => new Float32Array(cap));
     const windows = names.map(() => new Float32Array(maxWindow));
-    const search = new Float32Array(searchMax);
+    const search = new Float32Array(maxWindow + history);
+    let tk = null;                                    // holdoff: the triggers found so far (see sample)
     let held = null, heldKey = '', armedAt = 0;       // normal / single: the sweep on screen, and what it was taken with
     const connected = names.map(() => false);
     let written = 0;                                  // samples received so far, per channel
@@ -99,22 +99,32 @@ export const oscilloscope = {
         let start = -1;
         const t = names.indexOf(trigger);
         if (t >= 0 && connected[t]) {
-          const len = Math.min(cap, n + history + hold);
-          const base = cap - len;                       // where the searched part starts in the oldest-first view
-          read(rings[t], base, len, search);
-          // single ignores crossings that were already in the buffer when it was armed
-          const min = mode === 'single' ? Math.max(1, armedAt - (written - cap) - base) : 1;
-          const crosses = (i) => search[i - 1] < level && search[i] >= level;
           if (hold < 1) {
+            const len = Math.min(cap, n + history);
+            const base = cap - len;                     // where the searched part starts in the oldest-first view
+            read(rings[t], base, len, search);
+            // single ignores crossings that were already in the buffer when it was armed
+            const min = mode === 'single' ? Math.max(1, armedAt - (written - cap) - base) : 1;
             // newest crossing that still leaves a full window after it
             for (let i = len - n - 1; i >= min; i--) {
-              if (crosses(i)) { start = base + i; break; }
+              if (search[i - 1] < level && search[i] >= level) { start = base + i; break; }
             }
           } else {
-            // walk forward from the oldest data, re-arming `hold` samples after each trigger, and
-            // keep the newest trigger that still leaves a full window after it
-            for (let i = min, rearm = 0; i <= len - n - 1; i++) {
-              if (i >= rearm && crosses(i)) { start = base + i; rearm = i + hold; }
+            // The triggers a scope with this holdoff would have fired, found as the samples arrive so
+            // that the chain stays anchored to the signal and not to where the buffer happens to begin.
+            const tkKey = [t, level, hold].join();
+            if (!tk || tk.key !== tkKey) tk = { key: tkKey, scanned: 0, rearm: 0, hits: [] };
+            const ring = rings[t];
+            const oldest = written - cap;               // absolute index of the oldest sample still kept
+            for (let i = Math.max(tk.scanned, oldest + 1, 1); i < written; i++) {
+              if (i >= tk.rearm && ring[(i - 1) % cap] < level && ring[i % cap] >= level) { tk.hits.push(i); tk.rearm = i + hold; }
+            }
+            tk.scanned = written;
+            while (tk.hits.length && tk.hits[0] <= oldest) tk.hits.shift();
+            // newest one that still leaves a full window after it (and, in single, came after arming)
+            for (let k = tk.hits.length - 1; k >= 0; k--) {
+              const at = tk.hits[k];
+              if (at + n <= written && (mode !== 'single' || at >= armedAt)) { start = at - oldest; break; }
             }
           }
         }
