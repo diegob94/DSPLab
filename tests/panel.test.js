@@ -26,7 +26,7 @@ test('nodes only show their key values', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Math Operator');
   assert.deepEqual(await rows('Math Operator'), ['Operation']);
   await addFromPalette(page, 'Oscilloscope');
-  assert.deepEqual(await rows('Oscilloscope'), ['Trigger', 'X / div', 'Y / div']);
+  assert.deepEqual(await rows('Oscilloscope'), ['Trigger', 'Trig mode', 'X / div', 'Y / div']);
 }));
 
 test('editing in the panel updates the node, the model and the audio params', () => withApp(app, async (page) => {

@@ -266,19 +266,24 @@ only draws while the audio is running (otherwise it reads *Stopped*).
 |---|---|---|---|
 | Inputs | How many channels (inputs) the block has | 1 – 8 | 2 |
 | Trigger | Which channel starts each sweep | `ch1` … `chN` | ch1 |
+| Trig mode | What a sweep does when the trigger does or doesn't fire (see below) | auto, normal, single | auto |
 | Trig level | Level the trigger channel must cross going upwards | −1 – 1 | 0 |
-| X / div | Time per horizontal division (10 divisions, so the screen shows ten times this) | 0.1 ms – 100 ms (logarithmic) | 1 ms |
+| X / div | Time per horizontal division (10 divisions, so the screen shows ten times this) | 0.1 ms – 1000 ms (logarithmic) | 1 ms |
 | Y / div | Signal units per vertical division (8 divisions), shared by all channels | 0.01 – 2 (logarithmic) | 0.25 |
 
-Shown on the block: Trigger, X / div and Y / div. The screen has 10 × 8 divisions.
+Shown on the block: Trigger, Trig mode, X / div and Y / div. The screen has 10 × 8 divisions.
 While you change *Trig level* a dashed line shows it on the screen for a moment.
 
 - **Trigger.** Each sweep starts where the trigger channel rises through *Trig level*, and every
   channel is drawn from that same instant, so a repeating signal holds still and channels can be
   compared. The trigger channel can be any of them, which lets you synchronise to a clean reference
   while looking at a messy signal.
-- If the trigger channel has no cable, or never crosses the level, the newest samples are drawn
-  without synchronisation.
+- **Trig mode.** *auto*: if the trigger channel has no cable, or never crosses the level, the newest
+  samples are drawn without synchronisation. *normal*: the screen only updates on a trigger; until one
+  comes the last sweep stays (a blank screen if there has been none). *single*: waits for the first
+  trigger after it is armed, then holds that sweep. It is armed by choosing the mode, by changing the
+  trigger channel, level or X / div, and by pressing Run again.
+- The screen can span up to 10 s (X / div 1000 ms); the scope keeps 20 s of history.
 - Channels without a cable aren't drawn.
 - If you reduce *Inputs*, cables on the channels that disappear are removed, and the trigger returns to
   `ch1` if its channel is gone.
