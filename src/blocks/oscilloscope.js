@@ -17,8 +17,9 @@ export const oscilloscope = {
   params: [
     { key: 'channels', label: 'Inputs',     type: 'select', options: [1, 2, 3, 4, 5, 6, 7, 8], ports: true, default: 2 },
     { key: 'trigger',  label: 'Trigger',    show: true, type: 'select', options: (p) => inputNames(p), default: 'ch1' },
+    { key: 'mode',     label: 'Trig mode',  show: true, type: 'select', options: ['auto', 'normal', 'single'], default: 'auto' },
     { key: 'level',    label: 'Trig level', type: 'range', min: -1, max: 1, step: 0.01, default: 0 },
-    { key: 'xdiv',     label: 'X / div',    show: true, type: 'range', scale: 'log', min: 0.1, max: 100, unit: 'ms', default: 1 },
+    { key: 'xdiv',     label: 'X / div',    show: true, type: 'range', scale: 'log', min: 0.1, max: 1000, unit: 'ms', default: 1 },
     { key: 'ydiv',     label: 'Y / div',    show: true, type: 'range', scale: 'log', min: 0.01, max: 2, default: 0.25 },
   ],
   // the capture processor must be registered before build() can create the worklet node
@@ -27,11 +28,13 @@ export const oscilloscope = {
   },
   build(ctx, p) {
     const names = inputNames(p);
-    const cap = Math.ceil(ctx.sampleRate * 2);        // history kept per channel: 2 s
-    const maxWindow = Math.ceil(ctx.sampleRate);      // longest time span: 1 s
+    const maxWindow = Math.ceil(ctx.sampleRate * 10); // longest time span: 10 s
+    const cap = 2 * maxWindow;                        // history kept per channel: 20 s
+    const history = Math.ceil(ctx.sampleRate);        // how far back before the window a trigger is searched
     const rings = names.map(() => new Float32Array(cap));
     const windows = names.map(() => new Float32Array(maxWindow));
-    const search = new Float32Array(cap);
+    const search = new Float32Array(maxWindow + history);
+    let held = null, heldKey = '', armedAt = 0;       // normal / single: the sweep on screen, and what it was taken with
     const connected = names.map(() => false);
     let written = 0;                                  // samples received so far, per channel
 
@@ -75,24 +78,42 @@ export const oscilloscope = {
       update() {},
       onConnect(port) { connected[names.indexOf(port)] = true; },
       // One window per connected channel (null for unconnected ones), all starting at the same
-      // rising crossing of `level` on the `trigger` channel so the traces hold still. Without a
-      // trigger crossing the newest samples are shown.
-      sample(spanMs, level = 0, trigger = names[0]) {
+      // rising crossing of `level` on the `trigger` channel so the traces hold still.
+      //  auto:   without a trigger crossing the newest samples are shown.
+      //  normal: only a trigger crossing updates the screen; until one comes, the last sweep stays
+      //          (nothing at all if there is none yet).
+      //  single: waits for the first crossing after it was armed, then keeps that sweep. It is armed
+      //          by choosing the mode and again by changing the trigger, level or time base.
+      sample(spanMs, level = 0, trigger = names[0], mode = 'auto') {
         const n = Math.min(Math.round(spanMs * ctx.sampleRate / 1000), maxWindow);
-        let start = cap - n;
+        const key = [mode, trigger, level, n].join();
+        if (key !== heldKey) { heldKey = key; held = null; armedAt = written; }
+        if (held && mode === 'single') return held;
+
+        let start = -1;
         const t = names.indexOf(trigger);
         if (t >= 0 && connected[t]) {
-          read(rings[t], 0, cap, search);
+          const len = Math.min(cap, n + history);
+          const base = cap - len;                       // where the searched part starts in the oldest-first view
+          read(rings[t], base, len, search);
+          // single ignores crossings that were already in the buffer when it was armed
+          const min = mode === 'single' ? Math.max(1, armedAt - (written - cap) - base) : 1;
           // newest crossing that still leaves a full window after it
-          for (let i = cap - n - 1; i > 0; i--) {
-            if (search[i - 1] < level && search[i] >= level) { start = i; break; }
+          for (let i = len - n - 1; i >= min; i--) {
+            if (search[i - 1] < level && search[i] >= level) { start = base + i; break; }
           }
         }
-        return names.map((_, c) => {
+        if (start < 0) {
+          if (mode === 'auto') start = cap - n;
+          else return held || names.map(() => null);
+        }
+        const out = names.map((_, c) => {
           if (!connected[c]) return null;
           read(rings[c], start, n, windows[c]);
-          return windows[c].subarray(0, n);
+          return mode === 'auto' ? windows[c].subarray(0, n) : windows[c].slice(0, n);
         });
+        if (mode !== 'auto') held = out;
+        return out;
       },
       dispose() {
         capture.port.onmessage = null;
@@ -122,7 +143,7 @@ export const oscilloscope = {
         g.strokeStyle = '#3a4350';
         g.beginPath(); g.moveTo(0, H / 2 + .5); g.lineTo(W, H / 2 + .5); g.stroke();
 
-        const { xdiv, trigger, level, ydiv } = node.params;
+        const { xdiv, trigger, mode, level, ydiv } = node.params;
         const pxPerUnit = (H / DIV_Y) / ydiv;
         const yOf = (v) => Math.min(H, Math.max(0, H / 2 - v * pxPerUnit));
 
@@ -145,7 +166,10 @@ export const oscilloscope = {
         if (!inst) return;
 
         g.lineWidth = 1.5;
-        inst.sample(xdiv * DIV_X, level, trigger).forEach((data, k) => {
+        const sweeps = inst.sample(xdiv * DIV_X, level, trigger, mode);
+        // normal / single leave the screen empty until the trigger fires
+        if (mode !== 'auto' && sweeps.every((d) => !d)) g.fillText('Waiting for trigger', 6, 14);
+        sweeps.forEach((data, k) => {
           if (!data || data.length < 2) return;
           g.strokeStyle = SCOPE_COLORS[k % SCOPE_COLORS.length];
           g.beginPath();
