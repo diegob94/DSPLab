@@ -170,15 +170,16 @@ export const oscilloscope = {
       g.textBaseline = 'alphabetic';
       g.textAlign = 'left';
       if (labels) {
-        // the value at each division line: time along the bottom, level up the left side
+        // the value at each division line: time along the bottom, level up the right side
         const num = (v) => String(+v.toPrecision(3));
         for (let i = 0; i <= DIV_X; i++) {
           const t = i * xdiv;
           g.textAlign = i === 0 ? 'left' : i === DIV_X ? 'right' : 'center';
           g.fillText(t >= 1000 ? `${num(t / 1000)} s` : `${num(t)} ms`, Math.min(Math.max(i * W / DIV_X, 4), W - 4), H - 5);
         }
+        g.textAlign = 'right';
+        for (let i = 1; i < DIV_Y; i++) g.fillText(num((DIV_Y / 2 - i) * ydiv), W - 4, Math.round(i * H / DIV_Y) - 3);
         g.textAlign = 'left';
-        for (let i = 1; i < DIV_Y; i++) g.fillText(num((DIV_Y / 2 - i) * ydiv), 4, Math.round(i * H / DIV_Y) - 3);
       }
       if (!inst) g.fillText('Stopped', 6, 14);
 
