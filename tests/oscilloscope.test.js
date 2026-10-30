@@ -370,11 +370,11 @@ test('holdoff makes a signal with two crossings per period lock onto one of them
   assert.ok(await spread(5) < 0.05, 'with a 5 ms holdoff it stays on one');
 }));
 
-test('the holdoff setting is in the panel, 0 to 1000 ms, default 0', () => withApp(app, async (page) => {
+test('the holdoff setting is in the panel, 0 to 3000 ms, default 0', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
   assert.equal(await panelControl(page, 'Holdoff').inputValue(), '0');
   const p = await page.evaluate(() => dsplab.BLOCKS.oscilloscope.params.find((q) => q.key === 'holdoff'));
-  assert.deepEqual([p.min, p.max, p.unit], [0, 1000, 'ms']);
+  assert.deepEqual([p.min, p.max, p.unit], [0, 3000, 'ms']);
 }));
 
 test('the big screen labels every division with its time and level; the small one stays clean', () => withApp(app, async (page) => {
@@ -392,4 +392,28 @@ test('the big screen labels every division with its time and level; the small on
   const small = texts.filter((t) => t.startsWith('scope|')).map((t) => t.split('|')[1]);
   for (const t of ['0 ms', '5 ms', '10 ms', '0.75', '-0.25', '-0.75']) assert.ok(big.includes(t), `big screen shows ${t}: ${big}`);
   assert.deepEqual(small, ['Stopped']);
+}));
+
+test('the holdoff line is drawn while the holdoff is being changed, at that time from the start of the sweep', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  // record the dashed lines and texts the node's screen draws
+  const record = (ms) => page.evaluate(async (ms) => {
+    const node = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
+    const g = node.view.el.getContext('2d');
+    const seen = { texts: [], xs: [] };
+    const text = g.fillText, move = g.moveTo;
+    g.fillText = function (t, ...r) { seen.texts.push(t); return text.call(this, t, ...r); };
+    g.moveTo = function (x, y) { if (y === 0) seen.xs.push(x); return move.call(this, x, y); };
+    await new Promise((r) => setTimeout(r, ms));
+    g.fillText = text; g.moveTo = move;
+    return seen;
+  }, ms);
+  assert.ok(!(await record(100)).texts.some((t) => t.startsWith('holdoff')), 'no line until it is changed');
+  const quiet = record(300);
+  await setRange(panelControl(page, 'Holdoff'), 5);   // xdiv 1 ms: the sweep is 10 ms, so the line is halfway
+  const seen = await quiet;
+  assert.ok(seen.texts.includes('holdoff 5 ms'), `label: ${seen.texts}`);
+  assert.ok(seen.xs.includes(110.5), `vertical line at x=110.5: ${[...new Set(seen.xs)]}`);
+  await sleep(1700);
+  assert.ok(!(await record(100)).texts.some((t) => t.startsWith('holdoff')), 'the line disappears after a moment');
 }));

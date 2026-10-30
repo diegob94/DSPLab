@@ -307,7 +307,7 @@ only draws while the audio is running (otherwise it reads *Stopped*).
 | Trigger | Which channel starts each sweep | `ch1` … `chN` | ch1 |
 | Trig mode | What a sweep does when the trigger does or doesn't fire (see below) | auto, normal, single | auto |
 | Trig level | Level the trigger channel must cross going upwards | −1 – 1 | 0 |
-| Holdoff | After a trigger, crossings closer than this are ignored (see below) | 0 – 1000 ms | 0 ms |
+| Holdoff | After a trigger, crossings closer than this are ignored (see below) | 0 – 3000 ms | 0 ms |
 | X / div | Time per horizontal division (10 divisions, so the screen shows ten times this) | 0.1 ms – 1000 ms (logarithmic) | 1 ms |
 | Y / div | Signal units per vertical division (8 divisions), shared by all channels | 0.01 – 2 (logarithmic) | 0.25 |
 
@@ -328,7 +328,8 @@ While you change *Trig level* a dashed line shows it on the screen for a moment.
 - **Holdoff.** After each trigger the scope ignores further crossings for this long. A signal that
   crosses the level several times per repetition (a burst, two tones mixed) otherwise shows a
   different crossing from frame to frame and the trace jumps; set the holdoff a little shorter than the
-  repetition period and the sweep locks onto one of them. 0 turns it off.
+  repetition period and the sweep locks onto one of them. 0 turns it off. While you change it, a dashed
+  vertical line on the screen marks the holdoff, measured from the start of the sweep.
 - The screen can span up to 10 s (X / div 1000 ms); the scope keeps 20 s of history.
 - Channels without a cable aren't drawn.
 - If you reduce *Inputs*, cables on the channels that disappear are removed, and the trigger returns to

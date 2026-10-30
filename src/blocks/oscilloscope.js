@@ -6,6 +6,7 @@ const SCOPE_COLORS = ['#f2a65a', '#4dd0e1', '#8bd17c', '#e57fd0', '#f5d76e', '#7
 const inputNames = (p) => Array.from({ length: p.channels }, (_, i) => `ch${i + 1}`);
 
 const DIV_X = 10, DIV_Y = 8;   // graticule divisions
+const HOLDOFF_MAX_MS = 3000;   // longest holdoff
 const LEVEL_SHOWN_MS = 1500;   // how long the trigger level line stays after it was last changed
 
 export const oscilloscope = {
@@ -19,7 +20,7 @@ export const oscilloscope = {
     { key: 'trigger',  label: 'Trigger',    show: true, type: 'select', options: (p) => inputNames(p), default: 'ch1' },
     { key: 'mode',     label: 'Trig mode',  show: true, type: 'select', options: ['auto', 'normal', 'single'], default: 'auto' },
     { key: 'level',    label: 'Trig level', type: 'range', min: -1, max: 1, step: 0.01, default: 0 },
-    { key: 'holdoff',  label: 'Holdoff',    type: 'range', min: 0, max: 1000, step: 0.1, unit: 'ms', default: 0 },
+    { key: 'holdoff',  label: 'Holdoff',    type: 'range', min: 0, max: HOLDOFF_MAX_MS, step: 0.1, unit: 'ms', default: 0 },
     { key: 'xdiv',     label: 'X / div',    show: true, type: 'range', scale: 'log', min: 0.1, max: 1000, unit: 'ms', default: 1 },
     { key: 'ydiv',     label: 'Y / div',    show: true, type: 'range', scale: 'log', min: 0.01, max: 2, default: 0.25 },
   ],
@@ -31,10 +32,11 @@ export const oscilloscope = {
     const names = inputNames(p);
     const maxWindow = Math.ceil(ctx.sampleRate * 10); // longest time span: 10 s
     const cap = 2 * maxWindow;                        // history kept per channel: 20 s
-    const history = Math.ceil(ctx.sampleRate);        // how far back before the window a trigger is searched
+    const history = Math.ceil(ctx.sampleRate);        // how far back before the window a trigger is searched (plus the holdoff, so it can re-arm)
+    const searchMax = maxWindow + Math.ceil(ctx.sampleRate * (1 + HOLDOFF_MAX_MS / 1000));
     const rings = names.map(() => new Float32Array(cap));
     const windows = names.map(() => new Float32Array(maxWindow));
-    const search = new Float32Array(maxWindow + history);
+    const search = new Float32Array(searchMax);
     let held = null, heldKey = '', armedAt = 0;       // normal / single: the sweep on screen, and what it was taken with
     const connected = names.map(() => false);
     let written = 0;                                  // samples received so far, per channel
@@ -97,7 +99,7 @@ export const oscilloscope = {
         let start = -1;
         const t = names.indexOf(trigger);
         if (t >= 0 && connected[t]) {
-          const len = Math.min(cap, n + history);
+          const len = Math.min(cap, n + history + hold);
           const base = cap - len;                       // where the searched part starts in the oldest-first view
           read(rings[t], base, len, search);
           // single ignores crossings that were already in the buffer when it was armed
@@ -147,6 +149,7 @@ export const oscilloscope = {
     expand.addEventListener('pointerdown', (e) => e.stopPropagation());
     expand.addEventListener('click', () => window.dispatchEvent(new CustomEvent('dsplab:screen', { detail: node })));
         let lastLevel = node.params.level, levelShownAt = -Infinity;
+    let lastHoldoff = node.params.holdoff, holdoffShownAt = -Infinity;
 
     // draws the screen into a W x H area of g (the block's small canvas or the big window's)
     function paint(g, W, H, inst, fontPx = 10, labels = false) {
@@ -192,6 +195,19 @@ export const oscilloscope = {
         g.beginPath(); g.moveTo(0, ly); g.lineTo(W, ly); g.stroke();
         g.setLineDash([]);
         g.fillText(`level ${level}`, 6, ly < 28 ? ly + 12 : ly - 4);
+      }
+      // likewise the holdoff: a vertical line that far from the start of the sweep, where triggers are accepted again
+      if (holdoff !== lastHoldoff) { lastHoldoff = holdoff; holdoffShownAt = performance.now(); }
+      if (performance.now() - holdoffShownAt < LEVEL_SHOWN_MS) {
+        const hx = Math.round(Math.min(holdoff / (xdiv * DIV_X), 1) * (W - 1)) + .5;
+        g.strokeStyle = g.fillStyle = SCOPE_COLORS[(parseInt(trigger.slice(2), 10) - 1) % SCOPE_COLORS.length];
+        g.setLineDash([4, 3]);
+        g.beginPath(); g.moveTo(hx, 0); g.lineTo(hx, H); g.stroke();
+        g.setLineDash([]);
+        const left = hx > W - 90;
+        g.textAlign = left ? 'right' : 'left';
+        g.fillText(`holdoff ${holdoff} ms`, left ? hx - 4 : hx + 4, 28);
+        g.textAlign = 'left';
       }
       if (!inst) return;
 
