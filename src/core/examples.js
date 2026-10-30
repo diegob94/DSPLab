@@ -35,6 +35,32 @@ export const EXAMPLES = [
     },
   },
   {
+    // An ASK receiver for a message played into the microphone (a 440 Hz carrier keyed by Pulse Shaper symbols at
+    // 1000 baud, with the preamble "ddd" in front of 5 characters). The carrier is recovered with a PLL and
+    // multiplied with the signal (a product detector); the low-pass keeps the baseband, the squelch silences
+    // what is between bursts, and the symbols are sampled and framed by the preamble. Needs microphone permission.
+    id: 'ask-receiver',
+    title: 'ASK receiver',
+    diagram: {
+      version: 1, pan: { x: 0, y: 0 }, zoom: 1,
+      nodes: [
+        { id: 1, type: 'audio_source', x: 50, y: 160, params: {} },
+        { id: 2, type: 'carrier_recovery', x: 290, y: 57, params: { frequency: 440, bandwidth: 20 } },
+        { id: 3, type: 'math_operator', x: 520, y: 138, params: { operation: 'multiply' } },
+        { id: 4, type: 'filter', x: 770, y: 136, params: { type: 'lowpass', frequency: 517 } },
+        { id: 5, type: 'squelch', x: 988, y: 137, params: { threshold: 0.1 } },
+        { id: 6, type: 'symbol_timing', x: 1216, y: 137, params: { baud: 1000 } },
+        { id: 7, type: 'message_deserialize', x: 1456, y: 139, params: { rows: 8, cols: 5, preamble: 'ddd' } },
+        { id: 8, type: 'message_debug', x: 1731, y: 139, params: { lines: 16, decode: 'on' } },
+      ],
+      edges: [
+        edge(1, 'out', 2, 'in'), edge(2, 'out', 3, 'a'), edge(1, 'out', 3, 'b'),
+        edge(3, 'out', 4, 'in'), edge(4, 'out', 5, 'in'), edge(5, 'out', 6, 'in'),
+        edge(6, 'msg', 7, 'msg'), edge(7, 'msg', 8, 'msg'),
+      ],
+    },
+  },
+  {
     // needs microphone permission when Run is pressed
     id: 'mic-scope',
     title: 'Audio source scope',

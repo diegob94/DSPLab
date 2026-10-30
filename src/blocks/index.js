@@ -29,9 +29,16 @@ import { audioSink } from './audio-sink.js';
 import { oscilloscope } from './oscilloscope.js';
 import { mathOperator } from './math-operator.js';
 import { messageStrobe } from './message-strobe.js';
+import { messageConstant } from './message-constant.js';
 import { messageDebug } from './message-debug.js';
 import { messageReshape } from './message-reshape.js';
 import { messageSerialize } from './message-serialize.js';
+import { messageDeserialize } from './message-deserialize.js';
+import { messageConcatenate } from './message-concatenate.js';
+import { pulseShaper } from './pulse-shaper.js';
+import { symbolTiming } from './symbol-timing.js';
+import { squelch } from './squelch.js';
+import { carrierRecovery } from './carrier-recovery.js';
 import { fftPlot } from './fft-plot.js';
 import { audioRecorder } from './audio-recorder.js';
 import { filter } from './filter.js';
@@ -50,9 +57,16 @@ export const BLOCKS = {
   oscilloscope,
   math_operator: mathOperator,
   message_strobe: messageStrobe,
+  message_constant: messageConstant,
   message_debug: messageDebug,
   message_reshape: messageReshape,
   message_serialize: messageSerialize,
+  message_deserialize: messageDeserialize,
+  message_concatenate: messageConcatenate,
+  pulse_shaper: pulseShaper,
+  symbol_timing: symbolTiming,
+  squelch,
+  carrier_recovery: carrierRecovery,
   fft_plot: fftPlot,
   audio_recorder: audioRecorder,
   filter,

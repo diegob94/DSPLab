@@ -46,7 +46,7 @@ You start with a **Wave Generator** already connected to an **Audio Sink**. Pres
   values, read-only; you change them here.
 - **Toolbar** (top): Run/Stop, delete, the **Examples** menu, and the audio status (the sample rate while
   running).
-- **Examples** (toolbar): *Simple tone* (the starting diagram), *ASK modulation* and *Audio source scope* (microphone → oscilloscope). Picking one replaces
+- **Examples** (toolbar): *Simple tone* (the starting diagram), *ASK modulation*, *ASK receiver* (microphone → carrier recovery → message) and *Audio source scope* (microphone → oscilloscope). Picking one replaces
   the current diagram, so it asks for confirmation first (unless the canvas is empty); it can't be undone,
   because the autosave overwrites the old diagram.
 
@@ -159,6 +159,93 @@ the cutoff the level is −3 dB (with Q = 0.707). Raising Q adds a resonant peak
 
 Shown on the block: Type and Cutoff.
 
+**Pulse Shaper**: turns a stream of 1 × 1 messages (symbols) into a waveform you can play or look at.
+Input: `msg`. Output: `out` (audio).
+
+A one is `1` (times the amplitude) and a zero is `0`; the train of symbols is convolved with a pulse shape,
+sampled at the audio sample rate. Symbols are placed one after the other on a grid of 1 / baud seconds,
+whatever the exact moment each message arrives; the first symbol after a pause starts about 50 ms ahead. Set
+the same baud rate here as on the Message Serializer, or the stream will fall behind or run ahead. Messages
+that aren't 1 × 1 are ignored.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Pulse | *square* holds the level for the whole symbol; *sinc* is a band-limited pulse that crosses zero at the other symbols' centres | square, sinc | square |
+| Baud rate | Symbols per second | 50 – 20000 (logarithmic) | 1000 baud |
+| Amplitude | Level of a one | 0 – 1 | 0.5 |
+
+The sinc pulse is cut off 4 symbols to each side of its peak. Changing a setting applies to the next symbol.
+
+Shown on the block: Pulse and Baud rate.
+
+**Symbol Recovery**: samples a digital-looking signal (like the output of a matched filter) at the
+right instants and returns the bits. Input: `in` (audio). Output: `msg`.
+
+It runs a simple phase-locked loop: an oscillator that ticks once per symbol (at the baud rate you set) looks
+at the signal at the symbol instant and halfway between symbols. A Gardner detector compares the two at every
+transition and nudges the oscillator's phase, and slowly its frequency, until the ticks fall on the
+symbols' centres. Each tick sends a **1 × 1** message: 1 if the sample is above the decision level, which is
+halfway between the levels the loop sees at symbol instants, 0 otherwise.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Baud rate | Nominal symbol rate, the loop's starting frequency | 50 – 20000 (logarithmic) | 1000 baud |
+| Loop bandwidth | How fast the loop reacts, as a fraction of the baud rate: higher locks sooner but is noisier | 0.001 – 0.1 (logarithmic) | 0.005 |
+
+Silence is a signal that doesn't change at all: if the input stays perfectly flat for more than 32 symbols the
+block sends nothing (and forgets the signal's levels, to start afresh with the next burst); it also sends
+nothing until the signal first moves. A real signal with noise is never flat, so put a **Squelch** block
+in front of this one to turn the noise between bursts into exact zeros.
+
+Limits: it needs transitions to lock, so a long run of identical bits is held by the loop's memory rather than
+tracked, and a run longer than 32 symbols is taken for silence. A few zeros (up to 32) follow the end of a
+burst before it notices. The ticks are placed by linear interpolation, which is fine from about 4 samples per
+symbol up. A pure sinc pulse has long tails that make the detector noisy, so use a low loop bandwidth with
+it. Starting from a symbol boundary it may take a while to leave; square pulses lock quickly.
+
+Shown on the block: Baud rate.
+
+**Carrier Recovery**: locks a clean sine to a carrier hidden in its input, even a noisy or weak one.
+Input: `in`. Output: `out` (audio).
+
+It is a phase-locked loop whose oscillator is a sine. The input is compared with the oscillator in quadrature
+(multiplied by its cosine and sine, then low-passed), which gives the phase difference whatever the level of the
+input; a PI loop filter then corrects the oscillator's phase and, slowly, its frequency. Once locked the output
+is a pure sine at the carrier's frequency and in step with it, at the amplitude you set (the input's level
+does not matter). Use it to get the carrier back from a modulated signal, or to clean up a noisy tone.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Frequency | Where the oscillator runs on its own, and where it looks for the carrier | 20 – 20000 Hz (logarithmic) | 440 Hz |
+| Loop bandwidth | How wide a band around the frequency it can lock from, and how fast it follows: higher locks from further and sooner but lets more noise through | 1 – 500 Hz (logarithmic) | 20 Hz |
+| Amplitude | Level of the output sine | 0 – 1 | 0.5 |
+
+Set *Frequency* close to the carrier (within about the loop bandwidth, a few times that at most) and give it
+a moment to lock; with 20 Hz it takes a few tenths of a second. If the input has no carrier (silence, or an
+unconnected input) the oscillator keeps running at *Frequency*. Keep the loop bandwidth under about a
+sixteenth of the frequency: above that the low-pass filters can't separate the carrier from its double and the
+loop gets noisy or unstable. It locks
+onto a pure carrier; for a signal that is modulated with a sign flip (like BPSK) the carrier is suppressed and
+this block will not find it.
+
+Shown on the block: Frequency and Loop bandwidth.
+
+**Squelch**: a gate that mutes a signal while it is too weak. Input: `in`. Output: `out`.
+
+It follows the top and bottom of the signal over a short window; while the difference (the peak-to-peak
+swing) is above the threshold the signal passes unchanged, otherwise the output is exact zeros. It turns
+the noise between bursts into silence, which Symbol Recovery recognises.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Threshold | Peak-to-peak swing above which the signal passes | 0 – 1 | 0.1 |
+| Window | Time over which the block forgets the signal's top and bottom, so how long it takes to close after the signal ends (and about how long to open) | 1 – 500 ms (logarithmic) | 20 ms |
+
+Set the threshold between the noise and the signal. Too high and weak symbols are cut; too low and the gate never
+closes. An unconnected input gives silence.
+
+Shown on the block: Threshold.
+
 ### Sink blocks
 
 **Audio Sink**: plays a signal on your speakers. Input: `in`. Setting: **Volume** 0 – 1 (default 0.8).
@@ -226,6 +313,21 @@ a message it receives; it builds a new one.
 It only sends while the audio is running, and sends nothing while the text is empty. Editing the
 message applies at once, without restarting the clock.
 
+**Message Constant**: holds a fixed message and sends it once, when the audio starts. Output: `msg`.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Type | *text*: sent as an 8 × N message (UTF-8); *hex*: bytes, also sent as 8 × N; *bits*: sent as a 1 × N row of bits | text, hex, bits | text |
+| Message | The text; the bytes in hexadecimal (`FF`, `AA 55` or `0xAA 0x55`: spaces, commas and `0x` are ignored, and a last lone digit is dropped); or the bits (every character other than `0` and `1` is ignored, so `1011 0111` works) | up to 100 characters | hello |
+
+It sends again whenever you change what it holds, and sends nothing while it is empty. Because it sends
+only once it is meant for blocks that remember what they receive, such as the `a` input of Message
+Concatenate (a preamble); to repeat a message use a Message Strobe. To put a byte that no text can spell,
+like `0xFF`, in front of a text, use *hex*: it is 8 rows high like the text, so the two join by columns. A *bits*
+message is 1 row high, so to join it to a text put a Message Reshape in between (or use *hex*).
+
+Shown on the block: Type and Message.
+
 **Message Debug**: prints the messages it receives, one per line, each with the time (in seconds of
 audio) at which it arrived. Input: `msg`. It reads *Stopped* while the audio is off, and the log starts
 empty on every Run.
@@ -252,26 +354,67 @@ must equal the number of bits, and only one of them can be −1. If it doesn't f
 (numpy would raise an error) and the block shows what it could not do, like `3x3 can't be 2 x -1`. The
 block also shows the last change, like `8x5 → 2x20`.
 
-**Message Serialize**: turns a message into a waveform you can play or look at. Input: `msg`
-(message). Output: `out` (audio).
+**Message Serializer**: turns a message into a stream of single bits. Input: `msg`. Output: `msg`.
 
-Each bit becomes one *symbol*: a one is `1` (times the amplitude) and a zero is `0`, and the sequence of
-symbols is convolved with a pulse shape, sampled at the audio sample rate. When a message arrives the
-block sends its waveform **once** and then falls silent until the next message. A message that arrives
-while the previous one is still playing is added on top of it.
+Each bit of the incoming message goes out as its own **1 × 1** message, one per symbol, at the baud rate. The
+bits are read column by column, so an 8 × N message goes byte by byte, most significant bit first. Pacing
+follows the audio clock, so the average rate is exact; because a browser timer can't fire once per symbol at
+kilobaud, the symbols that are due are sent together every ~10 ms, and whoever receives them (the Pulse
+Shaper) does its own timing. A message that arrives while another is going out is queued behind it.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
-| Pulse | Shape of each symbol: *square* holds the level for the whole symbol; *sinc* is a band-limited pulse that crosses zero at the other symbols' centres | square, sinc | square |
-| Baud rate | Symbols per second (a message of 8 bits at 1000 baud lasts 8 ms) | 50 – 20000 (logarithmic) | 1000 baud |
-| Amplitude | Level of a one | 0 – 1 | 0.5 |
+| Baud rate | Symbols per second | 50 – 20000 (logarithmic) | 1000 baud |
 
-The bits are sent column by column, so an 8 × N message goes byte by byte, most significant bit first.
-The sinc pulse is cut off 4 symbols to each side of its peak, and the waveform has 4 extra symbols before and
-after the message that hold the pulse's ringing, so its ends aren't chopped. With a square pulse the waveform lasts
-exactly as many symbols as the message has bits. Changing a setting applies to the next message.
+Shown on the block: Baud rate.
 
-Shown on the block: Pulse and Baud rate.
+**Message Deserializer**: collects single bits back into messages, the inverse of the Message Serializer.
+Input: `msg`. Output: `msg`.
+
+Every 1 × 1 message adds a bit; when there are *Rows* × *Columns* of them the block sends one message of that
+size, filled column by column. With the defaults (8 × 1) every 8 bits make one byte, most significant bit
+first, which Message Debug prints as a character.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Rows | Rows of the output message | 1 – 64 | 8 |
+| Columns | Columns of the output message | 1 – 4096 | 1 |
+| Preamble type | How *Preamble* is written: *text* (UTF-8), *hex* (bytes, like `FF` or `AA 55`) or *bits* (like `11111111`) | text, hex, bits | text |
+| Preamble | What marks where a message starts, in that notation (empty: no framing) | up to 100 characters | empty |
+
+Messages that aren't 1 × 1 are ignored. Changing a setting drops the bits collected so far, and so does
+pressing Run.
+
+With the *Preamble* empty the block counts bits from the first one it receives, so after a Symbol
+Recovery (which can output stray bits before and after a burst) the bytes may be shifted and the text read as
+garbage. With a preamble it ignores the stream until it sees the preamble's bits (as the Message
+Serializer sends them: 8 bits per character or byte), at any bit offset, then collects one message of Rows × Columns
+bits (the preamble itself is not in it) and goes back to looking. Pick a preamble that is unlikely to appear
+by chance in the data, such as two or three characters. The block shows what it is doing: *Looking for the
+preamble*, how many bits it has collected, or the size it last sent.
+
+Shown on the block: Rows, Columns and Preamble.
+
+**Message Concatenate**: joins messages one after the other. Inputs: `a`, `b`, and up to `h` (set with
+*Inputs*). Output: `msg`.
+
+Every input except the last remembers the latest message that arrived there; every time one arrives at the
+**last** input, the block sends them all joined in the order of the inputs (`a`, then `b`, and so on). To
+put a preamble in front of a payload, feed the preamble (a Message Constant, say) to `a` and the payload to
+`b`: the payload's clock sets the pace and the preamble is repeated in front of each one. With three inputs
+you can add a trailer after the payload, or a preamble and a header, feeding the one that sets the pace to `c`.
+Nothing is sent until every input has received something; the block shows which one it is still waiting for.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Inputs | How many messages are joined | 2 – 8 | 2 |
+| Join | *columns*: each message goes after the previous one side by side (all need the same rows, so 8 × N texts make a longer text); *rows*: each goes below the previous one (all need the same columns) | columns, rows | columns |
+
+If two of them don't fit, the message is dropped and the block says which two, like
+`2x1 and 1x1 can't join by columns`. It shows the last join, like `8x2 + 8x5 → 8x7`. Changing *Inputs*
+keeps the cables on the ports that remain (`a`, `b`...) and drops those on removed ones.
+
+Shown on the block: Join.
 
 ## Recipes
 
@@ -284,6 +427,14 @@ several inputs). Press Run. The default 10 ms span shows about four cycles of 44
 **Amplitude-shift keying.** Pick *ASK modulation* in the Examples menu: a 440 Hz sine is multiplied by a
 2 Hz square wave that swings between 0 and 1, so the tone switches on and off. The scope shows the keyed
 signal (`ch1`) against the square wave (`ch2`, the trigger).
+
+**Receive an ASK message.** Pick *ASK receiver* in the Examples menu and press Run (it asks for the
+microphone). The Audio Source feeds a Carrier Recovery, which rebuilds a clean 440 Hz carrier; a Math Operator
+set to *multiply* mixes it with the signal, so the keyed bursts come out at baseband; the Filter (low-pass,
+517 Hz) removes the double-frequency term, the Squelch silences the gaps, Symbol Recovery samples the symbols at
+1000 baud and the Message Deserializer waits for the preamble `ddd` and collects the 5 characters that follow,
+which Message Debug prints. It expects a transmitter that sends that at 1000 baud on a 440 Hz carrier. The
+example is only a starting point: nobody has tried it here with a real microphone.
 
 **Compare two waves.** Add a second Wave Generator and connect it to `ch2`. Set the scope's X / div to
 0.5 ms, both generators to 1000 Hz, one to *sine* and the other to *square*, and set *Trigger* to `ch2`:
