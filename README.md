@@ -269,6 +269,27 @@ closes. An unconnected input gives silence.
 
 Shown on the block: Threshold.
 
+**Automatic Gain Control** (AGC): keeps a signal at a steady level whether it arrives weak or strong.
+Input: `in`. Output: `out`.
+
+It follows the signal's peak level and multiplies the signal by the gain that brings that level to the
+target. It rises to a louder signal within the attack time and recovers slowly after a quieter one over the
+release time, so the gain does not pump on every cycle.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Target | Peak level the output settles at | 0.01 – 1 | 0.5 |
+| Attack | How fast the level estimate (and so the gain) reacts to a louder signal | 0.1 – 100 ms (logarithmic) | 5 ms |
+| Release | How fast the gain recovers after the signal gets quieter | 10 – 5000 ms (logarithmic) | 500 ms |
+| Max gain | Most the block will amplify, so silence and noise are not boosted without limit | 0 – 60 dB | 40 dB |
+
+Make the release much longer than one period of the lowest frequency you care about, or the gain follows the
+waveform and distorts it. A short attack can let a sudden loud burst through at full level for a moment.
+Modulation that carries information in its amplitude is flattened by this block. An unconnected input gives
+silence.
+
+Shown on the block: Target.
+
 ### Sink blocks
 
 **Audio Sink**: plays a signal on your speakers. Input: `in`. Setting: **Volume** 0 – 1 (default 0.8).
