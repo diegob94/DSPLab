@@ -40,7 +40,20 @@ export function paramWidget(node, p, idPrefix = 'p') {
   if (p.type === 'range') {
     number = h('input', { type: 'number', min: p.min, max: p.max, step: p.step || 'any', value: node.params[p.key] });
     number.setAttribute('aria-label', `${p.label} value`);
-    wrap.append(h('div', { className: 'val' }, number, h('span', { textContent: p.unit || '' })));
+    const val = h('div', { className: 'val' }, number, h('span', { textContent: p.unit || '' }));
+    // a param flagged `reset: true` gets a button that puts it back to its default
+    if (p.reset) {
+      const reset = h('button', { type: 'button', className: 'reset', textContent: '\u21ba', title: `Reset to ${p.default}${p.unit ? ' ' + p.unit : ''}` });
+      reset.setAttribute('aria-label', `Reset ${p.label}`);
+      reset.addEventListener('pointerdown', (e) => e.stopPropagation());
+      reset.addEventListener('click', () => {
+        setParam(node, p.key, p.default);
+        input.value = toSlider(p.default);
+        number.value = p.default;
+      });
+      val.append(reset);
+    }
+    wrap.append(val);
   }
 
   input.addEventListener('pointerdown', (e) => e.stopPropagation());

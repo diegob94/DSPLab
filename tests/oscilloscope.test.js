@@ -460,10 +460,10 @@ test('dragging the big waveform pans in time (X position) and the wheel zooms X 
   assert.ok(Math.abs(zoomed.xpos - before) < 0.05, 'the time at the centre is unchanged');
   await page.mouse.wheel(0, 600);
   assert.ok((await params()).xdiv > zoomed.xdiv, 'and out again');
-  // the title-bar button puts X position back to 0, in the model and in the settings, and leaves X / div alone
+  // the ↺ button of the X position setting puts it back to 0, in the model and in the settings, and leaves X / div alone
   const xdiv = (await params()).xdiv;
   assert.notEqual((await params()).xpos, 0);
-  await page.click('.screen-action');
+  await page.click('.screen-side .param:has(label:text-is("X position")) button.reset');
   assert.deepEqual(await params(), { xpos: 0, xdiv });
   assert.equal(await page.locator('.screen-side .param:has(label:text-is("X position")) input[type=number]').inputValue(), '0');
   assert.equal(await page.evaluate(() => dsplab.graph.nodes.has(scope.id)), true);
@@ -488,4 +488,14 @@ test('the grid is centred on t = 0 and moves with X position', () => withApp(app
   assert.equal(centred.length, 9, 'X / div 1 ms over 10 ms: lines at -4..4 ms');
   const moved = await lines(0.5);   // the view's centre is half a division later, so the lines move left
   assert.ok(!moved.includes(110.5) && moved.includes(110.5 - 11), `the grid followed: ${moved}`);
+}));
+
+test('the X position setting in the panel has a reset button too', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  await setRange(panelControl(page, 'X position'), 3);
+  assert.notEqual(await panelControl(page, 'X position').inputValue(), '0');
+  await page.click('#props .param:has(label:text-is("X position")) button.reset');
+  assert.equal(await page.evaluate(() => [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope').params.xpos), 0);
+  assert.equal(await panelControl(page, 'X position').inputValue(), '0');
+  assert.equal(await page.locator('#props .param:has(label:text-is("X / div")) button.reset').count(), 0, 'only the params that ask for it');
 }));

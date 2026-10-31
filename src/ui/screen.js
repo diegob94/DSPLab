@@ -29,20 +29,14 @@ function openScreen(node) {
   const canvas = h('canvas', { className: 'screen-canvas' });
   const side = h('div', { className: 'screen-side' });
   const close = h('button', { type: 'button', className: 'screen-close', textContent: '\u00d7', title: 'Close', ariaLabel: 'Close' });
-  // gestures and buttons of the view change the block's params; the settings are redrawn to show them
+  // gestures on the view (pan, zoom) change the block's params; the settings are redrawn to show them
   const set = (key, value) => {
     const p = def.params.find((q) => q.key === key);
     setParam(node, key, validParam(p, Number(value.toPrecision(5)), node.params));
     renderOptions(side, node);
   };
-  // the view's own buttons (e.g. the oscilloscope's reset of X position), next to the close button
-  const actions = (node.view.actions || []).map((a) => {
-    const b = h('button', { type: 'button', className: 'screen-action', textContent: a.label, title: a.title });
-    b.addEventListener('click', () => a.run(set));
-    return b;
-  });
   const win = h('div', { className: 'screen-window', role: 'dialog', ariaLabel: `${def.title} big screen` },
-    h('div', { className: 'screen-title' }, h('span', { textContent: def.title }), h('div', { className: 'screen-actions' }, ...actions, close)),
+    h('div', { className: 'screen-title', textContent: def.title }, close),
     h('div', { className: 'screen-body' }, h('div', { className: 'screen-view' }, canvas), side));
   const root = h('div', { className: 'screen-backdrop' }, win);
   root.addEventListener('pointerdown', (e) => { if (e.target === root) closeScreen(); e.stopPropagation(); });

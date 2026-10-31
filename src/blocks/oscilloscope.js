@@ -22,7 +22,7 @@ export const oscilloscope = {
     { key: 'level',    label: 'Trig level', type: 'range', min: -1, max: 1, step: 0.01, default: 0 },
     { key: 'holdoff',  label: 'Holdoff',    type: 'range', min: 0, max: HOLDOFF_MAX_MS, step: 0.1, unit: 'ms', default: 0 },
     { key: 'xdiv',     label: 'X / div',    show: true, type: 'range', scale: 'log', min: 0.1, max: 1000, unit: 'ms', default: 1 },
-    { key: 'xpos',     label: 'X position', type: 'range', min: -10000, max: 10000, step: 0.1, unit: 'ms', default: 0 },
+    { key: 'xpos',     label: 'X position', type: 'range', min: -10000, max: 10000, step: 0.1, unit: 'ms', reset: true, default: 0 },
     { key: 'ydiv',     label: 'Y / div',    show: true, type: 'range', scale: 'log', min: 0.01, max: 2, default: 0.25 },
   ],
   // the capture processor must be registered before build() can create the worklet node
@@ -304,7 +304,6 @@ export const oscilloscope = {
       el,
       titleButton: expand,
       attach,
-      actions: [{ label: 'Reset X position', title: 'Centre the screen on the trigger (X position 0)', run: (set) => set('xpos', 0) }],
       draw(inst) {
         g0.setTransform(dpr, 0, 0, dpr, 0, 0);
         paint(g0, W0, H0, inst);
