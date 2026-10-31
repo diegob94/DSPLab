@@ -307,10 +307,16 @@ only draws while the audio is running (otherwise it reads *Stopped*).
 | Trigger | Which channel starts each sweep | `ch1` … `chN` | ch1 |
 | Trig mode | What a sweep does when the trigger does or doesn't fire (see below) | auto, normal, single | auto |
 | Trig level | Level the trigger channel must cross going upwards | −1 – 1 | 0 |
+| Holdoff | After a trigger, crossings closer than this are ignored (see below) | 0 – 3000 ms | 0 ms |
 | X / div | Time per horizontal division (10 divisions, so the screen shows ten times this) | 0.1 ms – 1000 ms (logarithmic) | 1 ms |
+| X position | Time at the centre of the screen, relative to the trigger (0 puts the trigger, t = 0, in the middle); negative shows earlier time. The ↺ button next to it resets it to 0 | −10000 – 10000 ms | 0 ms |
 | Y / div | Signal units per vertical division (8 divisions), shared by all channels | 0.01 – 2 (logarithmic) | 0.25 |
 
 Shown on the block: Trigger, Trig mode, X / div and Y / div. The screen has 10 × 8 divisions.
+The button in the block's top-right corner (title bar) opens a **big screen**: a window over the diagram with
+the waveform on the left and all the settings on the right; its grid is labelled with the time and level of each division. Close it with × , Esc or a click outside.
+On the big screen, **drag the waveform** sideways to move in time (it changes *X position*) and **scroll the
+wheel** over it to zoom in time (it changes *X / div*, keeping the time under the pointer in place).
 While you change *Trig level* a dashed line shows it on the screen for a moment.
 
 - **Trigger.** Each sweep starts where the trigger channel rises through *Trig level*, and every
@@ -321,7 +327,12 @@ While you change *Trig level* a dashed line shows it on the screen for a moment.
   samples are drawn without synchronisation. *normal*: the screen only updates on a trigger; until one
   comes the last sweep stays (while there is none the screen reads *Waiting for trigger*). *single*: waits for the first
   trigger after it is armed, then holds that sweep. It is armed by choosing the mode, by changing the
-  trigger channel, level or X / div, and by pressing Run again.
+  trigger channel, level, holdoff, X position or X / div, and by pressing Run again.
+- **Holdoff.** After each trigger the scope ignores further crossings for this long. A signal that
+  crosses the level several times per repetition (a burst, two tones mixed) otherwise shows a
+  different crossing from frame to frame and the trace jumps; set the holdoff a little shorter than the
+  repetition period and the sweep locks onto one of them. 0 turns it off. While you change it, a dashed
+  vertical line on the screen marks the holdoff, measured from the start of the sweep.
 - The screen can span up to 10 s (X / div 1000 ms); the scope keeps 20 s of history.
 - Channels without a cable aren't drawn.
 - If you reduce *Inputs*, cables on the channels that disappear are removed, and the trigger returns to

@@ -56,7 +56,11 @@ function renderNode(node, def) {
   el.append(portsEl(node, def));
 
   const body = h('div', { className: 'node-body' });
-  if (def.ui) { node.view = def.ui(node); body.append(node.view.el); }
+  if (def.ui) {
+    node.view = def.ui(node);
+    body.append(node.view.el);
+    if (node.view.titleButton) title.append(node.view.titleButton);
+  }
   for (const p of def.params.filter((p) => p.show)) {
     const val = h('b');
     val.dataset.key = p.key;

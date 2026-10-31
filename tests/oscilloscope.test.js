@@ -189,7 +189,7 @@ test('the trigger level is honoured', () => withApp(app, async (page) => {
 test('trace colours, trigger, X / div and Y / div are shown on the node', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
   assert.deepEqual(await page.locator('.node:has-text("Oscilloscope") .kv').allTextContents(), ['Triggerch1', 'Trig modeauto', 'X / div1 ms', 'Y / div0.25']);
-  assert.equal(await page.locator('#props .param').count(), 6);
+  assert.equal(await page.locator('#props .param').count(), 8);
 }));
 
 test('the screen carries no text besides "Stopped", "Waiting for trigger" and the trigger level line (the settings are on the node)', () => withApp(app, async (page) => {
@@ -260,11 +260,11 @@ test('trigger modes: auto falls back to the newest samples, normal shows nothing
   assert.deepEqual(await panelControl(page, 'Trig mode').locator('option').allTextContents(), ['auto', 'normal', 'single']);
   await startAudio(page);
   await sleep(1400);                       // start-up transients must be older than the searched history
-  // the screen redraws every frame with the node's own settings (10 ms span, ch1, its level and mode), and the
+  // the screen redraws every frame with the node's own settings (10 ms span, ch1, its level, mode and X position 0), and the
   // state of normal / single lives in the block, so the probes below use the same arguments as the screen
   const probe = (level, mode) => page.evaluate(async ([level, mode]) => {
     const inst = dsplab.engine.live.get(scope.id);
-    const get = () => inst.sample(10, level, 'ch1', mode)[0];
+    const get = () => inst.sample(10, level, 'ch1', mode, 0, 0)[0];
     const a = get();
     await new Promise((r) => setTimeout(r, 250));
     const b = get();
@@ -288,4 +288,214 @@ test('trigger modes: auto falls back to the newest samples, normal shows nothing
   assert.ok(held.a, 'captured');
   assert.deepEqual(held.a, held.b, 'and then held');
   assert.ok(held.a[0] < held.a[7], 'on a rising slope');
+}));
+
+// ---- big screen ----
+
+const openBig = async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  await page.evaluate(() => {
+    window.scope = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
+    dsplab.addEdge({ node: [...dsplab.graph.nodes.values()][0].id, port: 'out' }, { node: scope.id, port: 'ch1' });
+  });
+  await page.click('.node:has-text("Oscilloscope") .title-button');
+};
+
+test('the expand button opens a window with the waveform left of the settings; Esc and × close it', () => withApp(app, async (page) => {
+  await openBig(page);
+  const view = await page.locator('.screen-canvas').boundingBox();
+  const side = await page.locator('.screen-side').boundingBox();
+  assert.ok(view.x + view.width <= side.x + 1, 'waveform on the left, options on the right');
+  assert.ok(view.width > 400 && view.height > 300, `big canvas ${view.width}x${view.height}`);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('.screen-window').count(), 0);
+  await page.click('.node:has-text("Oscilloscope") .title-button');
+  await page.click('.screen-close');
+  assert.equal(await page.locator('.screen-window').count(), 0);
+}));
+
+test('the big window edits the block and draws the live trace', () => withApp(app, async (page) => {
+  await startAudio(page);   // first: the window covers the toolbar
+  await openBig(page);
+  await sleep(600);
+  const lit = () => page.evaluate(() => {
+    const c = document.querySelector('canvas.screen-canvas');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] > 200 && d[i + 1] > 120 && d[i + 2] < 120) n++;
+    return n;
+  });
+  assert.ok(await lit() > 500, 'trace drawn in the big canvas');
+  await page.locator('.screen-side .param:has(label:text-is("X / div")) input[type=number]').fill('5');
+  await page.locator('.screen-side .param:has(label:text-is("X / div")) input[type=number]').press('Enter');
+  assert.equal(await page.evaluate(() => scope.params.xdiv), 5);
+  // changing the inputs re-renders the trigger choices inside the window
+  await setRange(page.locator('.screen-side .param:has(label:text-is("Inputs")) select'), '4');
+  assert.deepEqual(await page.locator('.screen-side .param:has(label:text-is("Trigger")) option').allTextContents(), ['ch1', 'ch2', 'ch3', 'ch4']);
+}));
+
+test('Delete while the window is open does not remove the block behind it', () => withApp(app, async (page) => {
+  await openBig(page);
+  await page.keyboard.press('Delete');
+  assert.equal(await page.evaluate(() => dsplab.graph.nodes.has(scope.id)), true);
+}));
+
+test('holdoff makes a signal with two crossings per period lock onto one of them', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  // 100 Hz + 300 Hz crosses 0.5 upwards twice per 10 ms period (at about 0.2 ms and 3.1 ms)
+  await page.evaluate(() => {
+    const gen = [...dsplab.graph.nodes.values()][0];
+    gen.params.frequency = 100;
+    window.scope = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
+    const gen3 = dsplab.addNode('wave_generator', 200, 420);
+    gen3.params.frequency = 300;
+    const sum = dsplab.addNode('math_operator', 400, 420);
+    dsplab.addEdge({ node: gen.id, port: 'out' }, { node: sum.id, port: 'a' });
+    dsplab.addEdge({ node: gen3.id, port: 'out' }, { node: sum.id, port: 'b' });
+    dsplab.addEdge({ node: sum.id, port: 'out' }, { node: scope.id, port: 'ch1' });
+  });
+  await startAudio(page);
+  await sleep(1400);
+  // spread of the sample 2.5 ms after the trigger over many frames: the same crossing every time gives no spread
+  const spread = (holdoff) => page.evaluate(async (holdoff) => {
+    const inst = dsplab.engine.live.get(scope.id);
+    const v = [];
+    for (let i = 0; i < 20; i++) {
+      v.push(inst.sample(5, 0.5, 'ch1', 'auto', holdoff)[0][110]);
+      await new Promise((r) => setTimeout(r, 37));
+    }
+    return Math.max(...v) - Math.min(...v);
+  }, holdoff);
+  assert.ok(await spread(0) > 0.3, 'without holdoff the trigger hops between the two crossings');
+  assert.ok(await spread(5) < 0.05, 'with a 5 ms holdoff it stays on one');
+}));
+
+test('the holdoff setting is in the panel, 0 to 3000 ms, default 0', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  assert.equal(await panelControl(page, 'Holdoff').inputValue(), '0');
+  const p = await page.evaluate(() => dsplab.BLOCKS.oscilloscope.params.find((q) => q.key === 'holdoff'));
+  assert.deepEqual([p.min, p.max, p.unit], [0, 3000, 'ms']);
+}));
+
+test('the big screen labels every grid line with its time (0 = the trigger, in the middle) and level; the small one stays clean', () => withApp(app, async (page) => {
+  await openBig(page);
+  // record what the screen draws by wrapping fillText on the next frames
+  const texts = await page.evaluate(async () => {
+    const out = new Set();
+    const orig = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (t, ...r) { out.add([this.canvas.className, t].join('|')); return orig.call(this, t, ...r); };
+    await new Promise((r) => setTimeout(r, 200));
+    CanvasRenderingContext2D.prototype.fillText = orig;
+    return [...out];
+  });
+  const big = texts.filter((t) => t.startsWith('screen-canvas|')).map((t) => t.split('|')[1]);
+  const small = texts.filter((t) => t.startsWith('scope|')).map((t) => t.split('|')[1]);
+  // X / div 1 ms with X position 0: the grid runs from -4 ms to 4 ms and t = 0 is in the middle
+  for (const t of ['-4 ms', '-1 ms', '0', '1 ms', '4 ms', '0.75', '-0.25', '-0.75']) assert.ok(big.includes(t), `big screen shows ${t}: ${big}`);
+  assert.deepEqual(small, ['Stopped']);
+}));
+
+test('the holdoff line is drawn while the holdoff is being changed, at that time after the trigger', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  // record the dashed lines and texts the node's screen draws
+  const record = (ms) => page.evaluate(async (ms) => {
+    const node = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
+    const g = node.view.el.getContext('2d');
+    const seen = { texts: [], xs: [] };
+    const text = g.fillText, move = g.moveTo;
+    g.fillText = function (t, ...r) { seen.texts.push(t); return text.call(this, t, ...r); };
+    g.moveTo = function (x, y) { if (y === 0) seen.xs.push(x); return move.call(this, x, y); };
+    await new Promise((r) => setTimeout(r, ms));
+    g.fillText = text; g.moveTo = move;
+    return seen;
+  }, ms);
+  assert.ok(!(await record(100)).texts.some((t) => t.startsWith('holdoff')), 'no line until it is changed');
+  const quiet = record(300);
+  await setRange(panelControl(page, 'Holdoff'), 5);   // xdiv 1 ms, 10 ms across with the trigger in the middle: 5 ms after it is the right edge
+  const seen = await quiet;
+  assert.ok(seen.texts.includes('holdoff 5 ms'), `label: ${seen.texts}`);
+  assert.ok(seen.xs.includes(219.5), `vertical line at the right edge x=219.5: ${[...new Set(seen.xs)]}`);
+  await sleep(1700);
+  assert.ok(!(await record(100)).texts.some((t) => t.startsWith('holdoff')), 'the line disappears after a moment');
+}));
+
+test('X position is the time at the centre of the window relative to the trigger, before or after it', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  await page.evaluate(() => {
+    window.scope = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
+    dsplab.addEdge({ node: [...dsplab.graph.nodes.values()][0].id, port: 'out' }, { node: scope.id, port: 'ch1' });
+  });
+  const p = await page.evaluate(() => dsplab.BLOCKS.oscilloscope.params.find((q) => q.key === 'xpos'));
+  assert.deepEqual([p.min, p.max, p.unit, p.default], [-10000, 10000, 'ms', 0]);
+  await startAudio(page);
+  await sleep(1400);
+  // a 440 Hz sine of amplitude 0.5 triggers on its rising zero crossing; a quarter period (0.568 ms) later it
+  // peaks. X position is the time at the centre of the 10 ms window, so the middle sample is at that time
+  const mid = (xpos) => page.evaluate((xpos) => { const d = dsplab.engine.live.get(scope.id).sample(10, 0, 'ch1', 'auto', 0, xpos)[0]; return d[Math.floor(d.length / 2)]; }, xpos);
+  assert.ok(Math.abs(await mid(0)) < 0.05, 't = 0, the trigger, is in the middle');
+  assert.ok(Math.abs(await mid(0.568) - 0.5) < 0.03, 'a quarter period later: the peak');
+  assert.ok(Math.abs(await mid(-0.568) + 0.5) < 0.03, 'a quarter period before: the trough');
+}));
+
+test('dragging the big waveform pans in time (X position) and the wheel zooms X / div around the pointer', () => withApp(app, async (page) => {
+  await openBig(page);
+  const box = await page.locator('.screen-canvas').boundingBox();
+  const params = () => page.evaluate(() => ({ xpos: scope.params.xpos, xdiv: scope.params.xdiv }));
+  assert.deepEqual(await params(), { xpos: 0, xdiv: 1 });
+  // a drag across a tenth of the screen moves the view by one division (1 ms): the waveform follows the pointer
+  await page.mouse.move(box.x + 200, box.y + 200);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 200 + box.width / 10, box.y + 200, { steps: 5 });
+  await page.mouse.up();
+  const dragged = await params();
+  assert.ok(Math.abs(dragged.xpos + 1) < 0.05, `dragging right shows earlier time: ${dragged.xpos}`);
+  assert.equal(await page.locator('.screen-side .param:has(label:text-is("X position")) input[type=number]').inputValue(), String(dragged.xpos), 'the settings follow');
+  // zoom in with the wheel at the screen's centre: X / div shrinks, the time under the pointer stays put
+  const centre = { x: box.x + box.width / 2, y: box.y + 200 };
+  const before = dragged.xpos;   // the centre of the screen is at t = X position
+  await page.mouse.move(centre.x, centre.y);
+  await page.mouse.wheel(0, -300);
+  const zoomed = await params();
+  assert.ok(zoomed.xdiv < 1, `zoomed in: ${zoomed.xdiv}`);
+  assert.ok(Math.abs(zoomed.xpos - before) < 0.05, 'the time at the centre is unchanged');
+  await page.mouse.wheel(0, 600);
+  assert.ok((await params()).xdiv > zoomed.xdiv, 'and out again');
+  // the ↺ button of the X position setting puts it back to 0, in the model and in the settings, and leaves X / div alone
+  const xdiv = (await params()).xdiv;
+  assert.notEqual((await params()).xpos, 0);
+  await page.click('.screen-side .param:has(label:text-is("X position")) button.reset');
+  assert.deepEqual(await params(), { xpos: 0, xdiv });
+  assert.equal(await page.locator('.screen-side .param:has(label:text-is("X position")) input[type=number]').inputValue(), '0');
+  assert.equal(await page.evaluate(() => dsplab.graph.nodes.has(scope.id)), true);
+}));
+
+test('the grid is centred on t = 0 and moves with X position', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  // record the x of the vertical lines the node's screen strokes (moveTo at the top edge) after each setting
+  const lines = (xpos) => page.evaluate(async (xpos) => {
+    const node = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
+    node.params.xpos = xpos;
+    const g = node.view.el.getContext('2d');
+    const xs = [];
+    const move = g.moveTo;
+    g.moveTo = function (x, y) { if (y === 0) xs.push(x); return move.call(this, x, y); };
+    await new Promise((r) => setTimeout(r, 100));
+    g.moveTo = move;
+    return [...new Set(xs)].sort((a, b) => a - b);
+  }, xpos);
+  const centred = await lines(0);
+  assert.ok(centred.includes(110.5), `a line (t = 0) at the centre: ${centred}`);
+  assert.equal(centred.length, 9, 'X / div 1 ms over 10 ms: lines at -4..4 ms');
+  const moved = await lines(0.5);   // the view's centre is half a division later, so the lines move left
+  assert.ok(!moved.includes(110.5) && moved.includes(110.5 - 11), `the grid followed: ${moved}`);
+}));
+
+test('the X position setting in the panel has a reset button too', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  await setRange(panelControl(page, 'X position'), 3);
+  assert.notEqual(await panelControl(page, 'X position').inputValue(), '0');
+  await page.click('#props .param:has(label:text-is("X position")) button.reset');
+  assert.equal(await page.evaluate(() => [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope').params.xpos), 0);
+  assert.equal(await panelControl(page, 'X position').inputValue(), '0');
+  assert.equal(await page.locator('#props .param:has(label:text-is("X / div")) button.reset').count(), 0, 'only the params that ask for it');
 }));

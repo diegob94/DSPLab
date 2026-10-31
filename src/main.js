@@ -10,6 +10,7 @@ import { initWires, redrawEdges } from './ui/wires.js';
 import { initNodes, refreshSummary, startRenderLoop } from './ui/nodes.js';
 import { initProperties } from './ui/properties.js';
 import { initPalette } from './ui/palette.js';
+import { initScreen } from './ui/screen.js';
 import { initCanvas } from './ui/canvas.js';
 import { initToolbar, openSharedLink } from './ui/toolbar.js';
 
@@ -18,6 +19,7 @@ initNodes();
 initProperties();
 initPalette();
 initCanvas();
+initScreen();
 initToolbar();
 startRenderLoop();
 
