@@ -304,6 +304,7 @@ export const oscilloscope = {
       el,
       titleButton: expand,
       attach,
+      actions: [{ label: 'Reset X position', title: 'Centre the screen on the trigger (X position 0)', run: (set) => set('xpos', 0) }],
       draw(inst) {
         g0.setTransform(dpr, 0, 0, dpr, 0, 0);
         paint(g0, W0, H0, inst);

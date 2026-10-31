@@ -233,6 +233,8 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
   display: flex; align-items: center; justify-content: space-between;
   padding: 6px 6px 6px 12px; font-weight: 600; border-bottom: 1px solid var(--border);
 }
+.screen-actions { display: flex; align-items: center; gap: 6px; }
+.screen-action { padding: 3px 10px; }
 .screen-close { padding: 0 9px; font-size: 18px; line-height: 24px; }
 .screen-body { flex: 1; min-height: 0; display: flex; }
 .screen-view { flex: 1; min-width: 0; padding: 10px; }

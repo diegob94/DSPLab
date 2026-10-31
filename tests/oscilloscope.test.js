@@ -460,6 +460,12 @@ test('dragging the big waveform pans in time (X position) and the wheel zooms X 
   assert.ok(Math.abs(zoomed.xpos - before) < 0.05, 'the time at the centre is unchanged');
   await page.mouse.wheel(0, 600);
   assert.ok((await params()).xdiv > zoomed.xdiv, 'and out again');
+  // the title-bar button puts X position back to 0, in the model and in the settings, and leaves X / div alone
+  const xdiv = (await params()).xdiv;
+  assert.notEqual((await params()).xpos, 0);
+  await page.click('.screen-action');
+  assert.deepEqual(await params(), { xpos: 0, xdiv });
+  assert.equal(await page.locator('.screen-side .param:has(label:text-is("X position")) input[type=number]').inputValue(), '0');
   assert.equal(await page.evaluate(() => dsplab.graph.nodes.has(scope.id)), true);
 }));
 

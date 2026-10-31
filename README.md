@@ -316,7 +316,8 @@ Shown on the block: Trigger, Trig mode, X / div and Y / div. The screen has 10 Ã
 The button in the block's top-right corner (title bar) opens a **big screen**: a window over the diagram with
 the waveform on the left and all the settings on the right; its grid is labelled with the time and level of each division. Close it with Ã— , Esc or a click outside.
 On the big screen, **drag the waveform** sideways to move in time (it changes *X position*) and **scroll the
-wheel** over it to zoom in time (it changes *X / div*, keeping the time under the pointer in place).
+wheel** over it to zoom in time (it changes *X / div*, keeping the time under the pointer in place). The *Reset X position* button in the window's title bar
+puts *X position* back to 0.
 While you change *Trig level* a dashed line shows it on the screen for a moment.
 
 - **Trigger.** Each sweep starts where the trigger channel rises through *Trig level*, and every
