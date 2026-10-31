@@ -25,7 +25,7 @@ test('layout: properties | canvas | block palette', () => withApp(app, async (pa
 
 test('palette groups blocks by category', () => withApp(app, async (page) => {
   assert.deepEqual(await page.locator('#palette h2').allTextContents(), ['Source blocks', 'Processing blocks', 'Sink blocks', 'Message blocks']);
-  assert.deepEqual(await page.locator('.palette-item').allTextContents(), ['Wave Generator', 'Audio Source', 'Audio Recorder', 'Math Operator', 'Pulse Shaper', 'Symbol Recovery', 'Squelch', 'Carrier Recovery', 'Filter', 'Automatic Gain Control', 'Matched Filter', 'Audio Sink', 'Oscilloscope', 'FFT Plot', 'Message Strobe', 'Message Constant', 'Message Debug', 'Message Reshape', 'Message Serializer', 'Message Deserializer', 'Message Concatenate']);
+  assert.deepEqual(await page.locator('.palette-item').allTextContents(), ['Wave Generator', 'Audio Source', 'Audio Recorder', 'Math Operator', 'Pulse Shaper', 'Symbol Recovery', 'Squelch', 'Carrier Recovery', 'Filter', 'Automatic Gain Control', 'Matched Filter', 'AWGN', 'Delay', 'Audio Sink', 'Oscilloscope', 'FFT Plot', 'Message Strobe', 'Message Constant', 'Message Debug', 'Message Reshape', 'Message Serializer', 'Message Deserializer', 'Message Concatenate']);
 }));
 
 test('Run starts the audio engine and Stop ends it', () => withApp(app, async (page) => {

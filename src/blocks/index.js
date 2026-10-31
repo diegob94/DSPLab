@@ -45,6 +45,8 @@ import { audioRecorder } from './audio-recorder.js';
 import { filter } from './filter.js';
 import { agc } from './agc.js';
 import { matchedFilter } from './matched-filter.js';
+import { awgn } from './awgn.js';
+import { delay } from './delay.js';
 
 export const CATEGORIES = {
   'Source blocks': 'var(--source)',
@@ -75,4 +77,6 @@ export const BLOCKS = {
   filter,
   agc,
   matched_filter: matchedFilter,
+  awgn,
+  delay,
 };

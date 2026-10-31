@@ -290,6 +290,24 @@ silence.
 
 Shown on the block: Target.
 
+**AWGN**: adds white Gaussian noise to a signal (additive white Gaussian noise), to simulate a noisy channel.
+Input: `in`. Output: `out`.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Noise σ | Standard deviation of the noise (its RMS level) | 0 – 1 | 0.1 |
+
+The output is the input plus σ times Gaussian noise. With nothing connected it outputs the noise alone. The
+noise repeats every 10 seconds. Noise above ±1 is clipped by the Audio Sink.
+
+Shown on the block: Noise σ.
+
+**Delay**: delays a signal by a fixed time. Input: `in`. Output: `out`. Setting: **Delay** 0 – 1000 ms (default 10 ms).
+
+Changing the delay while running slides it, which briefly shifts the pitch.
+
+Shown on the block: Delay.
+
 ### Sink blocks
 
 **Audio Sink**: plays a signal on your speakers. Input: `in`. Setting: **Volume** 0 – 1 (default 0.8).
