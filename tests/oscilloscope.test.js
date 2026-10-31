@@ -301,6 +301,23 @@ const openBig = async (page) => {
   await page.click('.node:has-text("Oscilloscope") .title-button');
 };
 
+test('the big screen stays inside the viewport at any window size (the canvas never pushes it out)', () => withApp(app, async (page) => {
+  await openBig(page);
+  await page.keyboard.press('Escape');
+  for (const [w, h] of [[1280, 560], [1280, 800], [820, 420], [600, 900]]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.evaluate(() => scope.el.querySelector('.title-button').click());
+    await page.waitForTimeout(200);   // a few frames: a size feedback loop would grow the canvas
+    const box = async (sel) => page.locator(sel).boundingBox();
+    const win = await box('.screen-window'), view = await box('.screen-canvas'), side = await box('.screen-side');
+    for (const [name, b] of [['window', win], ['canvas', view], ['settings', side]]) {
+      assert.ok(b.x >= -1 && b.y >= -1 && b.x + b.width <= w + 1 && b.y + b.height <= h + 1, `${name} ${JSON.stringify(b)} outside ${w}x${h}`);
+    }
+    assert.ok(view.width > 100 && view.height > 80, `canvas ${view.width}x${view.height} at ${w}x${h}`);
+    await page.keyboard.press('Escape');
+  }
+}));
+
 test('the expand button opens a window with the waveform left of the settings; Esc and × close it', () => withApp(app, async (page) => {
   await openBig(page);
   const view = await page.locator('.screen-canvas').boundingBox();
