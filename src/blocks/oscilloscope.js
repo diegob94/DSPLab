@@ -272,23 +272,45 @@ export const oscilloscope = {
     function attach(canvas, set) {
       canvas.style.cursor = 'grab';
       canvas.style.touchAction = 'none';
-      // dragging moves the waveform with the pointer, so the time at the left edge moves the other way
+      // one pointer drags the waveform (the time at the left edge moves the other way); two pointers
+      // pinch: the distance between them scales X / div and the time under their midpoint stays put
+      const pointers = new Map();
+      let anchor = null;   // the gesture's starting state, retaken whenever the pointer count changes
+      const frac = (x) => (x - canvas.getBoundingClientRect().left) / canvas.clientWidth;
+      const restart = () => {
+        const pts = [...pointers.values()];
+        if (!pts.length) { anchor = null; canvas.style.cursor = 'grab'; return; }
+        const x = pts.reduce((a, q) => a + q.x, 0) / pts.length;
+        const { xdiv, xpos } = node.params;
+        anchor = { x, xdiv, xpos, dist: pts.length === 2 ? Math.abs(pts[0].x - pts[1].x) : 0 };
+      };
+      const move = (e) => {
+        const q = pointers.get(e.pointerId);
+        if (!q || !anchor) return;
+        q.x = e.clientX;
+        const pts = [...pointers.values()];
+        const x = pts.reduce((a, r) => a + r.x, 0) / pts.length;
+        const span0 = anchor.xdiv * DIV_X;
+        if (pts.length === 2 && anchor.dist > 8) {
+          const dist = Math.max(Math.abs(pts[0].x - pts[1].x), 1);
+          const at = anchor.xpos + (frac(anchor.x) - 0.5) * span0;   // time under the starting midpoint
+          set('xdiv', anchor.xdiv * anchor.dist / dist);
+          set('xpos', at - (frac(x) - 0.5) * node.params.xdiv * DIV_X);
+        } else {
+          set('xpos', anchor.xpos - (x - anchor.x) / canvas.clientWidth * span0);
+        }
+      };
+      const lift = (e) => { if (pointers.delete(e.pointerId)) restart(); };
       canvas.addEventListener('pointerdown', (e) => {
-        if (e.button !== 0) return;
-        canvas.setPointerCapture(e.pointerId);
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        try { canvas.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
         canvas.style.cursor = 'grabbing';
-        const x0 = e.clientX, pos0 = node.params.xpos, spanMs = node.params.xdiv * DIV_X;
-        const move = (ev) => set('xpos', pos0 - (ev.clientX - x0) / canvas.clientWidth * spanMs);
-        const up = () => {
-          canvas.style.cursor = 'grab';
-          canvas.removeEventListener('pointermove', move);
-          canvas.removeEventListener('pointerup', up);
-          canvas.removeEventListener('pointercancel', up);
-        };
-        canvas.addEventListener('pointermove', move);
-        canvas.addEventListener('pointerup', up);
-        canvas.addEventListener('pointercancel', up);
+        pointers.set(e.pointerId, { x: e.clientX });
+        restart();
       });
+      canvas.addEventListener('pointermove', move);
+      canvas.addEventListener('pointerup', lift);
+      canvas.addEventListener('pointercancel', lift);
       // the wheel changes X / div (up = zoom in), keeping the time under the pointer where it is
       canvas.addEventListener('wheel', (e) => {
         e.preventDefault();

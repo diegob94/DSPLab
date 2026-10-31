@@ -486,6 +486,31 @@ test('dragging the big waveform pans in time (X position) and the wheel zooms X 
   assert.equal(await page.evaluate(() => dsplab.graph.nodes.has(scope.id)), true);
 }));
 
+test('pinching the big waveform with two fingers zooms X / div around their midpoint', () => withApp(app, async (page) => {
+  await openBig(page);
+  const box = await page.locator('.screen-canvas').boundingBox();
+  const cx = box.x + box.width / 2, y = box.y + 200;
+  const params = () => page.evaluate(() => ({ xpos: scope.params.xpos, xdiv: scope.params.xdiv }));
+  const touch = (type, id, x) => page.evaluate(([type, id, x, y]) => {
+    document.querySelector('.screen-canvas').dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: 'touch', isPrimary: id === 1, clientX: x, clientY: y, bubbles: true }));
+  }, [type, id, x, y]);
+  await touch('pointerdown', 1, cx - 50);
+  await touch('pointerdown', 2, cx + 50);
+  await touch('pointermove', 1, cx - 100);   // fingers apart: zoom in
+  await touch('pointermove', 2, cx + 100);
+  const zoomed = await params();
+  assert.ok(Math.abs(zoomed.xdiv - 0.5) < 0.01, `twice as far apart halves X / div: ${zoomed.xdiv}`);
+  assert.ok(Math.abs(zoomed.xpos) < 0.01, 'the time under the midpoint (the centre) is unchanged');
+  await touch('pointermove', 1, cx - 25);    // fingers together: zoom out
+  await touch('pointermove', 2, cx + 25);
+  assert.ok((await params()).xdiv > 1.9, 'pinching in zooms out');
+  await touch('pointerup', 2, cx + 25);      // one finger left: it drags without jumping
+  const rest = await params();
+  await touch('pointermove', 1, cx - 25);
+  assert.deepEqual(await params(), rest);
+  await touch('pointerup', 1, cx - 25);
+}));
+
 test('the grid is centred on t = 0 and moves with X position', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
   // record the x of the vertical lines the node's screen strokes (moveTo at the top edge) after each setting
