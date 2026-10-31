@@ -309,7 +309,7 @@ only draws while the audio is running (otherwise it reads *Stopped*).
 | Trig level | Level the trigger channel must cross going upwards | −1 – 1 | 0 |
 | Holdoff | After a trigger, crossings closer than this are ignored (see below) | 0 – 3000 ms | 0 ms |
 | X / div | Time per horizontal division (10 divisions, so the screen shows ten times this) | 0.1 ms – 1000 ms (logarithmic) | 1 ms |
-| X position | Time at the left edge of the screen, relative to the trigger; negative shows what happened before it | −10000 – 10000 ms | 0 ms |
+| X position | Time at the centre of the screen, relative to the trigger (0 puts the trigger, t = 0, in the middle); negative shows earlier time | −10000 – 10000 ms | 0 ms |
 | Y / div | Signal units per vertical division (8 divisions), shared by all channels | 0.01 – 2 (logarithmic) | 0.25 |
 
 Shown on the block: Trigger, Trig mode, X / div and Y / div. The screen has 10 × 8 divisions.

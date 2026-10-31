@@ -90,12 +90,12 @@ export const oscilloscope = {
       //          by choosing the mode and again by changing the trigger, level, holdoff or time base.
       // Holdoff: after a trigger, crossings closer than `holdoffMs` are ignored, so a signal with
       // several crossings per repetition (a burst, a two-tone) locks onto one of them.
-      // X position: the time shown at the left edge, relative to the trigger (negative = earlier,
-      // so the signal before the trigger is on screen); limited to the 20 s that are kept.
-      sample(spanMs, level = 0, trigger = names[0], mode = 'auto', holdoffMs = 0, xposMs = 0) {
+      // X position: the time at the centre of the window, relative to the trigger (0 puts the trigger
+      // in the middle; negative = earlier); limited to the 20 s that are kept. Left out, the window starts at the trigger.
+      sample(spanMs, level = 0, trigger = names[0], mode = 'auto', holdoffMs = 0, xposMs = spanMs / 2) {
         const n = Math.min(Math.round(spanMs * ctx.sampleRate / 1000), maxWindow);
         const hold = Math.round(holdoffMs * ctx.sampleRate / 1000);
-        const shift = Math.round(xposMs * ctx.sampleRate / 1000);
+        const shift = Math.round((xposMs - spanMs / 2) * ctx.sampleRate / 1000);   // window start, relative to the trigger
         const ahead = Math.max(shift, 0);               // samples a trigger needs after its window, on top of n
         const key = [mode, trigger, level, n, hold, shift].join();
         if (key !== heldKey) { heldKey = key; held = null; armedAt = written; }
@@ -164,7 +164,7 @@ export const oscilloscope = {
     expand.firstChild.append(svgEl('path', { d: 'M6 2H2v4M10 2h4v4M6 14H2v-4M10 14h4v-4' }));
     expand.addEventListener('pointerdown', (e) => e.stopPropagation());
     expand.addEventListener('click', () => window.dispatchEvent(new CustomEvent('dsplab:screen', { detail: node })));
-        let lastLevel = node.params.level, levelShownAt = -Infinity;
+    let lastLevel = node.params.level, levelShownAt = -Infinity;
     let lastHoldoff = node.params.holdoff, holdoffShownAt = -Infinity;
 
     // draws the screen into a W x H area of g (the block's small canvas or the big window's)
@@ -172,15 +172,26 @@ export const oscilloscope = {
       g.fillStyle = '#0d0f12';
       g.fillRect(0, 0, W, H);
       g.lineWidth = 1;
+      const { xdiv, trigger, mode, level, holdoff, xpos, ydiv } = node.params;
+      // X position is the time at the centre of the screen (0 = the trigger); the vertical grid lines
+      // sit at multiples of X / div, so the grid moves with it, and the one at t = 0 is the trigger
+      const span = xdiv * DIV_X, left = xpos - span / 2;
+      const xOfT = (t) => (t - left) / span * W;
+      const lines = [];
+      for (let k = Math.ceil(left / xdiv); k * xdiv < left + span; k++) {
+        const x = xOfT(k * xdiv);
+        if (x > .5 && x < W - .5) lines.push({ t: k * xdiv, x: Math.round(x) + .5 });
+      }
       g.strokeStyle = '#242a33';
       g.beginPath();
-      for (let i = 1; i < DIV_X; i++) { g.moveTo(Math.round(i * W / DIV_X) + .5, 0); g.lineTo(Math.round(i * W / DIV_X) + .5, H); }
+      for (const l of lines) if (l.t !== 0) { g.moveTo(l.x, 0); g.lineTo(l.x, H); }
       for (let i = 1; i < DIV_Y; i++) { g.moveTo(0, Math.round(i * H / DIV_Y) + .5); g.lineTo(W, Math.round(i * H / DIV_Y) + .5); }
       g.stroke();
       g.strokeStyle = '#3a4350';
-      g.beginPath(); g.moveTo(0, H / 2 + .5); g.lineTo(W, H / 2 + .5); g.stroke();
-
-      const { xdiv, trigger, mode, level, holdoff, xpos, ydiv } = node.params;
+      g.beginPath();
+      g.moveTo(0, H / 2 + .5); g.lineTo(W, H / 2 + .5);
+      for (const l of lines) if (l.t === 0) { g.moveTo(l.x, 0); g.lineTo(l.x, H); }
+      g.stroke();
       const pxPerUnit = (H / DIV_Y) / ydiv;
       const yOf = (v) => Math.min(H, Math.max(0, H / 2 - v * pxPerUnit));
 
@@ -191,10 +202,10 @@ export const oscilloscope = {
       if (labels) {
         // the value at each division line: time along the bottom, level up the right side
         const num = (v) => String(+v.toPrecision(3));
-        for (let i = 0; i <= DIV_X; i++) {
-          const t = xpos + i * xdiv;
-          g.textAlign = i === 0 ? 'left' : i === DIV_X ? 'right' : 'center';
-          g.fillText(t >= 1000 ? `${num(t / 1000)} s` : `${num(t)} ms`, Math.min(Math.max(i * W / DIV_X, 4), W - 4), H - 5);
+        g.textAlign = 'center';
+        for (const l of lines) {
+          const t = l.t;
+          g.fillText(t === 0 ? '0' : Math.abs(t) >= 1000 ? `${num(t / 1000)} s` : `${num(t)} ms`, Math.min(Math.max(l.x, 24), W - 24), H - 5);
         }
         g.textAlign = 'right';
         for (let i = 1; i < DIV_Y; i++) g.fillText(num((DIV_Y / 2 - i) * ydiv), W - 4, Math.round(i * H / DIV_Y) - 3);
@@ -212,23 +223,23 @@ export const oscilloscope = {
         g.setLineDash([]);
         g.fillText(`level ${level}`, 6, ly < 28 ? ly + 12 : ly - 4);
       }
-      // likewise the holdoff: a vertical line that far from the start of the sweep, where triggers are accepted again
+      // likewise the holdoff: a vertical line that long after the trigger, where triggers are accepted again
       if (holdoff !== lastHoldoff) { lastHoldoff = holdoff; holdoffShownAt = performance.now(); }
       if (performance.now() - holdoffShownAt < LEVEL_SHOWN_MS) {
-        const hx = Math.round(Math.min(Math.max((holdoff - xpos) / (xdiv * DIV_X), 0), 1) * (W - 1)) + .5;
+        const hx = Math.round(Math.min(Math.max((holdoff - left) / span, 0), 1) * (W - 1)) + .5;
         g.strokeStyle = g.fillStyle = SCOPE_COLORS[(parseInt(trigger.slice(2), 10) - 1) % SCOPE_COLORS.length];
         g.setLineDash([4, 3]);
         g.beginPath(); g.moveTo(hx, 0); g.lineTo(hx, H); g.stroke();
         g.setLineDash([]);
-        const left = hx > W - 90;
-        g.textAlign = left ? 'right' : 'left';
-        g.fillText(`holdoff ${holdoff} ms`, left ? hx - 4 : hx + 4, 28);
+        const flip = hx > W - 90;                        // no room to the right of the line: write to its left
+        g.textAlign = flip ? 'right' : 'left';
+        g.fillText(`holdoff ${holdoff} ms`, flip ? hx - 4 : hx + 4, 28);
         g.textAlign = 'left';
       }
       if (!inst) return;
 
       g.lineWidth = 1.5;
-      const sweeps = inst.sample(xdiv * DIV_X, level, trigger, mode, holdoff, xpos);
+      const sweeps = inst.sample(span, level, trigger, mode, holdoff, xpos);
       // normal / single leave the screen empty until the trigger fires
       if (mode !== 'auto' && sweeps.every((d) => !d)) g.fillText('Waiting for trigger', 6, 14);
       sweeps.forEach((data, k) => {
@@ -283,9 +294,10 @@ export const oscilloscope = {
         e.preventDefault();
         const frac = (e.clientX - canvas.getBoundingClientRect().left) / canvas.clientWidth;
         const { xdiv, xpos } = node.params;
-        const at = xpos + frac * xdiv * DIV_X;
+        const off = frac - 0.5;                          // the pointer, from the centre, in screens
+        const at = xpos + off * xdiv * DIV_X;
         set('xdiv', xdiv * Math.exp(e.deltaY * 0.0015));
-        set('xpos', at - frac * node.params.xdiv * DIV_X);
+        set('xpos', at - off * node.params.xdiv * DIV_X);
       }, { passive: false });
     }
     return {

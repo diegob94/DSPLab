@@ -260,11 +260,11 @@ test('trigger modes: auto falls back to the newest samples, normal shows nothing
   assert.deepEqual(await panelControl(page, 'Trig mode').locator('option').allTextContents(), ['auto', 'normal', 'single']);
   await startAudio(page);
   await sleep(1400);                       // start-up transients must be older than the searched history
-  // the screen redraws every frame with the node's own settings (10 ms span, ch1, its level and mode), and the
+  // the screen redraws every frame with the node's own settings (10 ms span, ch1, its level, mode and X position 0), and the
   // state of normal / single lives in the block, so the probes below use the same arguments as the screen
   const probe = (level, mode) => page.evaluate(async ([level, mode]) => {
     const inst = dsplab.engine.live.get(scope.id);
-    const get = () => inst.sample(10, level, 'ch1', mode)[0];
+    const get = () => inst.sample(10, level, 'ch1', mode, 0, 0)[0];
     const a = get();
     await new Promise((r) => setTimeout(r, 250));
     const b = get();
@@ -377,7 +377,7 @@ test('the holdoff setting is in the panel, 0 to 3000 ms, default 0', () => withA
   assert.deepEqual([p.min, p.max, p.unit], [0, 3000, 'ms']);
 }));
 
-test('the big screen labels every division with its time and level; the small one stays clean', () => withApp(app, async (page) => {
+test('the big screen labels every grid line with its time (0 = the trigger, in the middle) and level; the small one stays clean', () => withApp(app, async (page) => {
   await openBig(page);
   // record what the screen draws by wrapping fillText on the next frames
   const texts = await page.evaluate(async () => {
@@ -390,11 +390,12 @@ test('the big screen labels every division with its time and level; the small on
   });
   const big = texts.filter((t) => t.startsWith('screen-canvas|')).map((t) => t.split('|')[1]);
   const small = texts.filter((t) => t.startsWith('scope|')).map((t) => t.split('|')[1]);
-  for (const t of ['0 ms', '5 ms', '10 ms', '0.75', '-0.25', '-0.75']) assert.ok(big.includes(t), `big screen shows ${t}: ${big}`);
+  // X / div 1 ms with X position 0: the grid runs from -4 ms to 4 ms and t = 0 is in the middle
+  for (const t of ['-4 ms', '-1 ms', '0', '1 ms', '4 ms', '0.75', '-0.25', '-0.75']) assert.ok(big.includes(t), `big screen shows ${t}: ${big}`);
   assert.deepEqual(small, ['Stopped']);
 }));
 
-test('the holdoff line is drawn while the holdoff is being changed, at that time from the start of the sweep', () => withApp(app, async (page) => {
+test('the holdoff line is drawn while the holdoff is being changed, at that time after the trigger', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
   // record the dashed lines and texts the node's screen draws
   const record = (ms) => page.evaluate(async (ms) => {
@@ -410,15 +411,15 @@ test('the holdoff line is drawn while the holdoff is being changed, at that time
   }, ms);
   assert.ok(!(await record(100)).texts.some((t) => t.startsWith('holdoff')), 'no line until it is changed');
   const quiet = record(300);
-  await setRange(panelControl(page, 'Holdoff'), 5);   // xdiv 1 ms: the sweep is 10 ms, so the line is halfway
+  await setRange(panelControl(page, 'Holdoff'), 5);   // xdiv 1 ms, 10 ms across with the trigger in the middle: 5 ms after it is the right edge
   const seen = await quiet;
   assert.ok(seen.texts.includes('holdoff 5 ms'), `label: ${seen.texts}`);
-  assert.ok(seen.xs.includes(110.5), `vertical line at x=110.5: ${[...new Set(seen.xs)]}`);
+  assert.ok(seen.xs.includes(219.5), `vertical line at the right edge x=219.5: ${[...new Set(seen.xs)]}`);
   await sleep(1700);
   assert.ok(!(await record(100)).texts.some((t) => t.startsWith('holdoff')), 'the line disappears after a moment');
 }));
 
-test('X position shifts the window in time relative to the trigger, before or after it', () => withApp(app, async (page) => {
+test('X position is the time at the centre of the window relative to the trigger, before or after it', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
   await page.evaluate(() => {
     window.scope = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
@@ -428,11 +429,12 @@ test('X position shifts the window in time relative to the trigger, before or af
   assert.deepEqual([p.min, p.max, p.unit, p.default], [-10000, 10000, 'ms', 0]);
   await startAudio(page);
   await sleep(1400);
-  // a 440 Hz sine of amplitude 0.5 triggers on its rising zero crossing; a quarter period (0.568 ms) later it peaks
-  const first = (xpos) => page.evaluate((xpos) => dsplab.engine.live.get(scope.id).sample(10, 0, 'ch1', 'auto', 0, xpos)[0][0], xpos);
-  assert.ok(Math.abs(await first(0)) < 0.05, 'starts at the trigger');
-  assert.ok(Math.abs(await first(0.568) - 0.5) < 0.03, 'a quarter period later: the peak');
-  assert.ok(Math.abs(await first(-0.568) + 0.5) < 0.03, 'a quarter period before: the trough');
+  // a 440 Hz sine of amplitude 0.5 triggers on its rising zero crossing; a quarter period (0.568 ms) later it
+  // peaks. X position is the time at the centre of the 10 ms window, so the middle sample is at that time
+  const mid = (xpos) => page.evaluate((xpos) => { const d = dsplab.engine.live.get(scope.id).sample(10, 0, 'ch1', 'auto', 0, xpos)[0]; return d[Math.floor(d.length / 2)]; }, xpos);
+  assert.ok(Math.abs(await mid(0)) < 0.05, 't = 0, the trigger, is in the middle');
+  assert.ok(Math.abs(await mid(0.568) - 0.5) < 0.03, 'a quarter period later: the peak');
+  assert.ok(Math.abs(await mid(-0.568) + 0.5) < 0.03, 'a quarter period before: the trough');
 }));
 
 test('dragging the big waveform pans in time (X position) and the wheel zooms X / div around the pointer', () => withApp(app, async (page) => {
@@ -450,13 +452,34 @@ test('dragging the big waveform pans in time (X position) and the wheel zooms X 
   assert.equal(await page.locator('.screen-side .param:has(label:text-is("X position")) input[type=number]').inputValue(), String(dragged.xpos), 'the settings follow');
   // zoom in with the wheel at the screen's centre: X / div shrinks, the time under the pointer stays put
   const centre = { x: box.x + box.width / 2, y: box.y + 200 };
-  const before = dragged.xpos + 0.5 * dragged.xdiv * 10;
+  const before = dragged.xpos;   // the centre of the screen is at t = X position
   await page.mouse.move(centre.x, centre.y);
   await page.mouse.wheel(0, -300);
   const zoomed = await params();
   assert.ok(zoomed.xdiv < 1, `zoomed in: ${zoomed.xdiv}`);
-  assert.ok(Math.abs(zoomed.xpos + 0.5 * zoomed.xdiv * 10 - before) < 0.05, 'the time at the centre is unchanged');
+  assert.ok(Math.abs(zoomed.xpos - before) < 0.05, 'the time at the centre is unchanged');
   await page.mouse.wheel(0, 600);
   assert.ok((await params()).xdiv > zoomed.xdiv, 'and out again');
   assert.equal(await page.evaluate(() => dsplab.graph.nodes.has(scope.id)), true);
+}));
+
+test('the grid is centred on t = 0 and moves with X position', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  // record the x of the vertical lines the node's screen strokes (moveTo at the top edge) after each setting
+  const lines = (xpos) => page.evaluate(async (xpos) => {
+    const node = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
+    node.params.xpos = xpos;
+    const g = node.view.el.getContext('2d');
+    const xs = [];
+    const move = g.moveTo;
+    g.moveTo = function (x, y) { if (y === 0) xs.push(x); return move.call(this, x, y); };
+    await new Promise((r) => setTimeout(r, 100));
+    g.moveTo = move;
+    return [...new Set(xs)].sort((a, b) => a - b);
+  }, xpos);
+  const centred = await lines(0);
+  assert.ok(centred.includes(110.5), `a line (t = 0) at the centre: ${centred}`);
+  assert.equal(centred.length, 9, 'X / div 1 ms over 10 ms: lines at -4..4 ms');
+  const moved = await lines(0.5);   // the view's centre is half a division later, so the lines move left
+  assert.ok(!moved.includes(110.5) && moved.includes(110.5 - 11), `the grid followed: ${moved}`);
 }));
