@@ -308,6 +308,22 @@ Changing the delay while running slides it, which briefly shifts the pitch.
 
 Shown on the block: Delay.
 
+**VCO** (voltage-controlled oscillator): a tone generator whose frequency follows a control signal.
+Input: `in`. Output: `out`.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Waveform | Shape of the wave | sine, square, sawtooth, triangle | sine |
+| Frequency | Frequency when the input is 0 | 1 – 20000 Hz (logarithmic) | 440 Hz |
+| Sensitivity | Hertz added per unit of input | 0 – 5000 Hz/unit | 100 |
+| Amplitude | Output level | 0 – 1 | 0.5 |
+
+The frequency at each instant is Frequency + Sensitivity × input, so a ±1 signal swings it by ±Sensitivity
+(frequency modulation). Feed it a message-shaped signal for FSK. A total below 0 Hz runs the wave backwards.
+An unconnected input is 0, which gives a plain tone at Frequency.
+
+Shown on the block: Waveform, Frequency, Sensitivity.
+
 ### Sink blocks
 
 **Audio Sink**: plays a signal on your speakers. Input: `in`. Setting: **Volume** 0 – 1 (default 0.8).

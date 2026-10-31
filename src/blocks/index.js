@@ -47,6 +47,7 @@ import { agc } from './agc.js';
 import { matchedFilter } from './matched-filter.js';
 import { awgn } from './awgn.js';
 import { delay } from './delay.js';
+import { vco } from './vco.js';
 
 export const CATEGORIES = {
   'Source blocks': 'var(--source)',
@@ -79,4 +80,5 @@ export const BLOCKS = {
   matched_filter: matchedFilter,
   awgn,
   delay,
+  vco,
 };
