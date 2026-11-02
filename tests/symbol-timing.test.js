@@ -85,3 +85,54 @@ test('Symbol Recovery: audio in, message out; a full chain recovers what the ser
   const got = (await page.evaluate(() => window.recovered)).join('');
   assert.ok(got.includes('01010101'.repeat(10)), `the whole message is in the recovered stream: ${got.slice(-100)}`);
 }));
+
+test('lock: the timing error goes to ~0 and the lock turns on with a clean signal, and off in silence', async () => {
+  const { SymbolTimer } = await import('../src/blocks/timing-core.js');
+  const fs = 48000;
+  let seed = 99;
+  const rand = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const bits = Array.from({ length: 600 }, () => (rand() < 0.5 ? 1 : 0));
+  const x = Float32Array.from({ length: 600 * 48 }, (_, i) => (bits[Math.floor((i + 17) / 48) % 600] ? 1 : -1));
+  const t = new SymbolTimer({ sampleRate: fs, baud: 1000, onBit: () => {} });
+  const ph = new Float32Array(x.length);
+  assert.ok(!t.locked);
+  for (let i = 0; i < x.length; i += 128) t.process(x.subarray(i, i + 128), ph.subarray(i, i + 128));
+  assert.ok(t.locked, 'locked');
+  assert.ok(ph.every((v) => Math.abs(v) <= 1), 'timing error within +-1');
+  assert.ok(ph.some((v) => v !== 0), 'and it is not just zeros');
+  const quiet = new Float32Array(48000), phq = new Float32Array(48000);
+  for (let i = 0; i < quiet.length; i += 128) t.process(quiet.subarray(i, i + 128), phq.subarray(i, i + 128));
+  assert.ok(!t.locked, 'unlocked after silence');
+  assert.ok(phq.subarray(-4800).every((v) => v === 0), 'no error in silence');
+});
+
+test('lock: a sinc stream at the wrong baud rate does not lock', async () => {
+  const { SymbolTimer } = await import('../src/blocks/timing-core.js');
+  const { pulseSamples } = await import('../src/blocks/pulse-shaper.js');
+  const run = (sendBaud) => {
+    const fs = 48000, sps = fs / sendBaud, N = 1500;
+    let seed = 5;
+    const rand = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const y = new Float32Array(Math.ceil((N + 12) * sps) + 100);
+    for (let k = 0; k < N; k++) {
+      const s = pulseSamples('sinc', k, sps, rand() < 0.5 ? 1 : 0, 0.5);
+      if (s) s.data.forEach((v, i) => { y[Math.floor(s.start + i + Math.round(6 * sps) + 20)] += v; });
+    }
+    const t = new SymbolTimer({ sampleRate: fs, baud: 1000, onBit: () => {} });
+    let on = 0, n = 0;
+    for (let i = 0; i < y.length - 128; i += 128) {
+      t.process(y.subarray(i, i + 128));
+      if (i > y.length / 2) { n++; on += t.locked; }
+    }
+    return on / n;
+  };
+  assert.ok(run(1000) > 0.7, 'mostly locked at the right rate');
+  assert.equal(run(1300), 0);
+});
+
+test('lock: the block reports it to its led', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Symbol Recovery');
+  assert.equal(await page.locator('.node:has-text("Symbol Recovery") .port.out').count(), 2);
+  assert.match(await page.locator('.node:has-text("Symbol Recovery") .lock-led').textContent(), /Unlocked/);
+  await startAudio(page);
+}));
