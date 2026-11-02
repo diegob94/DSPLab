@@ -301,6 +301,23 @@ const openBig = async (page) => {
   await page.click('.node:has-text("Oscilloscope") .title-button');
 };
 
+test('the big screen stays inside the viewport at any window size (the canvas never pushes it out)', () => withApp(app, async (page) => {
+  await openBig(page);
+  await page.keyboard.press('Escape');
+  for (const [w, h] of [[1280, 560], [1280, 800], [820, 420], [600, 900]]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.evaluate(() => scope.el.querySelector('.title-button').click());
+    await page.waitForTimeout(200);   // a few frames: a size feedback loop would grow the canvas
+    const box = async (sel) => page.locator(sel).boundingBox();
+    const win = await box('.screen-window'), view = await box('.screen-canvas'), side = await box('.screen-side');
+    for (const [name, b] of [['window', win], ['canvas', view], ['settings', side]]) {
+      assert.ok(b.x >= -1 && b.y >= -1 && b.x + b.width <= w + 1 && b.y + b.height <= h + 1, `${name} ${JSON.stringify(b)} outside ${w}x${h}`);
+    }
+    assert.ok(view.width > 100 && view.height > 80, `canvas ${view.width}x${view.height} at ${w}x${h}`);
+    await page.keyboard.press('Escape');
+  }
+}));
+
 test('the expand button opens a window with the waveform left of the settings; Esc and × close it', () => withApp(app, async (page) => {
   await openBig(page);
   const view = await page.locator('.screen-canvas').boundingBox();
@@ -467,6 +484,31 @@ test('dragging the big waveform pans in time (X position) and the wheel zooms X 
   assert.deepEqual(await params(), { xpos: 0, xdiv });
   assert.equal(await page.locator('.screen-side .param:has(label:text-is("X position")) input[type=number]').inputValue(), '0');
   assert.equal(await page.evaluate(() => dsplab.graph.nodes.has(scope.id)), true);
+}));
+
+test('pinching the big waveform with two fingers zooms X / div around their midpoint', () => withApp(app, async (page) => {
+  await openBig(page);
+  const box = await page.locator('.screen-canvas').boundingBox();
+  const cx = box.x + box.width / 2, y = box.y + 200;
+  const params = () => page.evaluate(() => ({ xpos: scope.params.xpos, xdiv: scope.params.xdiv }));
+  const touch = (type, id, x) => page.evaluate(([type, id, x, y]) => {
+    document.querySelector('.screen-canvas').dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: 'touch', isPrimary: id === 1, clientX: x, clientY: y, bubbles: true }));
+  }, [type, id, x, y]);
+  await touch('pointerdown', 1, cx - 50);
+  await touch('pointerdown', 2, cx + 50);
+  await touch('pointermove', 1, cx - 100);   // fingers apart: zoom in
+  await touch('pointermove', 2, cx + 100);
+  const zoomed = await params();
+  assert.ok(Math.abs(zoomed.xdiv - 0.5) < 0.01, `twice as far apart halves X / div: ${zoomed.xdiv}`);
+  assert.ok(Math.abs(zoomed.xpos) < 0.01, 'the time under the midpoint (the centre) is unchanged');
+  await touch('pointermove', 1, cx - 25);    // fingers together: zoom out
+  await touch('pointermove', 2, cx + 25);
+  assert.ok((await params()).xdiv > 1.9, 'pinching in zooms out');
+  await touch('pointerup', 2, cx + 25);      // one finger left: it drags without jumping
+  const rest = await params();
+  await touch('pointermove', 1, cx - 25);
+  assert.deepEqual(await params(), rest);
+  await touch('pointerup', 1, cx - 25);
 }));
 
 test('the grid is centred on t = 0 and moves with X position', () => withApp(app, async (page) => {
