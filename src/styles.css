@@ -248,3 +248,8 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
   .screen-view { min-height: 120px; }
   .screen-side { width: auto; max-height: 45%; border-left: 0; border-top: 1px solid var(--border); }
 }
+
+/* the "locked" indicator of the PLL blocks */
+.lock-led { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.lock-led .led { width: 10px; height: 10px; border-radius: 50%; background: #2a2f38; border: 1px solid var(--border); }
+.lock-led .led.on { background: var(--source); border-color: var(--source); box-shadow: 0 0 6px var(--source); }

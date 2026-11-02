@@ -7,7 +7,15 @@
 // two: mid-sample times the change between this symbol and the last one. At a transition the mid-sample
 // should sit on the decision level, so any other value means the strobes are early or late. A PI loop
 // filter turns that error into a phase correction (proportional) and a frequency correction (integral).
+//
+// Lock detector: when the strobes sit on the symbols the sampled values are at the signal's two levels, so
+// their distance from the decision level is the full half-swing; when they slide across the symbols it
+// averages far less. A slow average of that ("eye opening", 0..1) is the lock measure, with hysteresis
+// (LOCK_ON / LOCK_OFF) so it doesn't flicker; silence is never locked. (The Gardner error itself is not
+// used for this: with sharp-edged pulses it is +-1 at the edges even when locked.)
 const FLAT = 1e-6;   // a change smaller than this counts as no change
+const LOCK_ON = 0.8, LOCK_OFF = 0.7;
+const LOCK_RATE = 0.02;   // weight of each symbol in the average
 
 export class SymbolTimer {
   constructor({ sampleRate, baud, bandwidth = 0.005, onBit }) {
@@ -25,6 +33,8 @@ export class SymbolTimer {
     this.top = 0;         // the same, measured only at symbol instants
     this.bottom = 0;
     this.error = 0;       // last timing error, for display / tests
+    this.eye = 0;         // slow average of how far the symbol samples are from the decision level (1 = at the levels)
+    this.locked = false;
   }
 
   // bandwidth: loop noise bandwidth as a fraction of the baud rate (small = slow and quiet)
@@ -38,14 +48,20 @@ export class SymbolTimer {
     this.maxFreq = this.step * 0.1;
   }
 
-  process(input) {
+  // phase (optional): receives the last timing error (held between symbols; 0 in silence)
+  process(input, phase) {
     for (let n = 0; n < input.length; n++) {
       const x = input[n];
       // Silence is a signal that doesn't move at all (what a Squelch block leaves when it closes) for more
       // than 32 symbols: nothing is sent, and the level followers start again from the next signal.
       this.flat = Math.abs(x - this.prev) > FLAT ? 0 : this.flat + 1;
       const silent = this.flat * this.step > 32;
-      if (silent) this.hi = this.lo = this.top = this.bottom = x;
+      if (silent) {
+        this.hi = this.lo = this.top = this.bottom = x;
+        this.error = 0;
+        this.eye = 0;
+        this.locked = false;
+      }
       this.hi = x > this.hi ? x : this.hi + (x - this.hi) * this.decay;
       this.lo = x < this.lo ? x : this.lo + (x - this.lo) * this.decay;
       const w = this.step + this.freq;
@@ -66,12 +82,19 @@ export class SymbolTimer {
           this.error = Math.max(-1, Math.min(1, e));
           this.freq = Math.max(-this.maxFreq, Math.min(this.maxFreq, this.freq + this.ki * this.error * this.step));
           this.phase += this.kp * this.error;
+          const half = (this.top - this.bottom) / 2;
+          if (half > FLAT) {
+            this.eye += LOCK_RATE * (Math.min(1, Math.abs(y - level) / half) - this.eye);
+            // a loop pinned at its frequency limit can't follow the signal
+            this.locked = Math.abs(this.freq) < 0.9 * this.maxFreq && this.eye > (this.locked ? LOCK_OFF : LOCK_ON);
+          }
           this.onBit(y > level ? 1 : 0);
         }
         this.lastStrobe = y;
         this.phase -= 1;
       }
       this.prev = x;
+      if (phase) phase[n] = this.error;
     }
   }
 }

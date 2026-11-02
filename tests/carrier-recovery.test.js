@@ -82,7 +82,7 @@ test('the block runs in the engine: a tone in, a tone of the same frequency out'
 test('Carrier Recovery has an audio input and output; the panel changes it live', () => withApp(app, async (page) => {
   for (const t of ['Wave Generator', 'Carrier Recovery', 'Audio Sink']) await addFromPalette(page, t);
   assert.equal(await page.locator('.node:has-text("Carrier Recovery") .port.in').count(), 1);
-  assert.equal(await page.locator('.node:has-text("Carrier Recovery") .port.out').count(), 1);
+  assert.equal(await page.locator('.node:has-text("Carrier Recovery") .port.out').count(), 2);
   await page.evaluate(() => {
     const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
     const [g, c, k] = ['wave_generator', 'carrier_recovery', 'audio_sink'].map(by);
@@ -94,4 +94,44 @@ test('Carrier Recovery has an audio input and output; the panel changes it live'
   await panelControl(page, 'Frequency').evaluate((el) => { el.value = el.max; el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change')); });
   await sleep(300);
   assert.match(await page.textContent('#status'), /^Running/);
+}));
+
+test('lock: the phase error goes to 0 and the lock turns on with a tone, and stays off without one', async () => {
+  const { CarrierPLL } = await import('../src/blocks/carrier-core.js');
+  const run = (hz, a) => {
+    const pll = new CarrierPLL({ sampleRate: FS, frequency: 440, bandwidth: 20, amplitude: 1 });
+    const x = Float32Array.from({ length: FS * 2 }, (_, i) => a * Math.sin(2 * Math.PI * hz * i / FS + 0.7));
+    const y = new Float32Array(x.length), ph = new Float32Array(x.length);
+    let early = false;
+    for (let i = 0; i < x.length; i += 128) {
+      pll.process(x.subarray(i, i + 128), y.subarray(i, i + 128), ph.subarray(i, i + 128));
+      if (i === 128) early = pll.locked;
+    }
+    return { pll, ph, early };
+  };
+  const tone = run(455, 0.5);
+  assert.ok(tone.pll.locked, 'locked');
+  assert.ok(!tone.early, 'not locked at the very start');
+  assert.ok(Math.max(...tone.ph.slice(-4800).map(Math.abs)) < 0.02, 'phase error ~ 0');
+  assert.ok(Math.max(...tone.ph.map(Math.abs)) > 0.05, 'but it was not 0 while pulling in');
+  const none = run(455, 0);
+  assert.ok(!none.pll.locked);
+  assert.ok(none.ph.every((v) => v === 0));
+  // a tone far outside the loop's reach never locks
+  assert.ok(!run(1500, 0.5).pll.locked);
+});
+
+test('lock: the block reports it to its led', () => withApp(app, async (page) => {
+  for (const t of ['Wave Generator', 'Carrier Recovery']) await addFromPalette(page, t);
+  await page.evaluate(() => {
+    const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
+    const [g, c] = ['wave_generator', 'carrier_recovery'].map(by);
+    dsplab.addEdge({ node: g.id, port: 'out' }, { node: c.id, port: 'in' });
+  });
+  const led = page.locator('.node:has-text("Carrier Recovery") .lock-led');
+  assert.match(await led.textContent(), /Unlocked/);
+  await startAudio(page);
+  await page.waitForFunction(() => document.querySelector('.lock-led .led.on'), null, { timeout: 5000 });
+  assert.match(await led.textContent(), /^Locked/);
+  assert.equal(await page.locator('.node:has-text("Carrier Recovery") .port.out').count(), 2);
 }));
