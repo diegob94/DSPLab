@@ -202,7 +202,7 @@ Changing a setting rebuilds the filter and may click.
 Shown on the block: Pulse and Baud rate.
 
 **Symbol Recovery**: samples a digital-looking signal (like the output of a matched filter) at the
-right instants and returns the bits. Input: `in` (audio). Output: `msg`.
+right instants and returns the bits. Input: `in` (audio). Outputs: `msg`, and `phase` (audio).
 
 It runs a simple phase-locked loop: an oscillator that ticks once per symbol (at the baud rate you set) looks
 at the signal at the symbol instant and halfway between symbols. A Gardner detector compares the two at every
@@ -226,10 +226,17 @@ burst before it notices. The ticks are placed by linear interpolation, which is 
 symbol up. A pure sinc pulse has long tails that make the detector noisy, so use a low loop bandwidth with
 it. Starting from a symbol boundary it may take a while to leave; square pulses lock quickly.
 
-Shown on the block: Baud rate.
+**phase** is the loop's timing error (the Gardner detector's output, between -1 and 1, held between symbols),
+so you can watch it on an Oscilloscope; it settles around 0 when the loop is locked, and is 0 in silence. A
+**led** on the block lights up while the loop is locked, that is, while the symbol samples sit at the signal's
+two levels (it goes off in silence or if the loop can't follow the baud rate). Sharp-edged square pulses make
+the detector read about ±1 at every edge even when locked, so there `phase` is not near 0 (the led still
+works); smooth signals, like a matched filter's output, give a clean 0.
+
+Shown on the block: Baud rate and the lock led.
 
 **Carrier Recovery**: locks a clean sine to a carrier hidden in its input, even a noisy or weak one.
-Input: `in`. Output: `out` (audio).
+Input: `in`. Outputs: `out` and `phase` (both audio).
 
 It is a phase-locked loop whose oscillator is a sine. The input is compared with the oscillator in quadrature
 (multiplied by its cosine and sine, then low-passed), which gives the phase difference whatever the level of the
@@ -251,7 +258,12 @@ loop gets noisy or unstable. It locks
 onto a pure carrier; for a signal that is modulated with a sign flip (like BPSK) the carrier is suppressed and
 this block will not find it.
 
-Shown on the block: Frequency and Loop bandwidth.
+**phase** is the loop's phase error divided by π (so ±1 is ±180°): it is 0 when the oscillator is exactly in
+step with the carrier, and also while there is no carrier. Wire it to an Oscilloscope to watch the loop pull
+in. A **led** on the block lights up while the loop is locked (the phase error stays small) and goes off
+when the carrier disappears or drifts out of reach.
+
+Shown on the block: Frequency, Loop bandwidth and the lock led.
 
 **Squelch**: a gate that mutes a signal while it is too weak. Input: `in`. Output: `out`.
 
