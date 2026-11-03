@@ -117,6 +117,7 @@ test('Compile builds the code, the block filters like the C says, and mistakes a
   await expectStatus(page, /^Compile error · still running the previous version$/);
   const errors = await page.textContent('.node:has-text("C Block") .c-errors');
   assert.match(errors, /block\.c:3:\d+: error: .*undefined_name/);
+  assert.doesNotMatch(errors, /process exited/, "the runtime's own exit line is not shown");
   assert.ok(await page.locator('.node:has-text("C Block") .c-errors').isVisible());
   assert.equal(await page.textContent(COMPILE), 'Compile');
 

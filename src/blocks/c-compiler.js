@@ -106,7 +106,7 @@ export async function compileC(code, onProgress) {
   })));
   if (built.error) {
     const lines = (T.compilerDiagnostics ? T.compilerDiagnostics(built.raw) : stripAnsi(built.raw).split('\n').map((l) => l.trim()).filter(Boolean))
-      .filter((l) => !/^process exited with code/.test(l));
+      .filter((l) => !/process exited with code/.test(l));   // the runtime's own line, not the compiler's
     return { ok: false, lines: lines.length ? lines : [stripAnsi(built.error.message || built.error)] };
   }
   const bytes = new Uint8Array(built.result.bytes);
