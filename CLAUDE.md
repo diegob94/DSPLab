@@ -17,7 +17,8 @@ interaction, update it in the same commit.
 ./serve.sh                  # http://localhost:8000  (./serve.sh 9000 for another port)
 npm install                 # only needed for the tests
 npx playwright install chromium   # first time only
-npm test                    # whole suite, ~10 s
+npm test                    # whole suite, ~2.5 min (the C Block tests compile real C); first run also fetches the C compiler
+./scripts/fetch-compiler.sh # the C Block's compiler (~28 MB) into vendor/clang/; npm test runs it, ./serve.sh needs it once
 node --test tests/oscilloscope.test.js   # one file
 DSPLAB_URL=http://127.0.0.1:8000/ npm test   # test against a server you already run
 ```
@@ -33,6 +34,7 @@ DSPLAB_URL=http://127.0.0.1:8000/ npm test   # test against a server you already
 ```
 index.html            page skeleton; loads src/main.js as a module
 assets/               favicon + app icons (static files, not code); served and deployed next to index.html
+scripts/              fetch-compiler.sh: downloads the pinned in-browser C compiler into vendor/ (git-ignored, deployed by pages.yml)
 src/
   main.js             boot: init the UI modules, restore the saved diagram or load a starter one
   blocks/             one module per block + index.js (registry, categories, the block contract)
@@ -69,6 +71,24 @@ and for debugging from the console; app code must not use it.
 - The saved format is `{ version: 1, pan, nodes: [{id,type,x,y,params}], edges: [{from,to}] }` under
   the `dsplab.diagram` localStorage key. Changing a block's port or parameter names silently drops the
   saved cables/values that referred to the old ones. Bump `version` or add a migration if that matters.
+
+### The C Block
+
+`blocks/c-block.js` (the block), `c-compiler.js` (loads and runs clang) and `c-block-processor.js` (the worklet).
+The user writes `dsp_process(in, out, n, fs, p)`; `c-compiler.js` prepends a PRELUDE that exports the buffers and
+`run()` and adds a stub `main`, then compiles to a WASI module whose only import is `proc_exit`. The compiler is
+`@live-codes/clang-wasm` (clang 22 on WebAssembly), pinned and sha512-checked in `scripts/fetch-compiler.sh`; its
+assets are cached with the Cache API (`dsplab-clang-<version>`; bump the name with the version). Things that
+bit once and are easy to repeat:
+
+- A `WebAssembly.Module` can go to an AudioWorklet in the node's `processorOptions` but **not through
+  `port.postMessage`** (the worklet gets `messageerror`). Send the `.wasm` bytes and compile there; the initial
+  program is compiled synchronously because an `OfflineAudioContext` never yields to an async compile.
+- `compileArgs` reach clang only, not the linker, so exports are `export_name` attributes in the PRELUDE.
+- The user's code follows `#line 1 "block.c"` so compiler messages carry the user's own line numbers.
+- The compiled program is runtime data keyed by the model node (like the recorder's sample): only `code` is saved.
+- The node's status line is repainted on the next animation frame: tests must wait for it (`expectStatus`),
+  not read it right after a click.
 
 ## Adding a block
 
@@ -121,6 +141,11 @@ and for debugging from the console; app code must not use it.
   `change` so dragging a slider doesn't drop cables on the way. Mimic that in tests with `setRange`.
 - Hit-testing in tests: new blocks added by double-click all land at the canvas centre and overlap.
   Move them (`dsplab.graph` nodes + `moved`) or drag from a spot you know is empty.
+
+- In the cloud container an out-of-bounds WebAssembly access **crashes Chromium** ("Target crashed") instead of
+  throwing, even for plain wasm in a Worker. Don't test one; use `__builtin_trap()` for a catchable trap.
+- `npm test` takes minutes because every C Block test loads the 28 MB compiler into a fresh page (~6 s) and
+  compiles (~4 s the first time). Keep new C tests in as few pages as possible.
 
 ## Git
 

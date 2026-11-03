@@ -46,7 +46,7 @@ You start with a **Wave Generator** already connected to an **Audio Sink**. Pres
   values, read-only; you change them here.
 - **Toolbar** (top): Run/Stop, delete, **Share** (copies a link to the diagram), the **Examples** menu, and the audio status (the sample rate while
   running).
-- **Examples** (toolbar): *Simple tone* (the starting diagram), *ASK modulation*, *ASK receiver* (microphone → carrier recovery → message) and *Audio source scope* (microphone → oscilloscope). Picking one replaces
+- **Examples** (toolbar): *Simple tone* (the starting diagram), *ASK modulation*, *ASK receiver* (microphone → carrier recovery → message) and *Audio source scope* (microphone → oscilloscope) and *C Block low-pass* (a square wave through a filter written in C). Picking one replaces
   the current diagram, so it asks for confirmation first (unless the canvas is empty); it can't be undone,
   because the autosave overwrites the old diagram.
 
@@ -336,6 +336,50 @@ An unconnected input is 0, which gives a plain tone at Frequency.
 
 Shown on the block: Waveform, Frequency, Sensitivity.
 
+**C Block**: a block you program yourself, in C. Input: `in`. Output: `out` (one channel each).
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| C code | The program, edited in a text area in Properties (Tab indents; press Escape first to make Tab leave the field) | up to 12 000 characters | a one-pole low-pass filter |
+| P1 – P4 | Four sliders whose values your code reads, so it can be tuned without recompiling | 0 – 1 | 0.5 |
+
+You write one function, and DSPLab calls it for every block of samples:
+
+```c
+void dsp_process(const float *in, float *out, int n, float fs, const float *p);
+```
+
+`in` holds `n` input samples (up to 128, about 3 ms at 44.1 kHz) and you fill `out` with `n` output samples.
+`fs` is the sample rate and `p[0]`…`p[3]` are the sliders P1…P4. A `static` variable keeps its value from one
+call to the next, which is how a filter remembers its past. For example, a gain controlled by P1 (0 to 2):
+
+```c
+void dsp_process(const float *in, float *out, int n, float fs, const float *p) {
+  for (int i = 0; i < n; i++) out[i] = in[i] * p[0] * 2.0f;
+}
+```
+
+The code is compiled in your browser (clang, running as WebAssembly), so nothing is uploaded. The first time
+you compile it downloads the compiler, about 28 MB, which the browser then keeps; it takes a few seconds
+after that too. You can `#include` the standard headers that need no operating system (`<math.h>` for `sinf`,
+`expf`, `powf`…, `<string.h>`, `<stdint.h>`, `<stdlib.h>`, so `static` arrays and `malloc` work). There are
+no files and nothing to print to (`printf` compiles but prints nothing), and no `main` (do not define one). Avoid `y0`, `y1`, `j0`, `j1` as names, which `<math.h>` already uses.
+
+- **Run** compiles every C Block that has not been compiled yet, then starts the audio.
+- **Compile** (in Properties) applies an edit to a diagram that is running: the new program replaces the old
+  one without stopping the audio, but its `static` variables start over. Until you press it, the node says
+  *edited, press Compile*.
+- A mistake shows the compiler's messages on the block, with line numbers that match your code, and the previous
+  version keeps running.
+- If your code makes the program fail while running, the block goes silent and says why. A `NaN` or infinite
+  output sample is replaced by silence.
+
+Only the source is saved with the diagram (and in a Share link, so a long program makes a long link); the
+compiled program is rebuilt when you press Run. The code runs inside WebAssembly, which can see only the samples
+it is handed: no network, files or page. Still, as with any link someone sends you, open diagrams you trust.
+
+Shown on the block: whether it is compiled, and the compiler's messages.
+
 ### Sink blocks
 
 **Audio Sink**: plays a signal on your speakers. Input: `in`. Setting: **Volume** 0 – 1 (default 0.8).
@@ -593,6 +637,10 @@ Things to know:
 | Trace jitters | The trigger channel has no cable or never crosses *Trig level*, so the sweep is not synchronised |
 | Distorted sound | The signal exceeds ±1: lower the amplitudes |
 | "Audio error" in the toolbar | The browser couldn't start audio; reload and press Run again |
+| C Block says *The C compiler could not be loaded* | `vendor/clang/` is missing. Run `./scripts/fetch-compiler.sh` once (the site on GitHub Pages already has it) and reload |
+| C Block: *Compile error* | Read the messages on the block; the line numbers are your own. The previous version keeps running |
+| C Block is silent | It is not compiled yet (press Run or Compile), it failed while running (the block says so), or your code writes zeros |
+| The audio freezes after Compile | Your program probably never returns from `dsp_process` (an endless loop). Reload the page and fix the code |
 
 ## Not supported yet
 
@@ -602,5 +650,6 @@ list for now (one generator, one operator, two sinks, four message blocks).
 
 ## For developers
 
-`npm install && npm test` runs the browser test suite. Architecture, conventions and how to add a block
+`npm install && npm test` runs the browser test suite (the first run also downloads the C Block's compiler, about
+28 MB, into `vendor/clang/`; to try the C Block with `./serve.sh`, run `./scripts/fetch-compiler.sh` once). Architecture, conventions and how to add a block
 are in [`CLAUDE.md`](CLAUDE.md).
