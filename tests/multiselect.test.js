@@ -150,3 +150,16 @@ test('the real keyboard shortcuts work (Ctrl+C then Ctrl+V)', () => withApp(app,
   assert.equal(await page.evaluate(() => dsplab.graph.nodes.size), 6);
   assert.equal(await page.evaluate(() => dsplab.graph.edges.length), 2);
 }));
+
+test('the Help button lists the shortcuts and Esc closes it', () => withApp(app, async (page) => {
+  assert.equal(await page.locator('#help').isVisible(), false);
+  await page.click('#help-open');
+  assert.equal(await page.locator('#help').isVisible(), true);
+  assert.match(await page.locator('#help').innerText(), /Shift \+ drag/);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#help').isVisible(), false);
+  await page.keyboard.press('?');
+  assert.equal(await page.locator('#help').isVisible(), true);
+  await page.click('#help-close');
+  assert.equal(await page.locator('#help').isVisible(), false);
+}));

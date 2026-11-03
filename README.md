@@ -74,6 +74,7 @@ mouse, and pinching the canvas zooms.
 | Delete the selection | `Delete` or `Backspace`, or the **Delete selected** button (just **Delete** on a phone) |
 | Pan the canvas | Drag the empty background |
 | Zoom the canvas | Pinch with two fingers (a two-finger drag also pans), or scroll the mouse wheel over the canvas. 30 %–250 %; the zoom is saved with the diagram |
+| Show the shortcuts | The **Help** button in the toolbar, or `?` |
 | Deselect | Click the empty background |
 
 Connection rules:

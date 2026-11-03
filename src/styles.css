@@ -54,6 +54,13 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
 #run.running { background: var(--danger); border-color: var(--danger); color: #fff; }
 #status { color: var(--muted); margin-left: auto; }
 #status.on { color: var(--source); }
+#help { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; max-width: min(560px, 92vw); }
+#help::backdrop { background: #0008; }
+#help h2 { margin: 0 0 10px; font-size: 15px; }
+#help table { border-collapse: collapse; margin-bottom: 14px; }
+#help td { padding: 4px 0; vertical-align: top; }
+#help td:first-child { padding-right: 18px; color: var(--muted); }
+#help kbd { font: inherit; color: var(--text); }
 
 /* palette */
 #palette {
@@ -191,6 +198,7 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
   #delete .long { display: none; }
   #examples { padding: 0 6px; min-width: 0; width: 6em; }   /* fixed: its widest option would make it too wide */
   #status { display: none; }
+  #help-open { display: none; }   /* the shortcuts need a keyboard / mouse */
   .drawer-toggle { display: block; }
   #toolbar #show-palette { margin-left: auto; }
   .drawer-toggle.active { border-color: var(--accent); color: var(--accent); }

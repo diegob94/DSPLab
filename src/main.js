@@ -12,6 +12,7 @@ import { initProperties } from './ui/properties.js';
 import { initPalette } from './ui/palette.js';
 import { initScreen } from './ui/screen.js';
 import { initCanvas } from './ui/canvas.js';
+import { initHelp } from './ui/help.js';
 import { initToolbar, openSharedLink } from './ui/toolbar.js';
 
 initWires();
@@ -21,6 +22,7 @@ initPalette();
 initCanvas();
 initScreen();
 initToolbar();
+initHelp();
 startRenderLoop();
 
 if (!restore()) loadDiagram(EXAMPLES[0].diagram);
