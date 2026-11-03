@@ -135,6 +135,7 @@ function renderProps() {
     return;
   }
 
+  if (selection.ids.length > 1) return hint(`${selection.ids.length} blocks selected. Drag one to move them all; Delete removes them, Ctrl+C copies them.`);
   const node = graph.nodes.get(selection.id);
   const def = BLOCKS[node.type];
   const head = h('div', { className: 'props-head', textContent: def.title });

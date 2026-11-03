@@ -69,9 +69,12 @@ mouse, and pinching the canvas zooms.
 | Select a block or a cable | Click it. Its settings (or, for a cable, where it goes from and to) appear in Properties |
 | Edit a setting | Select the block, then use the controls in Properties |
 | Set an exact value | Type it in the number field under a slider and press Enter (or leave the field). Values outside the range are clamped to it |
+| Select several blocks | `Shift` (or `Ctrl`/`Cmd`) + click adds or removes a block; `Shift` + drag on the empty background draws a box that adds every block it touches; `Ctrl+A` selects all. Dragging any selected block moves them all; a plain click on one of them keeps just that one |
+| Copy, cut and paste blocks | `Ctrl+C` / `Ctrl+X` / `Ctrl+V` (`Cmd` on a Mac). The cables between the copied blocks come along. The copy is plain text on the system clipboard, so you can paste it into another tab, another browser or another computer running DSPLab. Each paste lands one grid step further along and stays selected |
 | Delete the selection | `Delete` or `Backspace`, or the **Delete selected** button (just **Delete** on a phone) |
 | Pan the canvas | Drag the empty background |
 | Zoom the canvas | Pinch with two fingers (a two-finger drag also pans), or scroll the mouse wheel over the canvas. 30 %–250 %; the zoom is saved with the diagram |
+| Show the shortcuts | The **Help** button in the toolbar, or `?` |
 | Deselect | Click the empty background |
 
 Connection rules:
@@ -596,7 +599,7 @@ Things to know:
 
 ## Not supported yet
 
-Undo/redo, copy and paste, selecting several blocks at once, zooming the canvas, exporting or importing
+Undo/redo, selecting several blocks on a touch screen (there is no Shift key), exporting or importing
 diagrams as files, a divide operation, and audio inputs from a microphone or file. Blocks are a short
 list for now (one generator, one operator, two sinks, four message blocks).
 
