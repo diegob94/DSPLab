@@ -145,6 +145,15 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
 .rec-status.recording { color: #ff7b72; }
 .rec-wave { display: block; width: 220px; height: 44px; border: 1px solid var(--border); border-radius: 4px; }
 #props button.action { margin: 4px 0 8px; width: 100%; }
+.cblock { width: 220px; }
+.c-status { color: var(--muted); font-size: 11px; }
+.c-status[data-state=error] { color: #ff7b72; }
+.c-status[data-state=compiling] { color: var(--accent); }
+.c-errors {
+  margin: 4px 0 0; max-height: 8em; overflow: auto; box-sizing: border-box; padding: 4px 6px;
+  font: 11px/1.3 ui-monospace, monospace; color: #ff7b72; white-space: pre-wrap; word-break: break-word;
+  background: #0d0f12; border: 1px solid var(--border); border-radius: 4px;
+}
 .param textarea.code {
   width: 100%; min-width: 0; box-sizing: border-box; resize: vertical; overflow: auto; white-space: pre; tab-size: 2;
   font: 12px/1.4 ui-monospace, monospace; color: var(--text);
