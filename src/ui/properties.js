@@ -8,9 +8,27 @@ import { clamp } from '../util.js';
 
 const propsBody = $('#props-body');
 
+// a multi-line source editor (a `type: 'code'` param). Tab indents instead of leaving the field, as in any
+// code editor; Escape lets the next Tab leave it again, so the keyboard is never trapped
+function codeEditor(id, p) {
+  const area = h('textarea', { id, className: 'code', rows: 14, spellcheck: false, maxLength: p.maxLength || 10000 });
+  area.setAttribute('autocapitalize', 'off');
+  area.setAttribute('autocomplete', 'off');
+  let tabIndents = true;
+  area.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { tabIndents = false; return; }
+    if (e.key !== 'Tab' || e.shiftKey || !tabIndents) return;
+    e.preventDefault();
+    area.setRangeText('  ', area.selectionStart, area.selectionEnd, 'end');
+    area.dispatchEvent(new Event('input'));
+  });
+  area.addEventListener('blur', () => { tabIndents = true; });
+  return area;
+}
+
 // idPrefix keeps ids unique when the same block is edited in two places at once (panel + big screen)
 export function paramWidget(node, p, idPrefix = 'p') {
-  const wrap = h('div', { className: 'param' });
+  const wrap = h('div', { className: p.type === 'code' ? 'param wide' : 'param' });
   const id = `${idPrefix}${node.id}-${p.key}`;
   wrap.append(h('label', { htmlFor: id, textContent: p.label }));
 
@@ -27,6 +45,8 @@ export function paramWidget(node, p, idPrefix = 'p') {
     optionsOf(p, node.params).forEach((o) => input.append(h('option', { value: o, textContent: o })));
   } else if (p.type === 'text') {
     input = h('input', { id, type: 'text', maxLength: p.maxLength || 100 });
+  } else if (p.type === 'code') {
+    input = codeEditor(id, p);
   } else if (log) {
     input = h('input', { id, type: 'range', min: 0, max: 1, step: 0.001 });
   } else {
@@ -59,7 +79,7 @@ export function paramWidget(node, p, idPrefix = 'p') {
   input.addEventListener('pointerdown', (e) => e.stopPropagation());
   input.addEventListener('input', () => {
     const value = p.type === 'select' ? optionsOf(p, node.params)[input.selectedIndex]
-      : p.type === 'text' ? input.value
+      : p.type === 'text' || p.type === 'code' ? input.value
       : fromSlider(parseFloat(input.value));
     setParam(node, p.key, value);
     if (number) number.value = node.params[p.key];

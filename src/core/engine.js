@@ -13,9 +13,13 @@ export const engine = {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     try {
       // blocks may need to load modules (e.g. an AudioWorklet) before they can be built
-      // (knowing which types are in the diagram lets a block skip intrusive work, e.g. the microphone prompt)
-      const used = new Set([...graph.nodes.values()].map((n) => n.type));
-      await Promise.all(Object.entries(BLOCKS).map(([type, block]) => block.setup && block.setup(ctx, used.has(type))));
+      // (knowing which types are in the diagram lets a block skip intrusive work, e.g. the microphone prompt,
+      // and the nodes of its type let it prepare each one, e.g. compile its code)
+      const nodes = [...graph.nodes.values()];
+      await Promise.all(Object.entries(BLOCKS).map(([type, block]) => {
+        const mine = nodes.filter((n) => n.type === type);
+        return block.setup && block.setup(ctx, mine.length > 0, mine);
+      }));
     } catch (err) {
       await ctx.close();
       throw err;

@@ -145,6 +145,11 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
 .rec-status.recording { color: #ff7b72; }
 .rec-wave { display: block; width: 220px; height: 44px; border: 1px solid var(--border); border-radius: 4px; }
 #props button.action { margin: 4px 0 8px; width: 100%; }
+.param textarea.code {
+  width: 100%; min-width: 0; box-sizing: border-box; resize: vertical; overflow: auto; white-space: pre; tab-size: 2;
+  font: 12px/1.4 ui-monospace, monospace; color: var(--text);
+  background: #0d0f12; border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px;
+}
 
 /* properties panel */
 #props {
@@ -164,6 +169,7 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
 }
 .props-cat { color: var(--muted); font-size: 11px; margin: 2px 0 12px 11px; }
 #props .param { grid-template-columns: 84px 1fr; margin-bottom: 8px; }
+#props .param.wide { grid-template-columns: minmax(0, 1fr); }   /* a source editor needs the whole row */
 #props .kv { margin: 6px 0; }
 
 /* read-only values on a node */
