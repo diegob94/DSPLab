@@ -73,4 +73,20 @@ export const EXAMPLES = [
       edges: [edge(1, 'out', 2, 'ch1')],
     },
   },
+  {
+    // a 200 Hz square wave through the C Block's example program (a one-pole low-pass, cutoff 632 Hz): the scope
+    // shows the edges rounded off. Run compiles the C code first, which takes a few seconds the first time.
+    id: 'c-lowpass',
+    title: 'C Block low-pass',
+    diagram: {
+      version: 1, pan: { x: 0, y: 0 }, zoom: 1,
+      nodes: [
+        { id: 1, type: 'wave_generator', x: 20, y: 60, params: { waveform: 'square', frequency: 200 } },
+        { id: 2, type: 'c_block', x: 290, y: 60, params: {} },
+        { id: 3, type: 'audio_sink', x: 560, y: 60, params: {} },
+        { id: 4, type: 'oscilloscope', x: 560, y: 190, params: { channels: 2, trigger: 'ch1', xdiv: 2 } },
+      ],
+      edges: [edge(1, 'out', 2, 'in'), edge(2, 'out', 3, 'in'), edge(1, 'out', 4, 'ch1'), edge(2, 'out', 4, 'ch2')],
+    },
+  },
 ];

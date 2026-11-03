@@ -11,7 +11,7 @@ const accepting = (page) => { const seen = []; page.on('dialog', (d) => { seen.p
 const types = (page) => page.evaluate(() => [...dsplab.graph.nodes.values()].map((n) => n.type).sort());
 
 test('the Examples menu lists the examples under its title', () => withApp(app, async (page) => {
-  assert.deepEqual(await page.locator('#examples option').allTextContents(), ['Examples', 'Simple tone', 'ASK modulation', 'ASK receiver', 'Audio source scope']);
+  assert.deepEqual(await page.locator('#examples option').allTextContents(), ['Examples', 'Simple tone', 'ASK modulation', 'ASK receiver', 'Audio source scope', 'C Block low-pass']);
   assert.equal(await page.locator('#examples').inputValue(), '');
 }));
 
