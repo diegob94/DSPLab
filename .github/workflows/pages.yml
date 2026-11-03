@@ -42,9 +42,12 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      # The C Block's compiler (~28 MB) is downloaded here instead of living in the repository.
+      - name: Fetch the C compiler
+        run: ./scripts/fetch-compiler.sh
       # The site is just the static app; all paths are relative, so it works under /DSPlab/.
       - name: Stage the site
-        run: mkdir _site && cp -r index.html src assets _site/
+        run: mkdir _site && cp -r index.html src assets vendor _site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

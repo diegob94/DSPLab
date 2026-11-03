@@ -3,6 +3,7 @@
   "private": true,
   "description": "Browser-only node-based DSP flowgraph editor. The app itself has no dependencies; Playwright is only used by the tests.",
   "scripts": {
+    "pretest": "./scripts/fetch-compiler.sh",
     "test": "node --test --test-concurrency=1"
   },
   "devDependencies": {
