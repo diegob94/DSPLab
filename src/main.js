@@ -1,7 +1,7 @@
 // Entry point: wires the UI to the core and loads the saved (or a starter) diagram.
 import { BLOCKS } from './blocks/index.js';
 import {
-  graph, select, addNode, removeNode, addEdge, removeEdge, rebuildPorts, syncParams,
+  graph, select, selectNodes, addNode, removeNode, addEdge, removeEdge, rebuildPorts, syncParams,
 } from './core/graph.js';
 import { engine } from './core/engine.js';
 import { serialize, restore, loadDiagram } from './core/persistence.js';
@@ -28,7 +28,7 @@ openSharedLink();   // a shared link wins over the saved diagram (it asks first 
 
 // handle for the tests and for poking at the app from the browser console
 window.dsplab = {
-  BLOCKS, graph, engine, select,
+  BLOCKS, graph, engine, select, selectNodes,
   addNode, removeNode, addEdge, removeEdge, rebuildPorts, syncParams,
   redrawEdges, refreshSummary, serialize,
 };

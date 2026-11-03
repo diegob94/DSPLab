@@ -16,14 +16,27 @@ export const graph = {
   pan: { x: 0, y: 0 },
   zoom: 1,            // world -> screen scale; screen = pan + world * zoom
 };
-let selection = null; // { kind: 'node' | 'edge', id }
+// null | { kind: 'edge', id } | { kind: 'node', id, ids }  (`ids`: every selected block, `id`: the last one added)
+let selection = null;
 
 export const getSelection = () => selection;
+export const selectedNodeIds = () => (selection && selection.kind === 'node' ? selection.ids : []);
 
 export function select(sel) {
+  if (sel && sel.kind === 'node' && !sel.ids) sel = { kind: 'node', id: sel.id, ids: [sel.id] };
   selection = sel;
   emit('selection', sel);
 }
+
+export function selectNodes(ids) {
+  ids = ids.filter((id) => graph.nodes.has(id));
+  select(ids.length ? { kind: 'node', id: ids[ids.length - 1], ids } : null);
+}
+
+export const toggleNode = (id) => {
+  const ids = selectedNodeIds();
+  selectNodes(ids.includes(id) ? ids.filter((i) => i !== id) : [...ids, id]);
+};
 
 export function addNode(type, x, y, saved = {}) {
   const def = BLOCKS[type];
@@ -45,7 +58,7 @@ export function removeNode(id) {
   graph.edges.filter((e) => e.from.node === id || e.to.node === id).forEach(removeEdge);
   graph.nodes.delete(id);
   emit('node-removed', node);
-  if (selection && selection.kind === 'node' && selection.id === id) select(null);
+  if (selectedNodeIds().includes(id)) selectNodes(selectedNodeIds().filter((i) => i !== id));
   emit('changed');
 }
 
@@ -77,7 +90,7 @@ export function removeEdge(edge) {
 
 export function deleteSelection() {
   if (!selection) return;
-  if (selection.kind === 'node') removeNode(selection.id);
+  if (selection.kind === 'node') [...selection.ids].forEach(removeNode);
   else { const e = graph.edges.find((e) => e.id === selection.id); if (e) removeEdge(e); }
   select(null);
 }

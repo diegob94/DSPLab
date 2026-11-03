@@ -86,6 +86,7 @@ button:disabled { opacity: .45; cursor: default; border-color: var(--border); }
   cursor: grab; touch-action: none;
 }
 #canvas.panning { cursor: grabbing; }
+.marquee { position: absolute; pointer-events: none; border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
 #world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
 #wires { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
 #wires path { fill: none; stroke: var(--wire); stroke-width: 2.5; }

@@ -25,7 +25,7 @@ export function initPalette() {
     }
   }
   pal.append(h('p', { className: 'hint', textContent:
-    'Drag from an output port (right) to an input port (left) to connect blocks. Select a block to edit it in the properties panel. Drag the background to pan. Delete removes the selection. On a phone, tap a block above to add it.' }));
+    'Drag from an output port (right) to an input port (left) to connect blocks. Select a block to edit it in the properties panel. Drag the background to pan. Shift+click adds blocks to the selection, Shift+drag on the background selects the ones inside the box. Delete removes the selection; Ctrl+C / Ctrl+V copy and paste blocks (also into another tab). On a phone, tap a block above to add it.' }));
 
   canvas.addEventListener('dragover', (e) => e.preventDefault());
   canvas.addEventListener('drop', (e) => {

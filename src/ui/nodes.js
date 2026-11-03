@@ -4,7 +4,7 @@ import { BLOCKS, CATEGORIES } from '../blocks/index.js';
 import { $, h } from '../dom.js';
 import { on } from '../core/events.js';
 import { portKind, portNames } from '../core/params.js';
-import { graph, select, moveNode } from '../core/graph.js';
+import { graph, select, toggleNode, selectedNodeIds, moveNode } from '../core/graph.js';
 import { engine } from '../core/engine.js';
 import { redrawEdges, startConnect } from './wires.js';
 
@@ -70,17 +70,28 @@ function renderNode(node, def) {
   node.el = el;
   refreshSummary(node);
 
-  // select + drag from anywhere on the card (ports stop their own pointerdown)
+  // select + drag from anywhere on the card (ports stop their own pointerdown). Shift / Ctrl / Cmd
+  // toggles the block in the selection; dragging a selected block moves the whole selection.
   el.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
     e.stopPropagation();
-    select({ kind: 'node', id: node.id });
-    const sx = e.clientX, sy = e.clientY, ox = node.x, oy = node.y;
-    const move = (ev) => moveNode(node, ox + (ev.clientX - sx) / graph.zoom, oy + (ev.clientY - sy) / graph.zoom);
+    if (e.shiftKey || e.ctrlKey || e.metaKey) { toggleNode(node.id); return; }
+    const inSelection = selectedNodeIds().includes(node.id);
+    if (!inSelection) select({ kind: 'node', id: node.id });
+    const group = selectedNodeIds().map((id) => graph.nodes.get(id));
+    const start = group.map((n) => ({ n, x: n.x, y: n.y }));
+    const sx = e.clientX, sy = e.clientY;
+    let dragged = false;
+    const move = (ev) => {
+      dragged = true;
+      for (const o of start) moveNode(o.n, o.x + (ev.clientX - sx) / graph.zoom, o.y + (ev.clientY - sy) / graph.zoom);
+    };
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       window.removeEventListener('dsplab:pinch', up);
+      // a plain click on a block of a multiple selection narrows it down to that block
+      if (!dragged && inSelection && group.length > 1) select({ kind: 'node', id: node.id });
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
@@ -104,7 +115,7 @@ export function initNodes() {
     redrawEdges();
   });
   on('selection', (sel) => {
-    graph.nodes.forEach((n) => n.el.classList.toggle('selected', !!sel && sel.kind === 'node' && sel.id === n.id));
+    graph.nodes.forEach((n) => n.el.classList.toggle('selected', !!sel && sel.kind === 'node' && sel.ids.includes(n.id)));
   });
 }
 
