@@ -60,14 +60,14 @@ test('the block places bits on its baud grid, whatever the arrival times', () =>
   assert.equal(out.after, false);
 }));
 
-test('Pulse Shaper has an async input and an audio output; it runs behind a Bit Source', () => withApp(app, async (page) => {
-  await addFromPalette(page, 'Bit Source');
+test('Pulse Shaper has an async input and an audio output; it runs behind a Strobe Source', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Strobe Source');
   await addFromPalette(page, 'Pulse Shaper');
   assert.equal(await page.locator('.node:has-text("Pulse Shaper") .port.in.async').count(), 1);
   assert.equal(await page.locator('.node:has-text("Pulse Shaper") .port.out.async').count(), 0, 'its output is audio');
   const wired = await page.evaluate(() => {
     const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
-    const [s, p, k] = ['bit_source', 'pulse_shaper', 'audio_sink'].map(by);
+    const [s, p, k] = ['strobe_source', 'pulse_shaper', 'audio_sink'].map(by);
     s.params.period = 50;
     return [
       !!dsplab.addEdge({ node: s.id, port: 'bits' }, { node: p.id, port: 'bits' }),

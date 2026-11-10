@@ -137,23 +137,26 @@ kept in memory only: it is not saved with the diagram, so after a reload you hav
 
 Shown on the block: Pause.
 
-**Bit Source**: a stream of bits on an **asynchronous clock**. Output: `bits` (async).
+**Strobe Source**: a stream of bits on an **asynchronous clock**, sent again and again. Output: `bits` (async).
 
 The bits of a text, of some bytes or of a bit pattern go out one per symbol at the baud rate, the most
-significant bit of each byte first (`A` is `01000001`). Pacing follows the audio clock, so the average rate is
-exact; because a browser timer can't fire once per symbol at kilobaud, the symbols that are due are sent together
-every ~10 ms, and whoever receives them (the Pulse Shaper) does its own timing. It only sends while the audio is
-running, and nothing while the data is empty.
+significant bit of each byte first (`A` is `01000001`), starting when the audio starts, and the whole thing goes out again every *Period*. Pacing
+follows the audio clock, so the average rate is exact; because a browser timer can't fire once per symbol at
+kilobaud, the symbols that are due are sent together every ~10 ms, and whoever receives them (the Pulse Shaper)
+does its own timing. It only sends while the audio is running, and nothing while the data is empty.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
 | Type | *text*: UTF-8; *hex*: bytes (`FF`, `AA 55` or `0xAA 0x55`: spaces, commas and `0x` are ignored, and a last lone digit is dropped); *bits*: every character other than `0` and `1` is ignored, so `1011 0111` works | text, hex, bits | text |
 | Data | What is sent, in that notation. A preamble is just the first characters of it | up to 100 characters | hello |
 | Baud rate | Symbols per second | 50 – 20000 (logarithmic) | 1000 baud |
-| Repeat | *every period*: send the data again every *Period*; *once*: send it when the audio starts and again whenever you change it | every period, once | every period |
 | Period | Time between the starts of two sends (data that takes longer is queued behind the previous one) | 10 ms – 10 s (logarithmic) | 1000 ms |
 
-Editing the data applies at once, without restarting the clock. Shown on the block: Data, Baud rate and Repeat.
+Editing the data applies at once, without restarting the clock. Shown on the block: Data, Baud rate and Period.
+
+**Constant Source**: the same stream, but sent only **once**, when the audio starts, and again whenever you change
+the data. Output: `bits` (async). Its settings are the same as the Strobe Source's without *Period*. Use it for
+data that is sent a single time; to repeat it, use a Strobe Source. Shown on the block: Data and Baud rate.
 
 ### Processing blocks
 
@@ -192,7 +195,7 @@ Input: `bits` (async). Output: `out` (audio).
 A one is `1` (times the amplitude) and a zero is `0`; the train of symbols is convolved with a pulse shape,
 sampled at the audio sample rate. Symbols are placed one after the other on a grid of 1 / baud seconds,
 whatever the exact moment each bit arrives; the first symbol after a pause starts about 50 ms ahead. Set
-the same baud rate here as on the Bit Source, or the stream will fall behind or run ahead.
+the same baud rate here as on the Strobe Source, or the stream will fall behind or run ahead.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|

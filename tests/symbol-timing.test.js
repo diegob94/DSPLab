@@ -62,14 +62,14 @@ test('it is quiet on silence, talks while a signal moves, and goes quiet again o
   assert.equal(n.length, again, 'and then nothing');
 });
 
-test('Symbol Recovery: audio in, async bits out; a full chain recovers what the Bit Source sent', () => withApp(app, async (page) => {
-  for (const t of ['Bit Source', 'Pulse Shaper', 'Symbol Recovery']) await addFromPalette(page, t);
+test('Symbol Recovery: audio in, async bits out; a full chain recovers what the Strobe Source sent', () => withApp(app, async (page) => {
+  for (const t of ['Strobe Source', 'Pulse Shaper', 'Symbol Recovery']) await addFromPalette(page, t);
   assert.equal(await page.locator('.node:has-text("Symbol Recovery") .port.in.async').count(), 0, 'its input is audio');
   assert.equal(await page.locator('.node:has-text("Symbol Recovery") .port.out.async').count(), 1);
   const text = 'UUUUUUUUUU';   // 0x55: a transition at every symbol, so the loop has something to lock to
   await page.evaluate((text) => {
     const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
-    const [s, p, r] = ['bit_source', 'pulse_shaper', 'symbol_timing'].map(by);
+    const [s, p, r] = ['strobe_source', 'pulse_shaper', 'symbol_timing'].map(by);
     Object.assign(s.params, { period: 400, data: text });
     for (const n of [s, p, r]) n.params.baud = 2000;
     p.params.pulse = 'square';

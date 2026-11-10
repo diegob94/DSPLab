@@ -24,7 +24,7 @@ export function pulseSamples(pulse, k, sps, bit, amplitude) {
 // Pulse-shapes a train of symbols: the convolution of an impulse train (1 for a one, 0 for a zero, one per
 // sample) with the pulse, done by adding one pulse per one rather than convolving with all the zeros.
 // Symbols are placed on a grid of 1 / baud, one slot after the other: it doesn't matter when exactly a
-// bit arrives (a Bit Source sends them in bursts), only in which order.
+// bit arrives (a Strobe Source sends them in bursts), only in which order.
 export const pulseShaper = {
   title: 'Pulse Shaper',
   category: 'Processing blocks',

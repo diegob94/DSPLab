@@ -30,7 +30,8 @@ import { audioSource } from './audio-source.js';
 import { audioSink } from './audio-sink.js';
 import { oscilloscope } from './oscilloscope.js';
 import { mathOperator } from './math-operator.js';
-import { bitSource } from './bit-source.js';
+import { strobeSource } from './strobe-source.js';
+import { constantSource } from './constant-source.js';
 import { bitMonitor } from './bit-monitor.js';
 import { pulseShaper } from './pulse-shaper.js';
 import { symbolTiming } from './symbol-timing.js';
@@ -57,7 +58,8 @@ export const BLOCKS = {
   audio_sink: audioSink,
   oscilloscope,
   math_operator: mathOperator,
-  bit_source: bitSource,
+  strobe_source: strobeSource,
+  constant_source: constantSource,
   bit_monitor: bitMonitor,
   pulse_shaper: pulseShaper,
   symbol_timing: symbolTiming,

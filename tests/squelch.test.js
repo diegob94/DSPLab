@@ -36,12 +36,12 @@ test('it closes some time after the signal ends, within the window, and opens ag
 });
 
 test('Squelch has an audio input and output, and keeps a Symbol Recovery quiet between bursts', () => withApp(app, async (page) => {
-  for (const t of ['Bit Source', 'Pulse Shaper', 'Squelch', 'Symbol Recovery']) await addFromPalette(page, t);
+  for (const t of ['Strobe Source', 'Pulse Shaper', 'Squelch', 'Symbol Recovery']) await addFromPalette(page, t);
   assert.equal(await page.locator('.node:has-text("Squelch") .port.in').count(), 1);
   assert.equal(await page.locator('.node:has-text("Squelch") .port.out').count(), 1);
   await page.evaluate(() => {
     const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
-    const [s, p, q, r] = ['bit_source', 'pulse_shaper', 'squelch', 'symbol_timing'].map(by);
+    const [s, p, q, r] = ['strobe_source', 'pulse_shaper', 'squelch', 'symbol_timing'].map(by);
     Object.assign(s.params, { period: 400, data: 'UUUUUUUUUU' });
     for (const n of [s, p, r]) n.params.baud = 2000;
     p.params.pulse = 'square';
