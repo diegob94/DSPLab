@@ -46,7 +46,7 @@ You start with a **Wave Generator** already connected to an **Audio Sink**. Pres
   values, read-only; you change them here.
 - **Toolbar** (top): Run/Stop, delete, **Share** (copies a link to the diagram), the **Examples** menu, and the audio status (the sample rate while
   running).
-- **Examples** (toolbar): *Simple tone* (the starting diagram), *ASK modulation*, *ASK receiver* (microphone → carrier recovery → message) and *Audio source scope* (microphone → oscilloscope). Picking one replaces
+- **Examples** (toolbar): *Simple tone* (the starting diagram), *ASK modulation*, *ASK receiver* (microphone → carrier recovery → bit monitor) and *Audio source scope* (microphone → oscilloscope). Picking one replaces
   the current diagram, so it asks for confirmation first (unless the canvas is empty); it can't be undone,
   because the autosave overwrites the old diagram.
 
@@ -81,6 +81,7 @@ Connection rules:
 
 - A cable always goes from an output to an input, and never from a block to itself.
 - An **input takes one cable**: connecting a second one replaces the first.
+- Every port has a **clock**. Most are *audio* (round ports): a sample at every tick of the sound card. *Asynchronous* ports (square) carry samples at their own instants, like one bit per symbol. Only ports with the same clock can be cabled together; a Pulse Shaper turns an async stream into audio and a Symbol Recovery does the opposite.
 - An **output can feed many inputs**.
 - An unconnected input counts as silence (zero).
 
@@ -136,6 +137,24 @@ kept in memory only: it is not saved with the diagram, so after a reload you hav
 
 Shown on the block: Pause.
 
+**Bit Source**: a stream of bits on an **asynchronous clock**. Output: `bits` (async).
+
+The bits of a text, of some bytes or of a bit pattern go out one per symbol at the baud rate, the most
+significant bit of each byte first (`A` is `01000001`). Pacing follows the audio clock, so the average rate is
+exact; because a browser timer can't fire once per symbol at kilobaud, the symbols that are due are sent together
+every ~10 ms, and whoever receives them (the Pulse Shaper) does its own timing. It only sends while the audio is
+running, and nothing while the data is empty.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Type | *text*: UTF-8; *hex*: bytes (`FF`, `AA 55` or `0xAA 0x55`: spaces, commas and `0x` are ignored, and a last lone digit is dropped); *bits*: every character other than `0` and `1` is ignored, so `1011 0111` works | text, hex, bits | text |
+| Data | What is sent, in that notation. A preamble is just the first characters of it | up to 100 characters | hello |
+| Baud rate | Symbols per second | 50 – 20000 (logarithmic) | 1000 baud |
+| Repeat | *every period*: send the data again every *Period*; *once*: send it when the audio starts and again whenever you change it | every period, once | every period |
+| Period | Time between the starts of two sends (data that takes longer is queued behind the previous one) | 10 ms – 10 s (logarithmic) | 1000 ms |
+
+Editing the data applies at once, without restarting the clock. Shown on the block: Data, Baud rate and Repeat.
+
 ### Processing blocks
 
 **Math Operator**: combines two signals sample by sample. Inputs: `a`, `b`. Output: `out`.
@@ -167,14 +186,13 @@ opposite and removes that band. For both, Frequency is the centre of the band an
 
 Shown on the block: Type and Frequency.
 
-**Pulse Shaper**: turns a stream of 1 × 1 messages (symbols) into a waveform you can play or look at.
-Input: `msg`. Output: `out` (audio).
+**Pulse Shaper**: turns a stream of bits (symbols, on an asynchronous clock) into a waveform you can play or look at.
+Input: `bits` (async). Output: `out` (audio).
 
 A one is `1` (times the amplitude) and a zero is `0`; the train of symbols is convolved with a pulse shape,
 sampled at the audio sample rate. Symbols are placed one after the other on a grid of 1 / baud seconds,
-whatever the exact moment each message arrives; the first symbol after a pause starts about 50 ms ahead. Set
-the same baud rate here as on the Message Serializer, or the stream will fall behind or run ahead. Messages
-that aren't 1 × 1 are ignored.
+whatever the exact moment each bit arrives; the first symbol after a pause starts about 50 ms ahead. Set
+the same baud rate here as on the Bit Source, or the stream will fall behind or run ahead.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
@@ -205,12 +223,12 @@ Changing a setting rebuilds the filter and may click.
 Shown on the block: Pulse and Baud rate.
 
 **Symbol Recovery**: samples a digital-looking signal (like the output of a matched filter) at the
-right instants and returns the bits. Input: `in` (audio). Outputs: `msg`, and `phase` (audio).
+right instants and returns the bits. Input: `in` (audio). Outputs: `bits` (async), and `phase` (audio).
 
 It runs a simple phase-locked loop: an oscillator that ticks once per symbol (at the baud rate you set) looks
 at the signal at the symbol instant and halfway between symbols. A Gardner detector compares the two at every
 transition and nudges the oscillator's phase, and slowly its frequency, until the ticks fall on the
-symbols' centres. Each tick sends a **1 × 1** message: 1 if the sample is above the decision level, which is
+symbols' centres. Each tick sends a bit: 1 if the sample is above the decision level, which is
 halfway between the levels the loop sees at symbol instants, 0 otherwise.
 
 | Setting | What it does | Range | Default |
@@ -334,7 +352,7 @@ Input: `in`. Output: `out`.
 | Amplitude | Output level | 0 – 1 | 0.5 |
 
 The frequency at each instant is Frequency + Sensitivity × input, so a ±1 signal swings it by ±Sensitivity
-(frequency modulation). Feed it a message-shaped signal for FSK. A total below 0 Hz runs the wave backwards.
+(frequency modulation). Feed it a baseband signal for FSK. A total below 0 Hz runs the wave backwards.
 An unconnected input is 0, which gives a plain tone at Frequency.
 
 Shown on the block: Waveform, Frequency, Sensitivity.
@@ -401,129 +419,25 @@ draws while the audio is running.
 The vertical axis goes from 0 dB (full scale) down to −100 dB. The loudest frequency is printed in the corner
 as *peak … Hz*. Shown on the block: Window size and Freq. axis.
 
-### Message blocks
-
-Messages are discrete events rather than a continuous signal. Their ports are **square**, and they
-travel on their own cables: a message port can only be connected to another message port, never to an
-audio one.
-
-A message is a table of ones and zeros with some rows and some columns. Text travels as **8 × N**: one
-column per byte (UTF-8, so `é` takes two columns), with the most significant bit in the top row. For
-example `A` (0x41) is the single column `0 1 0 0 0 0 0 1`, read from top to bottom. A block never edits
-a message it receives; it builds a new one.
-
-**Message Strobe**: sends the same text, as an 8 × N message, again and again. Output: `msg`.
+**Bit Monitor**: prints the bits it receives, a frame per line, each with the time (in seconds of audio) at which
+the frame was complete. Input: `bits` (async). It reads *Stopped* while the audio is off, and the log starts empty
+on every Run.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
-| Period | Time between messages | 10 ms – 10 s (logarithmic) | 1000 ms |
-| Message | The text sent | up to 100 characters | hello |
+| Format | *text*: each 8 bits are a character (UTF-8, top bit first; control characters show as `·`); *bits*: print 0s and 1s | text, bits | text |
+| Frame | Characters per line in *text*, bits per line in *bits* | 1 – 4096 | 8 |
+| Lines | How many of the newest lines stay on the block | 4, 8, 16 | 8 |
+| Preamble type | How *Preamble* is written: *text*, *hex* or *bits* | text, hex, bits | text |
+| Preamble | What marks where a frame starts, in that notation (empty: no framing) | up to 100 characters | empty |
 
-It only sends while the audio is running, and sends nothing while the text is empty. Editing the
-message applies at once, without restarting the clock.
+With no preamble the block counts bits from the first one it receives, so after a Symbol Recovery (which can
+output stray bits before and after a burst) the characters may be shifted and read as garbage. With a preamble it
+ignores the stream until it sees those bits (at any bit offset), collects one frame (the preamble is not in it)
+and goes back to looking. Pick a preamble unlikely to appear by chance in the data. Changing the frame size or
+the preamble drops the bits collected so far.
 
-**Message Constant**: holds a fixed message and sends it once, when the audio starts. Output: `msg`.
-
-| Setting | What it does | Range | Default |
-|---|---|---|---|
-| Type | *text*: sent as an 8 × N message (UTF-8); *hex*: bytes, also sent as 8 × N; *bits*: sent as a 1 × N row of bits | text, hex, bits | text |
-| Message | The text; the bytes in hexadecimal (`FF`, `AA 55` or `0xAA 0x55`: spaces, commas and `0x` are ignored, and a last lone digit is dropped); or the bits (every character other than `0` and `1` is ignored, so `1011 0111` works) | up to 100 characters | hello |
-
-It sends again whenever you change what it holds, and sends nothing while it is empty. Because it sends
-only once it is meant for blocks that remember what they receive, such as the `a` input of Message
-Concatenate (a preamble); to repeat a message use a Message Strobe. To put a byte that no text can spell,
-like `0xFF`, in front of a text, use *hex*: it is 8 rows high like the text, so the two join by columns. A *bits*
-message is 1 row high, so to join it to a text put a Message Reshape in between (or use *hex*).
-
-Shown on the block: Type and Message.
-
-**Message Debug**: prints the messages it receives, one per line, each with the time (in seconds of
-audio) at which it arrived. Input: `msg`. It reads *Stopped* while the audio is off, and the log starts
-empty on every Run.
-
-| Setting | What it does | Range | Default |
-|---|---|---|---|
-| Lines | How many of the newest messages stay on the block | 4, 8, 16 | 8 |
-| Decode | Turn an 8 × N message back into text | on, off | on |
-
-A message of any other shape, or any message when *Decode* is off, is printed as its bits: the size,
-then the rows separated by `/`, like `2x3  101 / 011`. Control characters in decoded text are shown as `·`.
-
-**Message Reshape**: changes the rows and columns of a message without changing its bits, like
-`numpy.reshape`. The bits are read row by row and laid out again in the new shape, so a 1 × 100 message can
-become 10 × 10 and back. Input: `msg`. Output: `msg`.
-
-| Setting | What it does | Range | Default |
-|---|---|---|---|
-| Rows | Rows of the output, or −1 to work it out from Columns | −1, 1 – 4096 | 1 |
-| Columns | Columns of the output, or −1 to work it out from Rows | −1, 1 – 4096 | −1 |
-
-Messages have at most two dimensions. The defaults flatten any message into a single row. Rows × columns
-must equal the number of bits, and only one of them can be −1. If it doesn't fit, the message is **dropped**
-(numpy would raise an error) and the block shows what it could not do, like `3x3 can't be 2 x -1`. The
-block also shows the last change, like `8x5 → 2x20`.
-
-**Message Serializer**: turns a message into a stream of single bits. Input: `msg`. Output: `msg`.
-
-Each bit of the incoming message goes out as its own **1 × 1** message, one per symbol, at the baud rate. The
-bits are read column by column, so an 8 × N message goes byte by byte, most significant bit first. Pacing
-follows the audio clock, so the average rate is exact; because a browser timer can't fire once per symbol at
-kilobaud, the symbols that are due are sent together every ~10 ms, and whoever receives them (the Pulse
-Shaper) does its own timing. A message that arrives while another is going out is queued behind it.
-
-| Setting | What it does | Range | Default |
-|---|---|---|---|
-| Baud rate | Symbols per second | 50 – 20000 (logarithmic) | 1000 baud |
-
-Shown on the block: Baud rate.
-
-**Message Deserializer**: collects single bits back into messages, the inverse of the Message Serializer.
-Input: `msg`. Output: `msg`.
-
-Every 1 × 1 message adds a bit; when there are *Rows* × *Columns* of them the block sends one message of that
-size, filled column by column. With the defaults (8 × 1) every 8 bits make one byte, most significant bit
-first, which Message Debug prints as a character.
-
-| Setting | What it does | Range | Default |
-|---|---|---|---|
-| Rows | Rows of the output message | 1 – 64 | 8 |
-| Columns | Columns of the output message | 1 – 4096 | 1 |
-| Preamble type | How *Preamble* is written: *text* (UTF-8), *hex* (bytes, like `FF` or `AA 55`) or *bits* (like `11111111`) | text, hex, bits | text |
-| Preamble | What marks where a message starts, in that notation (empty: no framing) | up to 100 characters | empty |
-
-Messages that aren't 1 × 1 are ignored. Changing a setting drops the bits collected so far, and so does
-pressing Run.
-
-With the *Preamble* empty the block counts bits from the first one it receives, so after a Symbol
-Recovery (which can output stray bits before and after a burst) the bytes may be shifted and the text read as
-garbage. With a preamble it ignores the stream until it sees the preamble's bits (as the Message
-Serializer sends them: 8 bits per character or byte), at any bit offset, then collects one message of Rows × Columns
-bits (the preamble itself is not in it) and goes back to looking. Pick a preamble that is unlikely to appear
-by chance in the data, such as two or three characters. The block shows what it is doing: *Looking for the
-preamble*, how many bits it has collected, or the size it last sent.
-
-Shown on the block: Rows, Columns and Preamble.
-
-**Message Concatenate**: joins messages one after the other. Inputs: `a`, `b`, and up to `h` (set with
-*Inputs*). Output: `msg`.
-
-Every input except the last remembers the latest message that arrived there; every time one arrives at the
-**last** input, the block sends them all joined in the order of the inputs (`a`, then `b`, and so on). To
-put a preamble in front of a payload, feed the preamble (a Message Constant, say) to `a` and the payload to
-`b`: the payload's clock sets the pace and the preamble is repeated in front of each one. With three inputs
-you can add a trailer after the payload, or a preamble and a header, feeding the one that sets the pace to `c`.
-Nothing is sent until every input has received something; the block shows which one it is still waiting for.
-
-| Setting | What it does | Range | Default |
-|---|---|---|---|
-| Inputs | How many messages are joined | 2 – 8 | 2 |
-| Join | *columns*: each message goes after the previous one side by side (all need the same rows, so 8 × N texts make a longer text); *rows*: each goes below the previous one (all need the same columns) | columns, rows | columns |
-
-If two of them don't fit, the message is dropped and the block says which two, like
-`2x1 and 1x1 can't join by columns`. It shows the last join, like `8x2 + 8x5 → 8x7`. Changing *Inputs*
-keeps the cables on the ports that remain (`a`, `b`...) and drops those on removed ones.
-
-Shown on the block: Join.
+Shown on the block: Format, Frame and Preamble.
 
 ## Recipes
 
@@ -541,8 +455,8 @@ signal (`ch1`) against the square wave (`ch2`, the trigger).
 microphone). The Audio Source feeds a Carrier Recovery, which rebuilds a clean 440 Hz carrier; a Math Operator
 set to *multiply* mixes it with the signal, so the keyed bursts come out at baseband; the Filter (low-pass,
 517 Hz) removes the double-frequency term, the Squelch silences the gaps, Symbol Recovery samples the symbols at
-1000 baud and the Message Deserializer waits for the preamble `ddd` and collects the 5 characters that follow,
-which Message Debug prints. It expects a transmitter that sends that at 1000 baud on a 440 Hz carrier. The
+1000 baud and the Bit Monitor waits for the preamble `ddd` and collects the 5 characters that follow,
+which it prints. It expects a transmitter that sends that at 1000 baud on a 440 Hz carrier. The
 example is only a starting point: nobody has tried it here with a real microphone.
 
 **Compare two waves.** Add a second Wave Generator and connect it to `ch2`. Set the scope's X / div to
@@ -601,7 +515,7 @@ Things to know:
 
 Undo/redo, selecting several blocks on a touch screen (there is no Shift key), exporting or importing
 diagrams as files, a divide operation, and audio inputs from a microphone or file. Blocks are a short
-list for now (one generator, one operator, two sinks, four message blocks).
+list for now (sources, processing blocks and sinks, including the bit blocks).
 
 ## For developers
 
