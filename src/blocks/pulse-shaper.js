@@ -1,4 +1,4 @@
-import { isBits } from './message.js';
+import { isBit } from './stream.js';
 
 const SPAN = 4;     // the sinc pulse is cut off this many symbols to each side of its peak
 const LEAD = 0.05;  // s of head start when the shaper is idle, so symbols that arrive in a burst can be placed
@@ -22,15 +22,15 @@ export function pulseSamples(pulse, k, sps, bit, amplitude) {
 }
 
 // Pulse-shapes a train of symbols: the convolution of an impulse train (1 for a one, 0 for a zero, one per
-// 1x1 message) with the pulse, done by adding one pulse per one rather than convolving with all the zeros.
+// sample) with the pulse, done by adding one pulse per one rather than convolving with all the zeros.
 // Symbols are placed on a grid of 1 / baud, one slot after the other: it doesn't matter when exactly a
-// message arrives (a serializer sends them in bursts), only in which order.
+// bit arrives (a Bit Source sends them in bursts), only in which order.
 export const pulseShaper = {
   title: 'Pulse Shaper',
   category: 'Processing blocks',
-  inputs: ['msg'],
+  inputs: ['bits'],
   outputs: ['out'],
-  messagePorts: ['msg'],
+  asyncPorts: ['bits'],
   pulseSamples,
   params: [
     { key: 'pulse',     label: 'Pulse',     show: true, type: 'select', options: ['square', 'sinc'], default: 'square' },
@@ -45,8 +45,8 @@ export const pulseShaper = {
     let k = -1;         // slot of the last symbol; -1 when idle
     return {
       outputs: { out },
-      inputs: { msg: { receive(m) {
-        if (!isBits(m) || m.length !== 1 || m[0].length !== 1) return;
+      inputs: { bits: { receive(bit) {
+        if (!isBit(bit)) return;
         const sps = ctx.sampleRate / params.baud;
         // idle, or the stream fell behind real time: begin a new one a little ahead (the sinc's lead-in needs room)
         if (k < 0 || origin + Math.round((k + 1) * sps) < ctx.currentTime * ctx.sampleRate) {
@@ -54,7 +54,7 @@ export const pulseShaper = {
           k = -1;
         }
         k++;
-        const s = pulseSamples(params.pulse, k, sps, m[0][0], params.amplitude);
+        const s = pulseSamples(params.pulse, k, sps, bit, params.amplitude);
         if (!s) return;
         const buffer = ctx.createBuffer(1, s.data.length, ctx.sampleRate);
         buffer.copyToChannel(s.data, 0);

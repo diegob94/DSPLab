@@ -62,22 +62,21 @@ test('it is quiet on silence, talks while a signal moves, and goes quiet again o
   assert.equal(n.length, again, 'and then nothing');
 });
 
-test('Symbol Recovery: audio in, message out; a full chain recovers what the serializer sent', () => withApp(app, async (page) => {
-  for (const t of ['Message Strobe', 'Message Serializer', 'Pulse Shaper', 'Symbol Recovery']) await addFromPalette(page, t);
-  assert.equal(await page.locator('.node:has-text("Symbol Recovery") .port.in.msg').count(), 0, 'its input is audio');
-  assert.equal(await page.locator('.node:has-text("Symbol Recovery") .port.out.msg').count(), 1);
+test('Symbol Recovery: audio in, async bits out; a full chain recovers what the Bit Source sent', () => withApp(app, async (page) => {
+  for (const t of ['Bit Source', 'Pulse Shaper', 'Symbol Recovery']) await addFromPalette(page, t);
+  assert.equal(await page.locator('.node:has-text("Symbol Recovery") .port.in.async').count(), 0, 'its input is audio');
+  assert.equal(await page.locator('.node:has-text("Symbol Recovery") .port.out.async').count(), 1);
   const text = 'UUUUUUUUUU';   // 0x55: a transition at every symbol, so the loop has something to lock to
   await page.evaluate((text) => {
     const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
-    const [s, z, p, r] = ['message_strobe', 'message_serialize', 'pulse_shaper', 'symbol_timing'].map(by);
-    Object.assign(s.params, { period: 400, message: text });
-    for (const n of [z, p, r]) n.params.baud = 2000;
+    const [s, p, r] = ['bit_source', 'pulse_shaper', 'symbol_timing'].map(by);
+    Object.assign(s.params, { period: 400, data: text });
+    for (const n of [s, p, r]) n.params.baud = 2000;
     p.params.pulse = 'square';
-    dsplab.addEdge({ node: s.id, port: 'msg' }, { node: z.id, port: 'msg' });
-    dsplab.addEdge({ node: z.id, port: 'msg' }, { node: p.id, port: 'msg' });
+    dsplab.addEdge({ node: s.id, port: 'bits' }, { node: p.id, port: 'bits' });
     dsplab.addEdge({ node: p.id, port: 'out' }, { node: r.id, port: 'in' });
     window.recovered = [];
-    window.addCollector = () => dsplab.engine.live.get(r.id).outputs.msg.connect({ receive: (m) => window.recovered.push(m[0][0]) });
+    window.addCollector = () => dsplab.engine.live.get(r.id).outputs.bits.connect({ receive: (b) => window.recovered.push(b) });
   }, text);
   await startAudio(page);
   await page.evaluate(() => window.addCollector());

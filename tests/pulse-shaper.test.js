@@ -44,13 +44,13 @@ test('a lone sinc pulse: peak 1, zeros at whole symbols, symmetric, sinc(0.5) = 
   assert.ok(Math.abs(y[c + 5] - 2 / Math.PI) < 1e-6);
 }));
 
-test('the block places 1 x 1 messages on its baud grid, whatever the arrival times', () => withApp(app, async (page) => {
+test('the block places bits on its baud grid, whatever the arrival times', () => withApp(app, async (page) => {
   const out = await page.evaluate(async () => {
     const ctx = new OfflineAudioContext(1, 4410, 44100);
     const blk = dsplab.BLOCKS.pulse_shaper.build(ctx, { pulse: 'square', baud: 4410, amplitude: 1 });
     blk.outputs.out.connect(ctx.destination);
-    for (const b of [1, 1, 0, 1]) blk.inputs.msg.receive([[b]]);   // all at once
-    blk.inputs.msg.receive([[1, 1]]);                              // not a 1 x 1: ignored
+    for (const b of [1, 1, 0, 1]) blk.inputs.bits.receive(b);   // all at once
+    blk.inputs.bits.receive(7);                                 // not a bit: ignored
     const data = (await ctx.startRendering()).getChannelData(0);
     const first = data.findIndex((v) => v !== 0);
     return { first, bits: Array.from({ length: 4 }, (_, k) => data[first + k * 10 + 5]), after: data.slice(first + 40).some((v) => v !== 0) };
@@ -60,23 +60,21 @@ test('the block places 1 x 1 messages on its baud grid, whatever the arrival tim
   assert.equal(out.after, false);
 }));
 
-test('Pulse Shaper has a message input and an audio output; it runs behind a serializer', () => withApp(app, async (page) => {
-  await addFromPalette(page, 'Message Strobe');
-  await addFromPalette(page, 'Message Serializer');
+test('Pulse Shaper has an async input and an audio output; it runs behind a Bit Source', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Bit Source');
   await addFromPalette(page, 'Pulse Shaper');
-  assert.equal(await page.locator('.node:has-text("Pulse Shaper") .port.in.msg').count(), 1);
-  assert.equal(await page.locator('.node:has-text("Pulse Shaper") .port.out.msg').count(), 0, 'its output is audio');
+  assert.equal(await page.locator('.node:has-text("Pulse Shaper") .port.in.async').count(), 1);
+  assert.equal(await page.locator('.node:has-text("Pulse Shaper") .port.out.async').count(), 0, 'its output is audio');
   const wired = await page.evaluate(() => {
     const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
-    const [s, z, p, k] = ['message_strobe', 'message_serialize', 'pulse_shaper', 'audio_sink'].map(by);
+    const [s, p, k] = ['bit_source', 'pulse_shaper', 'audio_sink'].map(by);
     s.params.period = 50;
     return [
-      !!dsplab.addEdge({ node: s.id, port: 'msg' }, { node: z.id, port: 'msg' }),
-      !!dsplab.addEdge({ node: z.id, port: 'msg' }, { node: p.id, port: 'msg' }),
+      !!dsplab.addEdge({ node: s.id, port: 'bits' }, { node: p.id, port: 'bits' }),
       !!dsplab.addEdge({ node: p.id, port: 'out' }, { node: k.id, port: 'in' }),
     ];
   });
-  assert.deepEqual(wired, [true, true, true]);
+  assert.deepEqual(wired, [true, true]);
   await startAudio(page);
   await selectNode(page, 'Pulse Shaper');
   await panelControl(page, 'Pulse').selectOption('sinc');   // live change, no rebuild

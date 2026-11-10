@@ -11,9 +11,10 @@
  * `options` (strings or numbers) may be a function of the params too. A `type: 'text'` param is a
  * free string (optional `maxLength`, default 100).
  * A range param flagged `reset: true` gets a ↺ button next to its value that puts it back to the default.
- * `messagePorts` lists the port names (inputs or outputs) that carry messages instead of audio: an output
- * is any object with connect(target) and send(msg) (see message.js), an input any object with receive(msg).
- * Message and audio ports cannot be cabled together.
+ * `asyncPorts` lists the port names (inputs or outputs) whose signal has an asynchronous clock: its samples
+ * (bits) come at their own instants instead of at the audio sample rate. An output is any object with
+ * connect(target) and send(sample) (see stream.js), an input any object with receive(sample).
+ * Ports with different clocks cannot be cabled together.
  * Parameters are edited in the properties panel; those marked `show: true` are also
  * displayed (read-only) on the node itself.
  * A block may also define an async setup(ctx, inUse), awaited before the first build (e.g. to register
@@ -29,13 +30,8 @@ import { audioSource } from './audio-source.js';
 import { audioSink } from './audio-sink.js';
 import { oscilloscope } from './oscilloscope.js';
 import { mathOperator } from './math-operator.js';
-import { messageStrobe } from './message-strobe.js';
-import { messageConstant } from './message-constant.js';
-import { messageDebug } from './message-debug.js';
-import { messageReshape } from './message-reshape.js';
-import { messageSerialize } from './message-serialize.js';
-import { messageDeserialize } from './message-deserialize.js';
-import { messageConcatenate } from './message-concatenate.js';
+import { bitSource } from './bit-source.js';
+import { bitMonitor } from './bit-monitor.js';
 import { pulseShaper } from './pulse-shaper.js';
 import { symbolTiming } from './symbol-timing.js';
 import { squelch } from './squelch.js';
@@ -53,7 +49,6 @@ export const CATEGORIES = {
   'Source blocks': 'var(--source)',
   'Processing blocks': 'var(--proc)',
   'Sink blocks':   'var(--sink)',
-  'Message blocks': 'var(--message)',
 };
 
 export const BLOCKS = {
@@ -62,13 +57,8 @@ export const BLOCKS = {
   audio_sink: audioSink,
   oscilloscope,
   math_operator: mathOperator,
-  message_strobe: messageStrobe,
-  message_constant: messageConstant,
-  message_debug: messageDebug,
-  message_reshape: messageReshape,
-  message_serialize: messageSerialize,
-  message_deserialize: messageDeserialize,
-  message_concatenate: messageConcatenate,
+  bit_source: bitSource,
+  bit_monitor: bitMonitor,
   pulse_shaper: pulseShaper,
   symbol_timing: symbolTiming,
   squelch,

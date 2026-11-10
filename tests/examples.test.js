@@ -67,14 +67,13 @@ test('Audio source scope wires the Audio Source to a one-channel Oscilloscope', 
 test('ASK receiver loads the whole chain with its settings, every cable connected', () => withApp(app, async (page) => {
   accepting(page);
   await page.selectOption('#examples', { label: 'ASK receiver' });
-  assert.deepEqual(await types(page), ['audio_source', 'carrier_recovery', 'filter', 'math_operator', 'message_debug', 'message_deserialize', 'squelch', 'symbol_timing']);
-  assert.equal(await page.locator('#wires path.edge').count(), 8);
+  assert.deepEqual(await types(page), ['audio_source', 'bit_monitor', 'carrier_recovery', 'filter', 'math_operator', 'squelch', 'symbol_timing']);
+  assert.equal(await page.locator('#wires path.edge').count(), 7);
   const p = await page.evaluate(() => Object.fromEntries([...dsplab.graph.nodes.values()].map((n) => [n.type, n.params])));
   assert.equal(p.carrier_recovery.frequency, 440);
   assert.equal(p.filter.frequency, 517);
   assert.equal(p.symbol_timing.baud, 1000);
-  assert.deepEqual([p.message_deserialize.rows, p.message_deserialize.cols, p.message_deserialize.preamble], [8, 5, 'ddd']);
-  assert.equal(p.message_debug.lines, 16);
+  assert.deepEqual([p.bit_monitor.frame, p.bit_monitor.preamble, p.bit_monitor.lines], [5, 'ddd', 16]);
 }));
 
 test('loading an example asks first, naming it, and cancelling keeps the diagram', () => withApp(app, async (page) => {
