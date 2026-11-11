@@ -24,7 +24,7 @@ const run = (page, steps) => page.evaluate(async (steps) => {
 }, steps);
 
 test('each int goes out as 8 bits, most significant bit first', () => withApp(app, async (page) => {
-  const r = await run(page, [[0, [0x41, 0xff]], [1, null]]);
+  const r = await run(page, [[0, [0x41, -1]], [1, null]]);
   assert.deepEqual(r.got, [0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
 }));
 
@@ -34,16 +34,16 @@ test('the audio clock sets the pace: one symbol per 1 / baud, none early', () =>
 }));
 
 test('an array that arrives meanwhile is queued behind; after a pause the next starts at once', () => withApp(app, async (page) => {
-  const { log, got } = await run(page, [[0, [0x80]], [0, [0x01]], [0.0015, null], [10, [0xff]]]);
+  const { log, got } = await run(page, [[0, [-128]], [0, [0x01]], [0.0015, null], [10, [-1]]]);
   assert.deepEqual(log, [1, 1, 2, 24]);
   assert.deepEqual(got.slice(0, 16), [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
 }));
 
 test('anything that is not an array of bytes is ignored', () => withApp(app, async (page) => {
-  assert.deepEqual((await run(page, [[0, 1], [0, [256]], [0, ['a']], [1, null]])).got, []);
+  assert.deepEqual((await run(page, [[0, 1], [0, [256]], [0, [128]], [0, [1.5]], [0, ['a']], [1, null]])).got, []);
 }));
 
-test('Bit Serializer takes array[int] and gives bits, both on an async clock', () => withApp(app, async (page) => {
+test('Bit Serializer takes array[int8] and gives bits, both on an async clock', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Bit Serializer');
   assert.equal(await page.locator('.node:has-text("Bit Serializer") .port.in.async').count(), 1);
   assert.equal(await page.locator('.node:has-text("Bit Serializer") .port.out.async').count(), 1);

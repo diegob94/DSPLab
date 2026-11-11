@@ -23,16 +23,16 @@ const run = (page, type, params, steps) => page.evaluate(async ([type, params, s
 }, [type, params, steps]);
 
 for (const type of ['strobe_source', 'constant_source']) {
-  test(`${type}: the whole data goes out as one array[int] of bytes`, () => withApp(app, async (page) => {
-    assert.deepEqual((await run(page, type, { data: 'Hé' }, [[50, null]])).got, [[72, 195, 169]]);   // UTF-8
-    assert.deepEqual((await run(page, type, { type: 'hex', data: '0xA5 ff 1' }, [[50, null]])).got, [[0xa5, 0xff]]);
+  test(`${type}: the whole data goes out as one array[int8] of bytes`, () => withApp(app, async (page) => {
+    assert.deepEqual((await run(page, type, { data: 'Hé' }, [[50, null]])).got, [[72, -61, -87]]);   // UTF-8 bytes 0x48 0xC3 0xA9 as int8
+    assert.deepEqual((await run(page, type, { type: 'hex', data: '0xA5 ff 1' }, [[50, null]])).got, [[-91, -1]]);
   }));
 
   test(`${type}: nothing is sent while the data is empty`, () => withApp(app, async (page) => {
     assert.deepEqual((await run(page, type, { data: '' }, [[50, null]])).got, []);
   }));
 
-  test(`${type}: has an array[int] async output only; cables only join ports that carry the same thing`, () => withApp(app, async (page) => {
+  test(`${type}: has an array[int8] async output only; cables only join ports that carry the same thing`, () => withApp(app, async (page) => {
     const title = type === 'strobe_source' ? 'Strobe Source' : 'Constant Source';
     await addFromPalette(page, title);
     assert.equal(await page.locator(`.node:has-text("${title}") .port.out.async`).count(), 1);

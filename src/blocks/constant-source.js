@@ -1,6 +1,6 @@
 import { streamOutput, parseBytes } from './stream.js';
 
-// Like the Strobe Source but the array[int] of bytes goes out only once, when the audio starts, and again
+// Like the Strobe Source but the array[int8] of bytes goes out only once, when the audio starts, and again
 // whenever the data is edited.
 export const constantSource = {
   title: 'Constant Source',
@@ -8,7 +8,7 @@ export const constantSource = {
   inputs: [],
   outputs: ['out'],
   asyncPorts: ['out'],
-  wireTypes: { out: 'array[int]' },
+  wireTypes: { out: 'array[int8]' },
   params: [
     { key: 'type', label: 'Type', type: 'select', options: ['text', 'hex'], default: 'text' },
     { key: 'data', label: 'Data', show: true, type: 'text', default: 'hello' },
