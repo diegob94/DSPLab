@@ -81,7 +81,7 @@ Connection rules:
 
 - A cable always goes from an output to an input, and never from a block to itself.
 - An **input takes one cable**: connecting a second one replaces the first.
-- Every port has a **clock**. Most are *audio* (round ports): a sample at every tick of the sound card. *Asynchronous* ports (square) carry samples at their own instants, like one bit per symbol. Async ports also have a sample type (`int`, `uint8`, `array[uint8]`, a list of bytes...); a few blocks are generic, like the Serializer, whose output type follows its input. Only ports that carry the same thing can be cabled together; a Pulse Shaper turns an async stream into audio and a Symbol Recovery does the opposite.
+- Every port has a **clock**. Most are *audio* (round ports): a sample at every tick of the sound card. *Asynchronous* ports (square) carry samples at their own instants, like arrays of bytes. Async ports also have a sample type (`int`, `uint8`, `array[uint8]`, a list of bytes...); a few blocks are generic, like Array Reshape, whose output type follows its input. Only ports that carry the same thing can be cabled together. An audio signal also has a **sample rate**: the sound card's, unless the block that makes it says otherwise (the Serializer sends one at its baud rate, the Upsampler one at a multiple of the rate it is given). An audio port only takes a signal at its own rate, so a Serializer can't be cabled to an Audio Sink; the Oscilloscope takes any rate, on each input. Select a cable to read its rate.
 - An **output can feed many inputs**.
 - An unconnected input counts as silence (zero).
 
@@ -238,21 +238,37 @@ longer fit are dropped.
 
 Shown on the block: Rows and Columns.
 
+**Upsampler**: raises the sample rate of a signal by inserting zeros. Input: `in` (a signal with a sample rate of its
+own, like a Serializer's). Output: `out` (a signal at *Factor* times that rate).
+
+After every input sample it inserts *Factor* − 1 zeros, so the output has *Factor* samples for each one of the input
+and its sample rate is *Factor* times as high: a Serializer at 1000 baud into an Upsampler with *Factor* 4 gives
+4000 samples/s, the first of each group being the input's sample and the other three 0. (Inserting *N* zeros would
+multiply the rate by *N* + 1; here *Factor* is the multiplier, so it inserts one less.) The input has to be a signal
+with a sample rate of its own: a plain audio signal, which has the sound card's rate, is refused, because the output
+would be faster than the sound card can carry. The rate of `out` follows the input's and the *Factor* live, also
+through a chain of Upsamplers, and a cable that needs the sound card's rate (an Audio Sink) is refused.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Factor | The multiplier of the sample rate | 2 – 64 | 2 |
+
+Shown on the block: Factor.
+
 **Serializer**: turns arrays of numbers into a continuous signal, one number per sample. Input: `in` (async, an array
 of integers or floats: `array[uint8]`, `array[int16]`, `array[float]`...; not an array of arrays). Output: `out`
-(`float`, **synchronous**, sample rate = baud rate).
+(a **signal**, like the audio of a Wave Generator or the microphone, but with a **sample rate equal to the baud rate**).
 
-The arrays that arrive go into a buffer, and the output delivers a sample every 1 / baud seconds for as long as the
+The arrays that arrive go into a buffer, and the output takes a sample every 1 / baud seconds for as long as the
 audio runs: the next number of the buffer, or **0 when the buffer is empty**. So it never stops: with nothing to send
 it sends zeros, and an array that arrives is consumed from the next sample on, after whatever was already waiting.
-The output is a signal of **floats**: when the input is integral (`uint8`, `int16`...) every number is cast to float
-implicitly, with the same value. Select the cable on `out` and its *Type* reads `float` and its *Clock* reads, for
-example, `synchronous, 1000 samples/s`, following the setting. Pacing follows the audio clock, so the average rate is
-exact; because a browser timer can't fire once per sample at kilobaud, the samples that are due are delivered
-together every ~10 ms, and whoever receives them does its own timing. A new baud rate starts from the moment you
-change it, and after a stall (a tab in the background) it skips ahead rather than delivering more than a second of
-samples at once. Anything that is not an array of numbers (strings, `null`, `NaN`, an array of arrays) is ignored. To
-feed it an array of arrays (like the output of Array Unpack) flatten it first with an Array Reshape with *Rows* 0.
+Integers (of any width) become floats implicitly, with the same value. The pacing is exact, to the sample (it runs
+in an audio worklet): each number is held for sampleRate / baud samples of the sound card, so the baud rate can be
+any number, not only a divisor of the sound card's rate. Because its sample rate is the baud rate and not the sound
+card's, `out` only goes to ports that take that rate (the Oscilloscope, an Upsampler); select the cable and its
+*Clock* reads, for example, `synchronous, 1000 samples/s`, following the setting. Anything that is not an array of
+numbers (strings, `null`, `NaN`, an array of arrays) is ignored. To feed it an array of arrays (like the output of
+Array Unpack) flatten it first with an Array Reshape with *Rows* 0.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
@@ -440,7 +456,10 @@ turn amplitudes up so the sum exceeds 1, you'll hear distortion; lower the ampli
 Generator's Offset counts too: amplitude 0.5 with offset 0.8 already goes past 1.
 
 **Oscilloscope**: draws signals over time. Inputs: `ch1` … `chN`, each channel in its own colour. It
-only draws while the audio is running (otherwise it reads *Stopped*).
+only draws while the audio is running (otherwise it reads *Stopped*). **Each input is sampled at its own sample
+rate** and placed on the common time scale, so you can show at once the microphone (at the sound card's rate) and a
+Serializer at 1000 baud, or two Serializers at different baud rates; a channel with a lower rate than the sound
+card's gets a dot at each of its own samples (when there are no more than about 300 on the screen).
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|

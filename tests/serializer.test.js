@@ -112,7 +112,7 @@ test('the Serializer runs in the engine and an Oscilloscope takes it', () => wit
     dsplab.addEdge({ node: z.id, port: 'out' }, { node: o.id, port: 'ch1' });
   });
   await startAudio(page);
-  const rate = await page.evaluate(() => dsplab.engine.live.get([...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope').id).rate);
-  assert.equal(rate, 4800, 'the scope takes the rate of its input');
+  const rates = await page.evaluate(() => dsplab.engine.live.get([...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope').id).channelRates);
+  assert.deepEqual(rates, [4800, null], 'the scope knows the rate of each input');
   assert.match(await page.textContent('#status'), /^Running/);
 }));

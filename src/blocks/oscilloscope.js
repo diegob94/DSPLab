@@ -14,7 +14,7 @@ export const oscilloscope = {
   category: 'Sink blocks',
   inputs: inputNames,
   outputs: [],
-  inputRate: 'follow',   // it takes the sample rate of its inputs, which have to agree
+  inputRate: 'any',   // each input has its own sample rate
   portColor: (port) => SCOPE_COLORS[(parseInt(port.slice(2), 10) - 1) % SCOPE_COLORS.length],
   params: [
     { key: 'channels', label: 'Inputs',     type: 'select', options: [1, 2, 3, 4, 5, 6, 7, 8], ports: true, default: 2 },
@@ -32,8 +32,8 @@ export const oscilloscope = {
   },
   build(ctx, p, node, wires = {}, rates = {}) {
     const names = inputNames(p);
-    // the sample rate of what is connected (the sound card's when it is a plain audio signal, or when nothing is)
-    const rate = Object.values(rates).find((r) => r) || ctx.sampleRate;
+    // the sample rate of what is connected to each channel (null: the sound card's, see setRates)
+    let channelRates = names.map((name) => rates[name] || null);
     const maxWindow = Math.ceil(ctx.sampleRate * 10); // longest time span: 10 s
     const cap = 2 * maxWindow;                        // history kept per channel: 20 s
     const history = Math.ceil(ctx.sampleRate);        // how far back before the window a trigger is searched
@@ -82,7 +82,9 @@ export const oscilloscope = {
     return {
       inputs: Object.fromEntries(names.map((name, i) => [name, taps[i]])),
       outputs: {},
-      rate,
+      sampleRate: ctx.sampleRate,
+      get channelRates() { return channelRates; },
+      setRates(r) { channelRates = names.map((name) => r[name] || null); },
       update() {},
       onConnect(port) { connected[names.indexOf(port)] = true; },
       // One window per connected channel (null for unconnected ones), all starting at the same
@@ -147,6 +149,7 @@ export const oscilloscope = {
           read(rings[c], start, n, windows[c]);
           return mode === 'auto' ? windows[c].subarray(0, n) : windows[c].slice(0, n);
         });
+        out.abs = written - cap + start;   // absolute index (in output samples) of the first sample of the window
         if (mode !== 'auto') held = out;
         return out;
       },
@@ -271,6 +274,19 @@ export const oscilloscope = {
           }
         }
         g.stroke();
+        // a channel whose sample rate is lower than the sound card's was sampled at its own instants: mark them
+        const rate = inst.channelRates[k];
+        if (rate && sweeps.abs !== undefined) {
+          const step = inst.sampleRate / rate;           // output samples per sample of this channel
+          const first = Math.max(0, Math.ceil(sweeps.abs / step - 1e-9)), last = Math.floor((sweeps.abs + data.length - 1) / step + 1e-9);
+          if (last - first <= 300) {
+            g.fillStyle = SCOPE_COLORS[k % SCOPE_COLORS.length];
+            for (let j = first; j <= last; j++) {
+              const i = Math.min(Math.round(j * step) - sweeps.abs, data.length - 1);
+              g.beginPath(); g.arc(i * (W - 1) / (data.length - 1), yOf(data[i]), 2.5, 0, 2 * Math.PI); g.fill();
+            }
+          }
+        }
       });
     }
     // pan and zoom in time on the big screen; set(key, value) applies a parameter change

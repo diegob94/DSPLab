@@ -4,6 +4,13 @@ import { graph, outWire, outRate } from './graph.js';
 import { on } from './events.js';
 import { portClock } from './params.js';
 
+// the sample rate of what feeds each input port of a node (null: the sound card's)
+function inputRates(node) {
+  const rates = {};
+  graph.edges.filter((e) => e.to.node === node.id).forEach((e) => { rates[e.to.port] = outRate(graph.nodes.get(e.from.node), e.from.port); });
+  return rates;
+}
+
 export const engine = {
   ctx: null,
   live: new Map(), // node id -> built block instance
@@ -46,9 +53,7 @@ export const engine = {
       // what each input port is fed with, for the blocks whose behaviour depends on it
       const wires = {};
       graph.edges.filter((e) => e.to.node === node.id).forEach((e) => { wires[e.to.port] = outWire(graph.nodes.get(e.from.node), e.from.port); });
-      const rates = {};   // and at what sample rate (null: the sound card's)
-      graph.edges.filter((e) => e.to.node === node.id).forEach((e) => { rates[e.to.port] = outRate(graph.nodes.get(e.from.node), e.from.port); });
-      this.live.set(node.id, BLOCKS[node.type].build(this.ctx, node.params, node, wires, rates));
+      this.live.set(node.id, BLOCKS[node.type].build(this.ctx, node.params, node, wires, inputRates(node)));
     }
     for (const e of graph.edges) {
       const src = this.live.get(e.from.node);
@@ -63,6 +68,13 @@ export const engine = {
   updateNode(node) {
     const inst = this.live.get(node.id);
     if (inst) inst.update(node.params);
+    // a setting that changes a sample rate (the baud rate of a Serializer) changes what the blocks downstream are fed with
+    if (inst && BLOCKS[node.type].rates) {
+      for (const other of graph.nodes.values()) {
+        const o = this.live.get(other.id);
+        if (o && o.setRates) o.setRates(inputRates(other));
+      }
+    }
   },
 };
 

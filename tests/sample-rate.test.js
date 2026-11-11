@@ -22,71 +22,74 @@ test('blocks that need the sound card rate refuse a signal at another sample rat
   assert.deepEqual(r, [false, false, false, false]);
 }));
 
-test('the oscilloscope takes the sample rate of its inputs and refuses other rates once it has one', () => withApp(app, async (page) => {
+test('the oscilloscope takes any sample rate on each of its inputs', () => withApp(app, async (page) => {
   for (const t of ['Strobe Source', 'Serializer', 'Serializer', 'Wave Generator', 'Oscilloscope']) await addFromPalette(page, t);
   const r = await scenario(page, [], `
     const [s, z1, z2, w, o] = [by('strobe_source'), by('serializer', 0), by('serializer', 1), by('wave_generator'), by('oscilloscope')];
     o.params.channels = 3; dsplab.rebuildPorts(o);
     z1.params.baud = 1000; z2.params.baud = 2000;
     edge(s, 'out', z1, 'in'); edge(s, 'out', z2, 'in');
-    const out = {};
-    out.first = edge(z1, 'out', o, 'ch1');         // takes 1000 samples/s
-    out.native = edge(w, 'out', o, 'ch2');         // the sound card's rate: not the same
-    out.other = edge(z2, 'out', o, 'ch2');         // 2000: not the same
-    z2.params.baud = 1000; g.setParam(z2, 'baud', 1000);
-    out.same = edge(z2, 'out', o, 'ch2');          // 1000: fine
-    out.edges = dsplab.graph.edges.filter((x) => x.to.node === o.id).length;
-    return out;`);
-  assert.deepEqual(r, { first: true, native: false, other: false, same: true, edges: 2 });
+    return [edge(z1, 'out', o, 'ch1'), edge(z2, 'out', o, 'ch2'), edge(w, 'out', o, 'ch3'), dsplab.graph.edges.filter((x) => x.to.node === o.id).length];`);
+  assert.deepEqual(r, [true, true, true, 3]);
 }));
 
-test('a scope with a plain audio input refuses a signal at another rate, and an empty scope takes anything', () => withApp(app, async (page) => {
-  for (const t of ['Strobe Source', 'Serializer', 'Wave Generator', 'Oscilloscope']) await addFromPalette(page, t);
-  const r = await scenario(page, [], `
-    const [s, z, w, o] = [by('strobe_source'), by('serializer'), by('wave_generator'), by('oscilloscope')];
-    edge(s, 'out', z, 'in');
-    const out = {};
-    out.audio = edge(w, 'out', o, 'ch1');
-    out.signal = edge(z, 'out', o, 'ch2');
-    return out;`);
-  assert.deepEqual(r, { audio: true, signal: false });
-}));
-
-test('replacing the cable on a port may change the rate when no other input has one', () => withApp(app, async (page) => {
-  for (const t of ['Strobe Source', 'Serializer', 'Wave Generator', 'Oscilloscope']) await addFromPalette(page, t);
-  const r = await scenario(page, [], `
-    const [s, z, w, o] = [by('strobe_source'), by('serializer'), by('wave_generator'), by('oscilloscope')];
-    edge(s, 'out', z, 'in');
-    const out = {};
-    out.audio = edge(w, 'out', o, 'ch1');
-    out.replace = edge(z, 'out', o, 'ch1');          // it replaces the only cable, so the rate may change
-    out.then = dsplab.graph.edges.filter((x) => x.to.node === o.id).map((x) => x.from.node === z.id);
-    return out;`);
-  assert.deepEqual(r, { audio: true, replace: true, then: [true] });
-}));
-
-test('changing the baud rate drops the cables whose rate no longer agrees', () => withApp(app, async (page) => {
-  for (const t of ['Strobe Source', 'Serializer', 'Serializer', 'Oscilloscope']) await addFromPalette(page, t);
-  const r = await scenario(page, [], `
-    const [s, z1, z2, o] = [by('strobe_source'), by('serializer', 0), by('serializer', 1), by('oscilloscope')];
-    z1.params.baud = 1000; z2.params.baud = 1000;
-    edge(s, 'out', z1, 'in'); edge(s, 'out', z2, 'in');
-    edge(z1, 'out', o, 'ch1'); edge(z2, 'out', o, 'ch2');
-    const before = dsplab.graph.edges.filter((x) => x.to.node === o.id).length;
-    g.setParam(z2, 'baud', 3000);
-    return [before, dsplab.graph.edges.filter((x) => x.to.node === o.id).length];`);
-  assert.deepEqual(r, [2, 1]);
-}));
-
-test('the signal reaches a scope in the engine, which reports the rate of its inputs', () => withApp(app, async (page) => {
+test('changing the baud rate keeps the cables to a scope', () => withApp(app, async (page) => {
   for (const t of ['Strobe Source', 'Serializer', 'Oscilloscope']) await addFromPalette(page, t);
   const r = await scenario(page, [], `
     const [s, z, o] = [by('strobe_source'), by('serializer'), by('oscilloscope')];
-    z.params.baud = 4800; s.params.period = 50;
     edge(s, 'out', z, 'in'); edge(z, 'out', o, 'ch1');
+    g.setParam(z, 'baud', 3000);
+    return dsplab.graph.edges.filter((x) => x.to.node === o.id).length;`);
+  assert.equal(r, 1);
+}));
+
+test('each channel of a running scope is told its own rate, and the rate follows the Serializer live', () => withApp(app, async (page) => {
+  for (const t of ['Strobe Source', 'Serializer', 'Wave Generator', 'Oscilloscope']) await addFromPalette(page, t);
+  const r = await scenario(page, [], `
+    const [s, z, w, o] = [by('strobe_source'), by('serializer'), by('wave_generator'), by('oscilloscope')];
+    z.params.baud = 4800; s.params.period = 50;
+    edge(s, 'out', z, 'in'); edge(z, 'out', o, 'ch1'); edge(w, 'out', o, 'ch2');
     await dsplab.engine.start();
-    const rate = dsplab.engine.live.get(o.id).rate;
+    const inst = dsplab.engine.live.get(o.id);
+    const first = inst.channelRates.slice();
+    g.setParam(z, 'baud', 1200);
+    const second = inst.channelRates.slice();
     await dsplab.engine.stop();
-    return rate;`);
-  assert.equal(r, 4800);
+    return [first, second, inst.sampleRate > 0];`);
+  assert.deepEqual(r, [[4800, null], [1200, null], true]);
+}));
+
+test('Upsampler needs a signal with a sample rate of its own and multiplies it by the factor', () => withApp(app, async (page) => {
+  for (const t of ['Strobe Source', 'Serializer', 'Upsampler', 'Wave Generator', 'Audio Sink', 'Oscilloscope']) await addFromPalette(page, t);
+  const r = await scenario(page, [], `
+    const [s, z, u, w, k, o] = [by('strobe_source'), by('serializer'), by('upsampler'), by('wave_generator'), by('audio_sink'), by('oscilloscope')];
+    z.params.baud = 1000; u.params.factor = 4;
+    edge(s, 'out', z, 'in');
+    const out = {};
+    out.native = edge(w, 'out', u, 'in');           // the sound card's rate: refused
+    out.serializer = edge(z, 'out', u, 'in');
+    out.rate = g.outRate(u, 'out');
+    out.toSink = edge(u, 'out', k, 'in');           // 4000 samples/s: the Audio Sink needs the sound card's
+    out.toScope = edge(u, 'out', o, 'ch1');
+    g.setParam(z, 'baud', 2000);
+    out.followed = g.outRate(u, 'out');             // the rate follows the Serializer
+    g.setParam(u, 'factor', 8);
+    out.factor = g.outRate(u, 'out');
+    return out;`);
+  assert.deepEqual(r, { native: false, serializer: true, rate: 4000, toSink: false, toScope: true, followed: 8000, factor: 16000 });
+}));
+
+test('Upsamplers chain, and cutting the input leaves the output without a rate (cables that need one are dropped)', () => withApp(app, async (page) => {
+  for (const t of ['Strobe Source', 'Serializer', 'Upsampler', 'Upsampler', 'Audio Sink']) await addFromPalette(page, t);
+  const r = await scenario(page, [], `
+    const [s, z, u1, u2] = [by('strobe_source'), by('serializer'), by('upsampler', 0), by('upsampler', 1)];
+    z.params.baud = 100; u1.params.factor = 2; u2.params.factor = 3;
+    edge(s, 'out', z, 'in');
+    const out = {};
+    out.u1 = edge(z, 'out', u1, 'in'); out.u2 = edge(u1, 'out', u2, 'in');
+    out.rate = g.outRate(u2, 'out');                 // 100 * 2 * 3
+    dsplab.graph.edges.filter((x) => x.from.node === z.id).forEach((x) => dsplab.removeEdge(x));
+    out.after = dsplab.graph.edges.filter((x) => x.to.node === u2.id).length;   // u1 -> u2 loses its rate: no longer fits
+    return out;`);
+  assert.deepEqual(r, { u1: true, u2: true, rate: 600, after: 0 });
 }));
