@@ -66,7 +66,7 @@ mouse, and pinching the canvas zooms.
 | Add a block | Drag it from the palette onto the canvas, or double-click it in the palette |
 | Move a block | Drag it by any part of the block (title bar or body) |
 | Connect blocks | Drag from an **output** port (right side of a block) to an **input** port (left side of another) |
-| Select a block or a cable | Click it. Its settings (or, for a cable, where it goes from and to) appear in Properties |
+| Select a block or a cable | Click it. Its settings (or, for a cable, where it goes from and to, the **type** it carries, its clock and, while the audio runs, the **size** of the last sample that went through it, like `5 elements` or `3 × 4 (rows × columns)`) appear in Properties |
 | Edit a setting | Select the block, then use the controls in Properties |
 | Set an exact value | Type it in the number field under a slider and press Enter (or leave the field). Values outside the range are clamped to it |
 | Select several blocks | `Shift` (or `Ctrl`/`Cmd`) + click adds or removes a block; `Shift` + drag on the empty background draws a box that adds every block it touches; `Ctrl+A` selects all. Dragging any selected block moves them all; a plain click on one of them keeps just that one |
