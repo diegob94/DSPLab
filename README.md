@@ -458,8 +458,9 @@ Generator's Offset counts too: amplitude 0.5 with offset 0.8 already goes past 1
 **Oscilloscope**: draws signals over time. Inputs: `ch1` … `chN`, each channel in its own colour. It
 only draws while the audio is running (otherwise it reads *Stopped*). **Each input is sampled at its own sample
 rate** and placed on the common time scale, so you can show at once the microphone (at the sound card's rate) and a
-Serializer at 1000 baud, or two Serializers at different baud rates; a channel with a lower rate than the sound
-card's gets a dot at each of its own samples (when there are no more than about 300 on the screen).
+Serializer at 1000 baud, or two Serializers at different baud rates; on the **big screen** a channel with a lower
+rate than the sound card's gets a dot at each of its own samples (when there are no more than about 300 on the screen);
+the small view on the block doesn't draw them.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|

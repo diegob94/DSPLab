@@ -274,9 +274,10 @@ export const oscilloscope = {
           }
         }
         g.stroke();
-        // a channel whose sample rate is lower than the sound card's was sampled at its own instants: mark them
+        // a channel whose sample rate is lower than the sound card's was sampled at its own instants: mark them (only on
+        // the big screen; the block's small one is too crowded)
         const rate = inst.channelRates[k];
-        if (rate && sweeps.abs !== undefined) {
+        if (labels && rate && sweeps.abs !== undefined) {
           const step = inst.sampleRate / rate;           // output samples per sample of this channel
           const first = Math.max(0, Math.ceil(sweeps.abs / step - 1e-9)), last = Math.floor((sweeps.abs + data.length - 1) / step + 1e-9);
           if (last - first <= 300) {
