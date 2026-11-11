@@ -3,7 +3,7 @@
 // own `el` / `view` to nodes and `el` to edges.
 import { BLOCKS } from '../blocks/index.js';
 import { emit } from './events.js';
-import { optionsOf, portWire, portNames, wiresMatch, validParam } from './params.js';
+import { optionsOf, portWire, portNames, wiresMatch, elementOf, validParam } from './params.js';
 
 export const MIN_ZOOM = 0.3;
 export const MAX_ZOOM = 2.5;
@@ -69,23 +69,52 @@ export function clearGraph() {
   select(null);
 }
 
+// What an output port carries. A generic output ('T') carries the element type of the array on the cable
+// that feeds the block's `in`, or anything ('*') while that is unknown.
+export function outWire(node, port, seen = new Set()) {
+  const wire = portWire(BLOCKS[node.type], port);
+  if (wire !== 'T') return wire;
+  const e = graph.edges.find((e) => e.to.node === node.id && e.to.port === 'in');
+  const src = e && graph.nodes.get(e.from.node);
+  if (!src || seen.has(node.id)) return '*';
+  return elementOf(outWire(src, e.from.port, seen.add(node.id))) || '*';
+}
+
+const wiresFit = (e) => {
+  const a = graph.nodes.get(e.from.node), b = graph.nodes.get(e.to.node);
+  return wiresMatch(outWire(a, e.from.port), portWire(BLOCKS[b.type], e.to.port));
+};
+
+// a cable that feeds a generic block can change what that block's output carries: drop the cables that no longer fit
+let pruning = false;
+function pruneEdges() {
+  if (pruning) return;
+  pruning = true;
+  try {
+    let bad;
+    while ((bad = graph.edges.find((e) => !wiresFit(e)))) removeEdge(bad);
+  } finally { pruning = false; }
+}
+
 export function addEdge(from, to) {
   const a = graph.nodes.get(from.node), b = graph.nodes.get(to.node);
   // ports that carry different things (another clock, or another sample type) can't be cabled together
-  if (!a || !b || !wiresMatch(portWire(BLOCKS[a.type], from.port), portWire(BLOCKS[b.type], to.port))) return null;
+  if (!a || !b || !wiresMatch(outWire(a, from.port), portWire(BLOCKS[b.type], to.port))) return null;
   // an input accepts a single connection; replace any existing one
   graph.edges.filter((e) => e.to.node === to.node && e.to.port === to.port).forEach(removeEdge);
   const edge = { id: graph.nextId++, from, to };
   graph.edges.push(edge);
   emit('edge-added', edge);
   emit('changed');
-  return edge;
+  pruneEdges();
+  return graph.edges.includes(edge) ? edge : null;
 }
 
 export function removeEdge(edge) {
   graph.edges = graph.edges.filter((e) => e !== edge);
   emit('edge-removed', edge);
   emit('changed');
+  pruneEdges();
 }
 
 export function deleteSelection() {

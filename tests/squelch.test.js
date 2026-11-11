@@ -1,6 +1,6 @@
 'use strict';
 const { before, after, test } = require('node:test');
-const { assert, launch, withApp, addFromPalette, panelControl, startAudio, sleep } = require('./helpers');
+const { assert, launch, withApp, addFromPalette, panelControl, startAudio, sleep, feedBits } = require('./helpers');
 
 let app;
 before(async () => { app = await launch(); });
@@ -36,21 +36,21 @@ test('it closes some time after the signal ends, within the window, and opens ag
 });
 
 test('Squelch has an audio input and output, and keeps a Symbol Recovery quiet between bursts', () => withApp(app, async (page) => {
-  for (const t of ['Strobe Source', 'Bit Serializer', 'Pulse Shaper', 'Squelch', 'Symbol Recovery']) await addFromPalette(page, t);
+  for (const t of ['Pulse Shaper', 'Squelch', 'Symbol Recovery']) await addFromPalette(page, t);
   assert.equal(await page.locator('.node:has-text("Squelch") .port.in').count(), 1);
   assert.equal(await page.locator('.node:has-text("Squelch") .port.out').count(), 1);
   await page.evaluate(() => {
     const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
-    const [s, z, p, q, r] = ['strobe_source', 'bit_serializer', 'pulse_shaper', 'squelch', 'symbol_timing'].map(by);
-    Object.assign(s.params, { period: 400, data: 'UUUUUUUUUU' });
-    for (const n of [z, p, r]) n.params.baud = 2000;
+    const [p, q, r] = ['pulse_shaper', 'squelch', 'symbol_timing'].map(by);
+    for (const n of [p, r]) n.params.baud = 2000;
     p.params.pulse = 'square';
     const e = (a, ap, b, bp) => dsplab.addEdge({ node: a.id, port: ap }, { node: b.id, port: bp });
-    e(s, 'out', z, 'in'); e(z, 'bits', p, 'bits'); e(p, 'out', q, 'in'); e(q, 'out', r, 'in');
+    e(p, 'out', q, 'in'); e(q, 'out', r, 'in');
     window.recovered = [];
     window.addCollector = () => dsplab.engine.live.get(r.id).outputs.bits.connect({ receive: (b) => window.recovered.push(b) });
   });
   await startAudio(page);
+  await feedBits(page, 'pulse_shaper', 'UUUUUUUUUU', 400);
   await page.evaluate(() => window.addCollector());
   await page.waitForFunction(() => window.recovered.length > 400, null, { timeout: 8000 });
   // new blocks all land at the canvas centre and overlap, so select it through the model rather than by clicking

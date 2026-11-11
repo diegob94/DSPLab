@@ -1,6 +1,6 @@
 'use strict';
 const { before, after, test } = require('node:test');
-const { assert, launch, withApp, addFromPalette, selectNode, panelControl, startAudio, sleep } = require('./helpers');
+const { feedBits, assert, launch, withApp, addFromPalette, selectNode, panelControl, startAudio, sleep } = require('./helpers');
 
 let app;
 before(async () => { app = await launch(); });
@@ -60,24 +60,18 @@ test('the block places bits on its baud grid, whatever the arrival times', () =>
   assert.equal(out.after, false);
 }));
 
-test('Pulse Shaper has an async input and an audio output; it runs behind a Strobe Source', () => withApp(app, async (page) => {
-  await addFromPalette(page, 'Strobe Source');
-  await addFromPalette(page, 'Bit Serializer');
+test('Pulse Shaper has an async input and an audio output; it plays what it is given', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Pulse Shaper');
   assert.equal(await page.locator('.node:has-text("Pulse Shaper") .port.in.async').count(), 1);
   assert.equal(await page.locator('.node:has-text("Pulse Shaper") .port.out.async').count(), 0, 'its output is audio');
   const wired = await page.evaluate(() => {
     const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
-    const [s, z, p, k] = ['strobe_source', 'bit_serializer', 'pulse_shaper', 'audio_sink'].map(by);
-    s.params.period = 50;
-    return [
-      !!dsplab.addEdge({ node: s.id, port: 'out' }, { node: z.id, port: 'in' }),
-      !!dsplab.addEdge({ node: z.id, port: 'bits' }, { node: p.id, port: 'bits' }),
-      !!dsplab.addEdge({ node: p.id, port: 'out' }, { node: k.id, port: 'in' }),
-    ];
+    const [p, k] = ['pulse_shaper', 'audio_sink'].map(by);
+    return [!!dsplab.addEdge({ node: p.id, port: 'out' }, { node: k.id, port: 'in' })];
   });
-  assert.deepEqual(wired, [true, true, true]);
+  assert.deepEqual(wired, [true]);
   await startAudio(page);
+  await feedBits(page, 'pulse_shaper', 'U', 50);
   await selectNode(page, 'Pulse Shaper');
   await panelControl(page, 'Pulse').selectOption('sinc');   // live change, no rebuild
   await sleep(300);

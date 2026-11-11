@@ -14,7 +14,7 @@
  * `asyncPorts` lists the port names (inputs or outputs) whose signal has an asynchronous clock: its samples
  * (bits) come at their own instants instead of at the audio sample rate. An output is any object with
  * connect(target) and send(sample) (see stream.js), an input any object with receive(sample).
- * `wireTypes` maps an async port to the type of its samples when it isn't a plain int (e.g. { out: 'array[uint8]' }); '*' takes any async port.
+ * `wireTypes` maps an async port to the type of its samples when it isn't a plain int (e.g. { out: 'array[uint8]' }); '*' takes any async port, 'array[T]' any array and 'T' (an output) the element type of the array that feeds the block's `in`.
  * Ports with different clocks or sample types cannot be cabled together.
  * Parameters are edited in the properties panel; those marked `show: true` are also
  * displayed (read-only) on the node itself.
@@ -33,7 +33,7 @@ import { oscilloscope } from './oscilloscope.js';
 import { mathOperator } from './math-operator.js';
 import { strobeSource } from './strobe-source.js';
 import { constantSource } from './constant-source.js';
-import { bitSerializer } from './bit-serializer.js';
+import { serializer } from './serializer.js';
 import { concatenate } from './concatenate.js';
 import { bitMonitor } from './bit-monitor.js';
 import { debugSink } from './debug-sink.js';
@@ -64,7 +64,7 @@ export const BLOCKS = {
   math_operator: mathOperator,
   strobe_source: strobeSource,
   constant_source: constantSource,
-  bit_serializer: bitSerializer,
+  serializer,
   concatenate,
   bit_monitor: bitMonitor,
   debug_sink: debugSink,

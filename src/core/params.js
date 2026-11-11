@@ -7,7 +7,11 @@ export const portNames = (def, dir, params) => (typeof def[dir] === 'function' ?
 export const portClock = (def, name) => ((def.asyncPorts || []).includes(name) ? 'async' : 'audio');
 
 // '*' (in a block's wireTypes) accepts any async port, whatever its sample type; audio only goes with audio
-export const wiresMatch = (a, b) => a === b || (a === '*' && b !== 'audio') || (b === '*' && a !== 'audio');
+export const wiresMatch = (a, b) => a === b || (a === '*' && b !== 'audio') || (b === '*' && a !== 'audio')
+  || (a === 'array[T]' && b.startsWith('array[')) || (b === 'array[T]' && a.startsWith('array['));
+
+// 'array[uint8]' -> 'uint8'; null when it isn't an array
+export const elementOf = (wire) => { const m = /^array\[(.*)\]$/.exec(wire); return m ? m[1] : null; };
 
 // what a port carries: 'audio', or for an async port the type of its samples ('int' unless the block's
 // wireTypes says otherwise, like 'array[uint8]'). Only ports that carry the same thing can be cabled together.

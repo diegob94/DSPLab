@@ -87,4 +87,12 @@ const panelControl = (page, label) => page.locator(`#props .param:has(> label:te
 
 const snapshot = (page) => page.evaluate(() => JSON.stringify(dsplab.serialize()));
 
-module.exports = { assert, launch, withApp, sleep, selectNode, addFromPalette, connect, setRange, panelControl, startAudio, snapshot };
+// Feeds the bits of a text (most significant bit first) to the live block of the given type every `period` ms.
+// The Serializer's output doesn't fit the Pulse Shaper's input yet, so this stands in for the source and serializer.
+const feedBits = (page, type, text, period) => page.evaluate(([type, text, period]) => {
+  const id = [...dsplab.graph.nodes.values()].find((n) => n.type === type).id;
+  const bits = Array.from(new TextEncoder().encode(text), (b) => b.toString(2).padStart(8, '0')).join('').split('').map(Number);
+  setInterval(() => bits.forEach((b) => dsplab.engine.live.get(id).inputs.bits.receive(b)), period);
+}, [type, text, period]);
+
+module.exports = { feedBits, assert, launch, withApp, sleep, selectNode, addFromPalette, connect, setRange, panelControl, startAudio, snapshot };

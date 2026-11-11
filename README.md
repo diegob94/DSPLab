@@ -81,7 +81,7 @@ Connection rules:
 
 - A cable always goes from an output to an input, and never from a block to itself.
 - An **input takes one cable**: connecting a second one replaces the first.
-- Every port has a **clock**. Most are *audio* (round ports): a sample at every tick of the sound card. *Asynchronous* ports (square) carry samples at their own instants, like one bit per symbol. Async ports also have a sample type (`int`, a single bit, or `array[uint8]`, a list of bytes). Only ports that carry the same thing can be cabled together; a Pulse Shaper turns an async stream into audio and a Symbol Recovery does the opposite.
+- Every port has a **clock**. Most are *audio* (round ports): a sample at every tick of the sound card. *Asynchronous* ports (square) carry samples at their own instants, like one bit per symbol. Async ports also have a sample type (`int`, `uint8`, `array[uint8]`, a list of bytes...); a few blocks are generic, like the Serializer, whose output type follows its input. Only ports that carry the same thing can be cabled together; a Pulse Shaper turns an async stream into audio and a Symbol Recovery does the opposite.
 - An **output can feed many inputs**.
 - An unconnected input counts as silence (zero).
 
@@ -141,7 +141,7 @@ Shown on the block: Pause.
 
 Every *Period* the whole data goes out as **one array of ints**: the bytes of a text (UTF-8, so `é` is two ints) or
 of some hex digits, as uint8 (0 to 255). `hello` is `[104, 101, 108, 108, 111]`, and `é` is `[195, 169]`. It starts when the audio starts, and sends nothing
-while the data is empty. To turn the bytes into bits at a baud rate, put a Bit Serializer after it.
+while the data is empty. To send the bytes one at a time at a baud rate, put a Serializer after it.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
@@ -202,18 +202,20 @@ that is not an array of bytes is ignored.
 Changing *Inputs* keeps the cables on the ports that remain (`a`, `b`...) and drops those on removed ones.
 Shown on the block: Inputs.
 
-**Bit Serializer**: turns arrays of bytes into a stream of single bits. Input: `in` (async, `array[uint8]`).
-Output: `bits` (async, `int`).
+**Serializer**: sends the elements of an array one at a time. Input: `in` (async, `array[T]`). Output: `out`
+(async, `T`).
 
-Each uint8 of the array is a byte and goes out as 8 bits, most significant bit first (`A` is `01000001`), one bit
-per symbol at the baud rate. Pacing follows the audio clock, so the average rate is exact; because a browser timer
-can't fire once per symbol at kilobaud, the symbols that are due are sent together every ~10 ms, and whoever
-receives them (the Pulse Shaper) does its own timing. An array that arrives while another is going out is queued
-behind it. Anything that is not an array of ints from 0 to 255 is ignored.
+Each array that arrives is taken apart and its elements go out one by one, one per symbol at the baud rate, whatever
+they are. `T` is the element type of the array on the cable that feeds `in`: after a Strobe Source (`array[uint8]`)
+the output carries `uint8`. While nothing is connected to `in` the output takes any async cable, and when you connect
+`in` the cables on `out` that no longer fit are dropped. Pacing follows the audio clock, so the average rate is
+exact; because a browser timer can't fire once per symbol at kilobaud, the symbols that are due are sent together
+every ~10 ms, and whoever receives them does its own timing. An array that arrives while another is going out is
+queued behind it. Anything that is not an array is ignored.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
-| Baud rate | Symbols per second | 50 – 20000 (logarithmic) | 1000 baud |
+| Baud rate | Elements per second | 50 – 20000 (logarithmic) | 1000 baud |
 
 Shown on the block: Baud rate.
 
@@ -223,7 +225,7 @@ Input: `bits` (async, `int`). Output: `out` (audio).
 A one is `1` (times the amplitude) and a zero is `0`; the train of symbols is convolved with a pulse shape,
 sampled at the audio sample rate. Symbols are placed one after the other on a grid of 1 / baud seconds,
 whatever the exact moment each bit arrives; the first symbol after a pause starts about 50 ms ahead. Set
-the same baud rate here as on the Bit Serializer, or the stream will fall behind or run ahead.
+the same baud rate here as on the Serializer, or the stream will fall behind or run ahead.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
