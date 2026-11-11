@@ -13,7 +13,7 @@ class SerializerProcessor extends AudioWorkletProcessor {
   }
 
   process(inputs, outputs) {
-    this.signal.process(outputs[0][0]);
+    this.signal.process(outputs[0][0], currentFrame);
     return true;
   }
 }

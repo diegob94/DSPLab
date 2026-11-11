@@ -12,7 +12,7 @@ class UpsamplerProcessor extends AudioWorkletProcessor {
 
   process(inputs, outputs) {
     const ch = inputs[0] && inputs[0][0];
-    this.signal.process(ch || this.silence, outputs[0][0]);
+    this.signal.process(ch || this.silence, outputs[0][0], currentFrame);
     return true;
   }
 }

@@ -11,10 +11,12 @@ const run = (page, steps, { baud = 1000, sampleRate = 48000 } = {}) => page.eval
   const { SerializerSignal } = await import('/src/blocks/serializer-core.js');
   const s = new SerializerSignal(sampleRate, baud);
   const out = [];
+  let frame = 0;
   for (const [items, n] of steps) {
     if (items) s.push(items);
     const buf = new Float32Array(n);
-    s.process(buf);
+    s.process(buf, frame);
+    frame += n;
     out.push(...buf);
   }
   return out;
@@ -51,13 +53,13 @@ test('a new rate takes effect from the next sample', () => withApp(app, async (p
     const { SerializerSignal } = await import('/src/blocks/serializer-core.js');
     const s = new SerializerSignal(48000, 4800);
     s.push([1, 2, 3, 4, 5, 6]);
-    const a = new Float32Array(20); s.process(a);          // 1, 2
+    const a = new Float32Array(20); s.process(a, 0);       // 1, 2
     s.set(2400);
-    const b = new Float32Array(40); s.process(b);          // 20 samples per symbol from now on
+    const b = new Float32Array(40); s.process(b, 20);      // 20 samples per symbol from now on, on the grid of the new rate
     return [Array.from(a), Array.from(b)];
   });
   assert.deepEqual(out[0], [...Array(10).fill(1), ...Array(10).fill(2)]);
-  assert.deepEqual(out[1], [...Array(20).fill(3), ...Array(20).fill(4)]);
+  assert.deepEqual(out[1], [...Array(20).fill(2), ...Array(20).fill(3)]);   // 2 is still held when the new grid says symbol 1 goes on until frame 40
 }));
 
 test('Serializer takes an array of numbers (async) and gives a signal (audio); ignores what is not an array of numbers', () => withApp(app, async (page) => {

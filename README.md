@@ -246,7 +246,8 @@ and its sample rate is *Factor* times as high: a Serializer at 1000 baud into an
 4000 samples/s, the first of each group being the input's sample and the other three 0. (Inserting *N* zeros would
 multiply the rate by *N* + 1; here *Factor* is the multiplier, so it inserts one less.) The input has to be a signal
 with a sample rate of its own: a plain audio signal, which has the sound card's rate, is refused, because the output
-would be faster than the sound card can carry. The rate of `out` follows the input's and the *Factor* live, also
+would be faster than the sound card can carry. All the signals of a diagram put their samples on one time grid that starts when the audio does, so the sample the Upsampler
+copies from its input starts exactly where that input sample does, and the Oscilloscope shows both lined up. The rate of `out` follows the input's and the *Factor* live, also
 through a chain of Upsamplers, and a cable that needs the sound card's rate (an Audio Sink) is refused.
 
 | Setting | What it does | Range | Default |

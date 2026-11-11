@@ -60,7 +60,9 @@ export const oscilloscope = {
       return g;
     });
 
+    let origin = 0;                                   // context frame of the first sample captured
     capture.port.onmessage = ({ data }) => {
+      if (!Array.isArray(data)) { origin = data.origin; return; }
       const len = data[0].length;
       const head = written % cap;
       const first = Math.min(len, cap - head);
@@ -149,7 +151,7 @@ export const oscilloscope = {
           read(rings[c], start, n, windows[c]);
           return mode === 'auto' ? windows[c].subarray(0, n) : windows[c].slice(0, n);
         });
-        out.abs = written - cap + start;   // absolute index (in output samples) of the first sample of the window
+        out.abs = origin + written - cap + start;   // context frame of the first sample of the window
         if (mode !== 'auto') held = out;
         return out;
       },
