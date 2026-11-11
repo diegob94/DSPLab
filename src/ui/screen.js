@@ -20,7 +20,7 @@ export function closeScreen() {
 
 function renderOptions(side, node) {
   side.replaceChildren(h('div', { className: 'props-head', textContent: 'Settings' }));
-  for (const p of BLOCKS[node.type].params.filter((p) => !p.visible || p.visible(node.params))) side.append(paramWidget(node, p, 'big'));
+  for (const p of BLOCKS[node.type].params.filter((p) => !p.hidden && (!p.visible || p.visible(node.params)))) side.append(paramWidget(node, p, 'big'));
 }
 
 function openScreen(node) {

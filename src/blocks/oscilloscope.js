@@ -28,6 +28,7 @@ export function channelPoints(length, abs, rate, sampleRate) {
 
 const DIV_X = 10, DIV_Y = 8;   // graticule divisions
 const HOLDOFF_MAX_MS = 3000;   // longest holdoff
+const TAG_W = 22, TAG_H = 16;  // the channel tags on the right edge of the big screen
 const LEVEL_SHOWN_MS = 1500;   // how long the trigger level line stays after it was last changed
 
 export const oscilloscope = {
@@ -46,6 +47,8 @@ export const oscilloscope = {
     { key: 'xdiv',     label: 'X / div',    show: true, type: 'range', scale: 'log', min: 0.1, max: 1000, unit: 'ms', default: 1 },
     { key: 'xpos',     label: 'X position', type: 'range', min: -10000, max: 10000, step: 0.1, unit: 'ms', reset: true, default: 0 },
     { key: 'ydiv',     label: 'Y / div',    show: true, type: 'range', scale: 'log', min: 0.01, max: 2, default: 0.25 },
+    // vertical position of each channel's zero, in divisions; set by dragging its tag on the big screen
+    ...Array.from({ length: 8 }, (_, i) => ({ key: `off${i + 1}`, label: `ch${i + 1} offset`, hidden: true, type: 'range', min: -DIV_Y / 2, max: DIV_Y / 2, step: 0.01, unit: 'div', default: 0 })),
     // how each channel is drawn between its samples; only the ones of the channels that exist are shown
     ...Array.from({ length: 8 }, (_, i) => ({
       key: `display${i + 1}`, label: `Ch${i + 1} display`, type: 'select', options: DISPLAY_MODES, default: 'auto',
@@ -204,6 +207,42 @@ export const oscilloscope = {
     let lastLevel = node.params.level, levelShownAt = -Infinity;
     let lastHoldoff = node.params.holdoff, holdoffShownAt = -Infinity;
 
+    // where channel k's tag sits (y of its zero line) on a screen H pixels tall
+    const tagY = (k, H) => H / 2 - node.params[`off${k + 1}`] * H / DIV_Y;
+    // Tags that overlap fan out to the left while the pointer is over them, so each can be reached.
+    let fan = false;
+    const tagBox = (k, H, spread = fan) => {
+      const y = Math.min(Math.max(tagY(k, H), TAG_H / 2), H - TAG_H / 2);
+      let rank = 0;
+      for (let j = k + 1; j < node.params.channels; j++) if (Math.abs(Math.min(Math.max(tagY(j, H), TAG_H / 2), H - TAG_H / 2) - y) < TAG_H) rank++;
+      return { y, dx: spread ? rank * (TAG_W + 2) : 0 };
+    };
+    // one tag per channel on the right edge, in the channel's colour, with a faint line across at its zero
+    // when it has been moved; the tags are what the big screen lets you drag up and down
+    function drawTags(g, W, H, fontPx) {
+      const n = node.params.channels;
+      g.save();
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      for (let k = 0; k < n; k++) {
+        const { y, dx } = tagBox(k, H), c = SCOPE_COLORS[k % SCOPE_COLORS.length];
+        const R = W - dx;   // right edge of this tag
+        if (node.params[`off${k + 1}`] !== 0) {
+          g.globalAlpha = .35; g.strokeStyle = c; g.setLineDash([2, 4]);
+          g.beginPath(); g.moveTo(0, Math.round(y) + .5); g.lineTo(W - TAG_W - dx, Math.round(y) + .5); g.stroke();
+          g.setLineDash([]); g.globalAlpha = 1;
+        }
+        g.fillStyle = c;
+        g.beginPath();
+        g.moveTo(R, y - TAG_H / 2); g.lineTo(R - TAG_W + 6, y - TAG_H / 2); g.lineTo(R - TAG_W, y);
+        g.lineTo(R - TAG_W + 6, y + TAG_H / 2); g.lineTo(R, y + TAG_H / 2);
+        g.closePath(); g.fill();
+        g.fillStyle = '#0d0f12';
+        g.font = `bold ${fontPx}px system-ui, sans-serif`;
+        g.fillText(String(k + 1), R - (TAG_W - 6) / 2 - 1, y + .5);
+      }
+      g.restore();
+    }
     // draws the screen into a W x H area of g (the block's small canvas or the big window's)
     function paint(g, W, H, inst, fontPx = 10, labels = false) {
       g.fillStyle = '#0d0f12';
@@ -230,23 +269,23 @@ export const oscilloscope = {
       for (const l of lines) if (l.t === 0) { g.moveTo(l.x, 0); g.lineTo(l.x, H); }
       g.stroke();
       const pxPerUnit = (H / DIV_Y) / ydiv;
-      const yOf = (v) => Math.min(H, Math.max(0, H / 2 - v * pxPerUnit));
+      // channel k's trace: its zero sits `off` divisions above the centre
+      const yOf = (v, k = 0) => Math.min(H, Math.max(0, H / 2 - node.params[`off${k + 1}`] * H / DIV_Y - v * pxPerUnit));
 
       g.fillStyle = '#6b7482';
       g.font = `${fontPx}px system-ui, sans-serif`;
       g.textBaseline = 'alphabetic';
       g.textAlign = 'left';
       if (labels) {
-        // the value at each division line: time along the bottom, level up the right side
+        // the value at each division line: time along the bottom, level up the left side
         const num = (v) => String(+v.toPrecision(3));
         g.textAlign = 'center';
         for (const l of lines) {
           const t = l.t;
           g.fillText(t === 0 ? '0' : Math.abs(t) >= 1000 ? `${num(t / 1000)} s` : `${num(t)} ms`, Math.min(Math.max(l.x, 24), W - 24), H - 5);
         }
-        g.textAlign = 'right';
-        for (let i = 1; i < DIV_Y; i++) g.fillText(num((DIV_Y / 2 - i) * ydiv), W - 4, Math.round(i * H / DIV_Y) - 3);
         g.textAlign = 'left';
+        for (let i = 1; i < DIV_Y; i++) g.fillText(num((DIV_Y / 2 - i) * ydiv), 4, Math.round(i * H / DIV_Y) - 3);
       }
       if (!inst) g.fillText('Stopped', 6, 14);
 
@@ -254,8 +293,9 @@ export const oscilloscope = {
       // the trigger level, drawn for a moment after it was changed (also while stopped)
       if (level !== lastLevel) { lastLevel = level; levelShownAt = performance.now(); }
       if (performance.now() - levelShownAt < LEVEL_SHOWN_MS) {
-        const ly = Math.round(yOf(level)) + .5;
-        g.strokeStyle = g.fillStyle = SCOPE_COLORS[(parseInt(trigger.slice(2), 10) - 1) % SCOPE_COLORS.length];
+        const tk = parseInt(trigger.slice(2), 10) - 1;
+        const ly = Math.round(yOf(level, tk)) + .5;
+        g.strokeStyle = g.fillStyle = SCOPE_COLORS[tk % SCOPE_COLORS.length];
         g.setLineDash([4, 3]);
         g.beginPath(); g.moveTo(0, ly); g.lineTo(W, ly); g.stroke();
         g.setLineDash([]);
@@ -274,6 +314,7 @@ export const oscilloscope = {
         g.fillText(`holdoff ${holdoff} ms`, flip ? hx - 4 : hx + 4, 28);
         g.textAlign = 'left';
       }
+      if (labels) drawTags(g, W, H, fontPx);
       if (!inst) return;
 
       g.lineWidth = 1.5;
@@ -288,20 +329,21 @@ export const oscilloscope = {
         const points = sweeps.abs === undefined ? [] : channelPoints(data.length, sweeps.abs, rate, inst.sampleRate);
         const X = (i) => i * (W - 1) / (data.length - 1);
         g.beginPath();
+        const yK = (v) => yOf(v, k);   // this channel's trace sits at its offset
         if (points.length && points.length <= 4 * W) {
           if (display === 'impulse') {
             // a vertical line from zero to the value at each sample, nothing between them
-            const y0 = yOf(0);
-            for (const i of points) { g.moveTo(X(i), y0); g.lineTo(X(i), yOf(data[i])); }
+            const y0 = yK(0);
+            for (const i of points) { g.moveTo(X(i), y0); g.lineTo(X(i), yK(data[i])); }
           } else if (display === 'sample & hold') {
             // each sample's value is held until the next one
-            g.moveTo(0, yOf(data[0]));
-            let y = yOf(data[0]);
-            for (const i of points) { g.lineTo(X(i), y); y = yOf(data[i]); g.lineTo(X(i), y); }
+            g.moveTo(0, yK(data[0]));
+            let y = yK(data[0]);
+            for (const i of points) { g.lineTo(X(i), y); y = yK(data[i]); g.lineTo(X(i), y); }
             g.lineTo(W - 1, y);
           } else {
             // linear: straight lines from sample to sample
-            points.forEach((i, n) => { if (n) g.lineTo(X(i), yOf(data[i])); else g.moveTo(X(i), yOf(data[i])); });
+            points.forEach((i, n) => { if (n) g.lineTo(X(i), yK(data[i])); else g.moveTo(X(i), yK(data[i])); });
           }
         } else {
           // many samples per pixel: draw each column's lowest and highest sample, in time order
@@ -313,8 +355,8 @@ export const oscilloscope = {
               if (data[i] > hi) { hi = data[i]; iHi = i; }
             }
             const [first, last] = iLo < iHi ? [lo, hi] : [hi, lo];
-            if (x) g.lineTo(x, yOf(first)); else g.moveTo(x, yOf(first));
-            g.lineTo(x, yOf(last));
+            if (x) g.lineTo(x, yK(first)); else g.moveTo(x, yK(first));
+            g.lineTo(x, yK(last));
           }
         }
         g.stroke();
@@ -325,7 +367,7 @@ export const oscilloscope = {
           : labels && rate && rate < inst.sampleRate && points.length <= 300;
         if (points.length && dots) {
           g.fillStyle = SCOPE_COLORS[k % SCOPE_COLORS.length];
-          for (const i of points) { g.beginPath(); g.arc(X(i), yOf(data[i]), 2.5, 0, 2 * Math.PI); g.fill(); }
+          for (const i of points) { g.beginPath(); g.arc(X(i), yK(data[i]), 2.5, 0, 2 * Math.PI); g.fill(); }
         }
       });
     }
@@ -362,16 +404,50 @@ export const oscilloscope = {
         }
       };
       const lift = (e) => { if (pointers.delete(e.pointerId)) restart(); };
+      // the channel tag under a pointer event, if any (the last one is drawn on top, so it wins)
+      const tagAt = (e, spread = fan) => {
+        const r = canvas.getBoundingClientRect(), H = canvas.clientHeight;
+        for (let k = node.params.channels - 1; k >= 0; k--) {
+          const { y, dx } = tagBox(k, H, spread);
+          if (e.clientX >= r.right - TAG_W - dx && e.clientX <= r.right - dx && Math.abs(e.clientY - r.top - y) <= TAG_H / 2) return k;
+        }
+        return -1;
+      };
+      let tag = null;   // a tag being dragged: { k, y, off }
       canvas.addEventListener('pointerdown', (e) => {
         if (e.pointerType === 'mouse' && e.button !== 0) return;
+        const k = tagAt(e);
+        if (k >= 0) {
+          try { canvas.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
+          tag = { k, id: e.pointerId, y: e.clientY, off: node.params[`off${k + 1}`] };
+          fan = false;   // the others fall back into place while this one is dragged
+          canvas.style.cursor = 'ns-resize';
+          return;
+        }
         try { canvas.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
         canvas.style.cursor = 'grabbing';
         pointers.set(e.pointerId, { x: e.clientX });
         restart();
       });
-      canvas.addEventListener('pointermove', move);
-      canvas.addEventListener('pointerup', lift);
-      canvas.addEventListener('pointercancel', lift);
+      canvas.addEventListener('pointermove', (e) => {
+        if (tag) {
+          if (e.pointerId === tag.id) set(`off${tag.k + 1}`, tag.off - (e.clientY - tag.y) / canvas.clientHeight * DIV_Y);
+        } else if (!pointers.size) {
+          // over a tag, in its resting place or fanned out: spread the overlapping ones
+          fan = tagAt(e, false) >= 0 || tagAt(e, true) >= 0;
+          canvas.style.cursor = tagAt(e) >= 0 ? 'ns-resize' : 'grab';
+        }
+        move(e);
+      });
+      const end = (e) => {
+        if (tag && e.pointerId === tag.id) { tag = null; canvas.style.cursor = 'grab'; fan = false; }
+        lift(e);
+      };
+      canvas.addEventListener('pointerleave', () => { if (!tag) fan = false; });
+      canvas.addEventListener('pointerup', end);
+      canvas.addEventListener('pointercancel', end);
+      // a double click on a tag puts that channel back on the centre line
+      canvas.addEventListener('dblclick', (e) => { const k = tagAt(e); if (k >= 0) set(`off${k + 1}`, 0); });
       // the wheel changes X / div (up = zoom in), keeping the time under the pointer where it is
       canvas.addEventListener('wheel', (e) => {
         e.preventDefault();

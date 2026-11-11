@@ -14,6 +14,7 @@
  * A param with `visible: (params) => boolean` is only listed in the panel and the big screen while that holds (the
  * oscilloscope's display mode of each channel).
  * A range param flagged `reset: true` gets a ↺ button next to its value that puts it back to the default.
+ * A param flagged `hidden: true` is saved and validated like any other but has no widget (a view edits it directly).
  * `asyncPorts` lists the port names (inputs or outputs) whose signal has an asynchronous clock: its samples
  * (bits) come at their own instants instead of at the audio sample rate. An output is any object with
  * connect(target) and send(sample) (see stream.js), an input any object with receive(sample).
