@@ -489,7 +489,8 @@ on every Run.
 |---|---|---|---|
 | Format | *text*: each 8 bits are a character (UTF-8, top bit first; control characters show as `·`); *bits*: print 0s and 1s | text, bits | text |
 | Frame | Characters per line in *text*, bits per line in *bits* | 1 – 4096 | 8 |
-| Lines | How many of the newest lines stay on the block | 4, 8, 16 | 8 |
+| Lines | How many of the newest lines are kept | 4, 8, 16, 32, 64, 128 | 8 |
+| Width, Height | Size of the log on the block (also set by dragging its corner, like the Debug Sink's) | 120 – 1000 px, 40 – 800 px | 220 × 120 |
 | Preamble type | How *Preamble* is written: *text*, *hex* or *bits* | text, hex, bits | text |
 | Preamble | What marks where a frame starts, in that notation (empty: no framing) | up to 100 characters | empty |
 
@@ -507,11 +508,13 @@ It reads *Stopped* while the audio is off, and the log starts empty on every Run
 
 Each line is the time (seconds of audio), the type and the value, like `2.000  array[uint8]  [104,101]`. The type is
 worked out from the sample: `int`, `float`, `array[uint8]` (ints from 0 to 255), `array[uint8]` (ints from −128 to 127 with a negative one), `array[int]` (other ints),
-`array[float]`, `array[mixed]`... Long values are cut short with `…`.
+`array[float]`, `array[mixed]`... Long values are cut short with `…`. The log shows the newest lines (older ones scroll out of view), and you can make it
+bigger or smaller by **dragging the grip in its bottom-right corner**; the size is saved with the diagram.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
-| Lines | How many of the newest samples stay on the block | 4, 8, 16 | 8 |
+| Lines | How many of the newest samples are kept | 4, 8, 16, 32, 64, 128 | 8 |
+| Width, Height | Size of the log on the block (also set by dragging its corner) | 120 – 1000 px, 40 – 800 px | 220 × 120 |
 
 Shown on the block: Lines.
 

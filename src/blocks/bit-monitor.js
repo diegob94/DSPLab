@@ -1,4 +1,4 @@
-import { h } from '../dom.js';
+import { logView, logSizeParams } from './log-view.js';
 import { isBit, parseBits, bitsToText } from './stream.js';
 
 // one log line for a frame: its text (control characters shown as ·) or its bits
@@ -16,9 +16,10 @@ export const bitMonitor = {
   params: [
     { key: 'format', label: 'Format', show: true, type: 'select', options: ['text', 'bits'], default: 'text' },
     { key: 'frame', label: 'Frame', show: true, type: 'range', min: 1, max: 4096, step: 1, default: 8 },
-    { key: 'lines', label: 'Lines', type: 'select', options: [4, 8, 16], default: 8 },
+    { key: 'lines', label: 'Lines', type: 'select', options: [4, 8, 16, 32, 64, 128], default: 8 },
     { key: 'preambleType', label: 'Preamble type', type: 'select', options: ['text', 'hex', 'bits'], default: 'text' },
     { key: 'preamble', label: 'Preamble', show: true, type: 'text', default: '' },
+    ...logSizeParams,
   ],
   // the number of bits in a frame: characters of 8 bits in text format
   frameBits: (p) => (p.format === 'text' ? p.frame * 8 : p.frame),
@@ -62,15 +63,7 @@ export const bitMonitor = {
     };
     return inst;
   },
-  ui() {
-    const el = h('pre', { className: 'msg-log' });
-    let shown = null;
-    return {
-      el,
-      draw(inst) {
-        const text = inst ? inst.log.join('\n') || 'Waiting for bits' : 'Stopped';
-        if (text !== shown) { shown = text; el.textContent = text; }
-      },
-    };
+  ui(node) {
+    return logView(node, (inst) => (inst ? inst.log.join('\n') || 'Waiting for bits' : 'Stopped'));
   },
 };

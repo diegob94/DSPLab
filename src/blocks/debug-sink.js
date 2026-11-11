@@ -1,4 +1,4 @@
-import { h } from '../dom.js';
+import { logView, logSizeParams } from './log-view.js';
 import { sampleType } from './stream.js';
 
 // one log line for a sample: the audio time, its type and its value (cut short if it is long)
@@ -17,7 +17,8 @@ export const debugSink = {
   asyncPorts: ['in'],
   wireTypes: { in: '*' },
   params: [
-    { key: 'lines', label: 'Lines', show: true, type: 'select', options: [4, 8, 16], default: 8 },
+    { key: 'lines', label: 'Lines', show: true, type: 'select', options: [4, 8, 16, 32, 64, 128], default: 8 },
+    ...logSizeParams,
   ],
   build(ctx, p) {
     let lines = p.lines;
@@ -33,15 +34,7 @@ export const debugSink = {
       dispose() { log.length = 0; },
     };
   },
-  ui() {
-    const el = h('pre', { className: 'msg-log' });
-    let shown = null;
-    return {
-      el,
-      draw(inst) {
-        const text = inst ? inst.log.join('\n') || 'Waiting for samples' : 'Stopped';
-        if (text !== shown) { shown = text; el.textContent = text; }
-      },
-    };
+  ui(node) {
+    return logView(node, (inst) => (inst ? inst.log.join('\n') || 'Waiting for samples' : 'Stopped'));
   },
 };

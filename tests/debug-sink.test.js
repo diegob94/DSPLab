@@ -47,3 +47,44 @@ test('it accepts any async port but not audio, and shows the type live on the bl
   await page.waitForFunction(() => /array\[uint8\]/.test(document.querySelector('.msg-log').textContent));
   assert.match(await page.locator('.msg-log').textContent(), /array\[uint8\]  \[104,101,108,108,111\]/);
 }));
+
+test('dragging the corner resizes the log (it does not move the block), and the size is saved', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Debug Sink');
+  const node = page.locator('.node:has-text("Debug Sink")');
+  const wrap = node.locator('.log-wrap');
+  await page.waitForFunction(() => document.querySelector('.log-wrap').offsetWidth === 220);   // the first frame sizes it
+  const before = await wrap.boundingBox();
+  const at = await node.boundingBox();
+  const g = await node.locator('.log-grip').boundingBox();
+  await page.mouse.move(g.x + g.width / 2, g.y + g.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(g.x + g.width / 2 + 80, g.y + g.height / 2 + 60, { steps: 5 });
+  await page.mouse.up();
+  const after = await wrap.boundingBox();
+  assert.ok(Math.abs(after.width - (before.width + 80)) <= 1 && Math.abs(after.height - (before.height + 60)) <= 1, `${before.width}x${before.height} -> ${after.width}x${after.height}`);
+  const still = await node.boundingBox();
+  assert.ok(Math.abs(still.x - at.x) <= 1 && Math.abs(still.y - at.y) <= 1, 'the block stayed where it was');
+  const saved = await page.evaluate(() => {
+    const p = [...dsplab.graph.nodes.values()].find((n) => n.type === 'debug_sink').params;
+    return [p.width, p.height, JSON.parse(localStorage.getItem('dsplab.diagram') || 'null')];
+  });
+  assert.deepEqual(saved.slice(0, 2), [300, 180]);
+  // the size limits hold: dragging far beyond them stops at the maximum
+  await page.mouse.move(g.x + 80 + g.width / 2, g.y + 60 + g.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(g.x + 2000, g.y + 2000, { steps: 3 });
+  await page.mouse.up();
+  assert.deepEqual(await page.evaluate(() => { const p = [...dsplab.graph.nodes.values()].find((n) => n.type === 'debug_sink').params; return [p.width, p.height]; }), [1000, 800]);
+}));
+
+test('the newest lines stay in view', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Debug Sink');
+  await page.evaluate(() => { [...dsplab.graph.nodes.values()].find((n) => n.type === 'debug_sink').params.lines = 128; });
+  await startAudio(page);
+  await page.evaluate(() => {
+    const id = [...dsplab.graph.nodes.values()].find((n) => n.type === 'debug_sink').id;
+    for (let i = 0; i < 100; i++) dsplab.engine.live.get(id).inputs.in.receive(i);
+  });
+  await page.waitForFunction(() => document.querySelector('.msg-log').textContent.endsWith('  99'));
+  assert.ok(await page.evaluate(() => { const e = document.querySelector('.msg-log'); return e.scrollTop + e.clientHeight >= e.scrollHeight - 1; }));
+}));
