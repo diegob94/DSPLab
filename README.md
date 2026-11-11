@@ -426,17 +426,21 @@ threshold counts as below it, and a block with nothing connected reads as 0.
 
 Changing the threshold applies at once. Shown on the block: Threshold.
 
-**AWGN**: adds white Gaussian noise to a signal (additive white Gaussian noise), to simulate a noisy channel.
-Input: `in`. Output: `out`.
+**AWGN**: adds white Gaussian noise to a signal (additive white Gaussian noise), to simulate a noisy channel, at a
+signal-to-noise ratio you set. Input: `in`. Output: `out`.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
-| Noise σ | Standard deviation of the noise (its RMS level) | 0 – 1 | 0.1 |
+| SNR | Signal power over noise power, in dB | -20 – 60 dB | 20 dB |
+| Window | Time over which the input's power is averaged (panel only) | 10 – 5000 ms (logarithmic) | 500 ms |
 
-The output is the input plus σ times Gaussian noise. With nothing connected it outputs the noise alone. The
-noise repeats every 10 seconds. Noise above ±1 is clipped by the Audio Sink.
+The output is the input plus Gaussian noise whose power is the input's power divided by 10^(SNR / 10): 0 dB is noise as
+strong as the signal, 20 dB is noise 100 times weaker in power (10 times in amplitude). The input's power is its mean square
+(DC included), followed with a moving average over *Window*, so the noise follows the level of the signal: a short window
+follows bursts, a long one gives steadier noise. An input of silence gets no noise (it has no power), so a block with nothing
+connected outputs silence. Noise above ±1 is clipped by the Audio Sink.
 
-Shown on the block: Noise σ.
+Shown on the block: SNR.
 
 **Delay**: delays a signal by a fixed time. Input: `in`. Output: `out`. Setting: **Delay** 0 – 1000 ms (default 10 ms).
 
