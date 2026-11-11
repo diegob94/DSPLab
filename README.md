@@ -501,7 +501,8 @@ While you change *Trig level* a dashed line shows it on the screen for a moment.
 - **Display mode.** Each channel is drawn from its own samples (one per tick of the sound card for a plain audio
   signal; one per symbol for a signal at a lower sample rate, like a Serializer's). *linear* joins them with straight
   lines; *sample & hold* keeps each value until the next sample (a staircase); *impulse* draws only a vertical line from
-  zero up to the value at each sample, with a dot on its tip and nothing between samples (what is called a stem plot, or a
+  zero up to the value at each sample, with a dot on its tip (also on the zeros, so you see every sample; the dots appear
+  once there is at most one per pixel, zoom in with *X / div* if you only see the stems) and nothing between samples (what is called a stem plot, or a
   Dirac impulse train). *auto* is *linear* for a channel at the sound card's rate and *sample & hold* for a slower one.
   When there are too many samples on the screen to tell them apart (more than four per pixel) every mode draws the
   signal's envelope instead. Only the settings of the channels that exist are listed.

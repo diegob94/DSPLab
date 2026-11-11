@@ -78,3 +78,33 @@ test('the three display modes draw different pictures of a channel at its own ra
   assert.notEqual(hold.h, impulse.h);
   assert.notEqual(linear.h, impulse.h);
 }));
+
+test('impulse mode puts a dot on every sample, zeros included, once the samples are far enough apart', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Wave Generator');
+  await addFromPalette(page, 'Oscilloscope');
+  await page.evaluate(() => {
+    const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
+    const [w, o] = ['wave_generator', 'oscilloscope'].map(by);
+    Object.assign(w.params, { amplitude: 0, offset: 0 });      // a channel of zeros at the sound card's rate
+    Object.assign(o.params, { channels: 1, xdiv: 0.1, display1: 'linear' });
+    dsplab.rebuildPorts(o);
+    dsplab.addEdge({ node: w.id, port: 'out' }, { node: o.id, port: 'ch1' });
+  });
+  await startAudio(page);
+  await sleep(500);
+  // the orange pixels away from the horizontal axis line (the axis is a different colour): a trace of zeros is on that line
+  const lit = (mode) => page.evaluate(async (mode) => {
+    [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope').params.display1 = mode;
+    await new Promise((r) => setTimeout(r, 250));
+    const c = document.querySelector('.node canvas.scope');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] > 180 && d[i + 2] < 140) n++;
+    return n;
+  }, mode);
+  const impulse = await lit('impulse'), sah = await lit('sample & hold');
+  assert.ok(impulse > 0, 'the dots of the zeros are drawn');
+  // 1 ms is 44-48 samples; each dot is a few pixels
+  assert.ok(impulse > 40, `${impulse} lit pixels`);
+  assert.ok(sah > 0, 'and the other modes still draw the trace of zeros as a line');
+}));

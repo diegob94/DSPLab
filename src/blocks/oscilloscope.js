@@ -318,9 +318,12 @@ export const oscilloscope = {
           }
         }
         g.stroke();
-        // dots on the samples of a channel slower than the sound card's (on the big screen, which has room; an impulse
-        // always has its dot, as its tip)
-        if (points.length && points.length <= 300 && rate && rate < inst.sampleRate && (labels || display === 'impulse')) {
+        // dots on the samples: the tip of every impulse, zeros included (so the samples between two stems can be told from
+        // nothing) while there is at most one per pixel; and, on the big screen, those of a channel slower than the sound
+        // card's in the other modes
+        const dots = display === 'impulse' ? points.length <= W
+          : labels && rate && rate < inst.sampleRate && points.length <= 300;
+        if (points.length && dots) {
           g.fillStyle = SCOPE_COLORS[k % SCOPE_COLORS.length];
           for (const i of points) { g.beginPath(); g.arc(X(i), yOf(data[i]), 2.5, 0, 2 * Math.PI); g.fill(); }
         }
