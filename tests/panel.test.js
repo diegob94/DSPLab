@@ -1,6 +1,6 @@
 'use strict';
 const { before, after, test } = require('node:test');
-const { assert, launch, withApp, selectNode, addFromPalette, setRange } = require('./helpers');
+const { assert, launch, withApp, selectNode, addFromPalette, setRange, startAudio } = require('./helpers');
 
 let app;
 before(async () => { app = await launch(); });
@@ -57,4 +57,50 @@ test('selecting a cable shows its endpoints; deleting a block clears the panel',
   await selectNode(page, 'Audio Sink');
   await page.keyboard.press('Delete');
   assert.equal(await page.locator('#props .param').count(), 0);
+}));
+
+test('selecting a cable shows its type, clock and, while running, the size of what flows through it', () => withApp(app, async (page) => {
+  for (const t of ['Strobe Source', 'Array Unpack', 'Debug Sink', 'Wave Generator', 'Audio Sink']) await addFromPalette(page, t);
+  const ids = await page.evaluate(() => {
+    const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
+    const [s, u, d, w, k] = ['strobe_source', 'array_unpack', 'debug_sink', 'wave_generator', 'audio_sink'].map(by);
+    s.params.period = 50;
+    const e = (a, ap, b, bp) => dsplab.addEdge({ node: a.id, port: ap }, { node: b.id, port: bp }).id;
+    return { sd: e(s, 'out', u, 'in'), ud: e(u, 'out', d, 'in'), wk: e(w, 'out', k, 'in') };
+  });
+  const show = (id) => page.evaluate((id) => dsplab.select({ kind: 'edge', id }), id);
+  const rows = async () => Object.fromEntries(await page.locator('#props-body .kv').evaluateAll((els) => els.map((el) => [el.children[0].textContent, el.children[1].textContent])));
+  await show(ids.sd);
+  let r = await rows();
+  assert.equal(r.Type, 'array[uint8]');
+  assert.equal(r.Clock, 'asynchronous');
+  assert.equal(r.Size, 'Run to see the size');
+  await show(ids.wk);
+  r = await rows();
+  assert.deepEqual([r.Type, r.Clock, r.Size], ['audio', 'synchronous, sound card rate', 'continuous signal']);
+  await startAudio(page);
+  await show(ids.sd);
+  await page.waitForFunction(() => /5 elements/.test(document.querySelector('#props-body').textContent));   // 'hello'
+  await show(ids.ud);
+  await page.waitForFunction(() => /5 × 8 \(rows × columns\)/.test(document.querySelector('#props-body').textContent));   // 5 bytes of 8 bits
+  assert.match(await page.textContent('#props-body'), /array\[array\[uint8\]\]/);
+}));
+
+test('the cable from the Serializer reads audio with the baud rate as its sample rate', () => withApp(app, async (page) => {
+  for (const t of ['Strobe Source', 'Serializer', 'Oscilloscope']) await addFromPalette(page, t);
+  const ids = await page.evaluate(() => {
+    const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
+    const [s, z, o] = ['strobe_source', 'serializer', 'oscilloscope'].map(by);
+    const e = (a, ap, b, bp) => dsplab.addEdge({ node: a.id, port: ap }, { node: b.id, port: bp }).id;
+    z.params.baud = 2400;
+    return { sz: e(s, 'out', z, 'in'), zo: e(z, 'out', o, 'ch1'), z: z.id };
+  });
+  const row = (label) => page.evaluate((label) => [...document.querySelectorAll('#props-body .kv')].find((el) => el.children[0].textContent === label).children[1].textContent, label);
+  await page.evaluate((id) => dsplab.select({ kind: 'edge', id }), ids.zo);
+  assert.equal(await row('Type'), 'audio');
+  assert.equal(await row('Clock'), 'synchronous, 2400 samples/s');
+  await page.evaluate((id) => { dsplab.graph.nodes.get(id).params.baud = 500; }, ids.z);   // the panel follows the setting
+  await page.waitForFunction(() => /500 samples\/s/.test(document.querySelector('#props-body').textContent));
+  await page.evaluate((id) => dsplab.select({ kind: 'edge', id }), ids.sz);
+  assert.equal(await row('Clock'), 'asynchronous');
 }));

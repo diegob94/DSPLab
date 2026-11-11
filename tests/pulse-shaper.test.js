@@ -1,6 +1,6 @@
 'use strict';
 const { before, after, test } = require('node:test');
-const { assert, launch, withApp, addFromPalette, selectNode, panelControl, startAudio, sleep } = require('./helpers');
+const { assert, launch, withApp, addFromPalette, panelControl, startAudio, sleep } = require('./helpers');
 
 let app;
 before(async () => { app = await launch(); });
@@ -44,41 +44,88 @@ test('a lone sinc pulse: peak 1, zeros at whole symbols, symmetric, sinc(0.5) = 
   assert.ok(Math.abs(y[c + 5] - 2 / Math.PI) < 1e-6);
 }));
 
-test('the block places 1 x 1 messages on its baud grid, whatever the arrival times', () => withApp(app, async (page) => {
-  const out = await page.evaluate(async () => {
-    const ctx = new OfflineAudioContext(1, 4410, 44100);
-    const blk = dsplab.BLOCKS.pulse_shaper.build(ctx, { pulse: 'square', baud: 4410, amplitude: 1 });
-    blk.outputs.out.connect(ctx.destination);
-    for (const b of [1, 1, 0, 1]) blk.inputs.msg.receive([[b]]);   // all at once
-    blk.inputs.msg.receive([[1, 1]]);                              // not a 1 x 1: ignored
-    const data = (await ctx.startRendering()).getChannelData(0);
-    const first = data.findIndex((v) => v !== 0);
-    return { first, bits: Array.from({ length: 4 }, (_, k) => data[first + k * 10 + 5]), after: data.slice(first + 40).some((v) => v !== 0) };
-  });
-  assert.equal(out.first, Math.ceil(0.05 * 44100));
-  assert.deepEqual(out.bits, [1, 1, 0, 1]);
-  assert.equal(out.after, false);
+// an input signal at `inRate` made of `symbols` (each held for sampleRate / inRate samples) through a ShaperSignal
+const shape = (page, { symbols, inRate = 48000, sampleRate = 48000, pulse = 'square', sps = 4, late = 0 }) => page.evaluate(async ([symbols, inRate, sampleRate, pulse, sps, late]) => {
+  const { SerializerSignal } = await import('/src/blocks/serializer-core.js');
+  const { ShaperSignal } = await import('/src/blocks/shaper-core.js');
+  const src = new SerializerSignal(sampleRate, inRate);
+  src.push(symbols);
+  const sh = new ShaperSignal(sampleRate, inRate, pulse, sps);
+  const n = Math.ceil((symbols.length + 12 * sps) * sampleRate / inRate / 128) * 128;
+  const inp = new Float32Array(n), out = new Float32Array(n);
+  for (let i = 0; i < n; i += 128) {
+    const a = inp.subarray(i, i + 128);
+    src.process(a, i);
+    if (i >= late) sh.process(a, out.subarray(i, i + 128), i);
+  }
+  return Array.from(out);
+}, [symbols, inRate, sampleRate, pulse, sps, late]);
+
+test('it convolves its input with the pulse: an impulse train becomes one square pulse per one', () => withApp(app, async (page) => {
+  // symbols at the sound card's rate (sps 4): 1 0 0 0 | 0 0 0 0 | 1 0 0 0 | 0 0 0 0 ...
+  const y = await shape(page, { symbols: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0], sps: 4 });
+  assert.deepEqual(y.slice(0, 16), [1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0]);
 }));
 
-test('Pulse Shaper has a message input and an audio output; it runs behind a serializer', () => withApp(app, async (page) => {
-  await addFromPalette(page, 'Message Strobe');
-  await addFromPalette(page, 'Message Serializer');
-  await addFromPalette(page, 'Pulse Shaper');
-  assert.equal(await page.locator('.node:has-text("Pulse Shaper") .port.in.msg').count(), 1);
-  assert.equal(await page.locator('.node:has-text("Pulse Shaper") .port.out.msg').count(), 0, 'its output is audio');
-  const wired = await page.evaluate(() => {
+test('a run of impulses tiles the square pulses, and the output is linear in the input (the level is the input\'s)', () => withApp(app, async (page) => {
+  const y = await shape(page, { symbols: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], sps: 4 });
+  assert.deepEqual(y.slice(0, 12), Array(12).fill(1));
+  assert.deepEqual((await shape(page, { symbols: [1.5, 0, 0, 0], sps: 4 })).slice(0, 5), [1.5, 1.5, 1.5, 1.5, 0]);
+}));
+
+test('a sinc pulse: peak at the middle of the kernel, zeros at whole symbols, symmetric', () => withApp(app, async (page) => {
+  const sps = 4;
+  const y = await shape(page, { symbols: [1], pulse: 'sinc', sps });
+  const c = 4 * sps;   // the kernel is centred 4 symbols after the impulse
+  assert.ok(Math.abs(y[c] - 1) < 1e-6);
+  for (const k of [1, 2, 3]) assert.ok(Math.abs(y[c + sps * k]) < 1e-6 && Math.abs(y[c - sps * k]) < 1e-6);
+  assert.ok(Math.abs(y[c + 1] - y[c - 1]) < 1e-6);
+  assert.ok(Math.abs(y[c + 2] - 2 / Math.PI) < 1e-6);
+}));
+
+test('it works at the rate of its input: a signal at a lower rate is convolved at that rate and held', () => withApp(app, async (page) => {
+  // 12000 samples/s into a 48000 Hz card: each input sample lasts 4 card samples; sps 3 = three input samples per pulse
+  const y = await shape(page, { symbols: [1, 0, 0, 0, 0, 0, 1, 0, 0], inRate: 12000, sps: 3 });
+  assert.deepEqual(y.slice(0, 36), [...Array(12).fill(1), ...Array(12).fill(0), ...Array(12).fill(1)]);
+}));
+
+test('the output stays in step with the input when its processor starts later', () => withApp(app, async (page) => {
+  const a = await shape(page, { symbols: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1], sps: 4, inRate: 12000 });
+  const b = await shape(page, { symbols: [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1], sps: 4, inRate: 12000, late: 384 });
+  assert.deepEqual(b.slice(1000), a.slice(1000));   // once it has heard a whole kernel it is the same
+}));
+
+test('Pulse Shaper has a signal in and a signal out (no async ports); its rate follows its input', () => withApp(app, async (page) => {
+  for (const t of ['Strobe Source', 'Serializer', 'Upsampler', 'Pulse Shaper', 'Wave Generator']) await addFromPalette(page, t);
+  assert.equal(await page.locator('.node:has-text("Pulse Shaper") .port.in').count(), 1);
+  assert.equal(await page.locator('.node:has-text("Pulse Shaper") .port.out').count(), 1);
+  assert.equal(await page.locator('.node:has-text("Pulse Shaper") .async').count(), 0);
+  const r = await page.evaluate(async () => {
+    const g = await import('/src/core/graph.js');
     const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
-    const [s, z, p, k] = ['message_strobe', 'message_serialize', 'pulse_shaper', 'audio_sink'].map(by);
-    s.params.period = 50;
-    return [
-      !!dsplab.addEdge({ node: s.id, port: 'msg' }, { node: z.id, port: 'msg' }),
-      !!dsplab.addEdge({ node: z.id, port: 'msg' }, { node: p.id, port: 'msg' }),
-      !!dsplab.addEdge({ node: p.id, port: 'out' }, { node: k.id, port: 'in' }),
-    ];
+    const [s, z, u, p, w] = ['strobe_source', 'serializer', 'upsampler', 'pulse_shaper', 'wave_generator'].map(by);
+    const e = (a, ap, b, bp) => !!dsplab.addEdge({ node: a.id, port: ap }, { node: b.id, port: bp });
+    z.params.baud = 500; u.params.factor = 8;
+    e(s, 'out', z, 'in');
+    const out = { fromWave: e(w, 'out', p, 'in'), wave: g.outRate(p, 'out') };   // the sound card's rate, kept
+    e(z, 'out', u, 'in'); e(u, 'out', p, 'in');
+    out.chain = g.outRate(p, 'out');                                              // 500 * 8
+    return out;
   });
-  assert.deepEqual(wired, [true, true, true]);
+  assert.deepEqual(r, { fromWave: true, wave: null, chain: 4000 });
+}));
+
+test('Pulse Shaper in the engine accepts live changes', () => withApp(app, async (page) => {
+  for (const t of ['Wave Generator', 'Pulse Shaper', 'Audio Sink']) await addFromPalette(page, t);
+  await page.evaluate(() => {
+    const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
+    const [w, p, k] = ['wave_generator', 'pulse_shaper', 'audio_sink'].map(by);
+    dsplab.addEdge({ node: w.id, port: 'out' }, { node: p.id, port: 'in' });
+    dsplab.addEdge({ node: p.id, port: 'out' }, { node: k.id, port: 'in' });
+  });
   await startAudio(page);
-  await selectNode(page, 'Pulse Shaper');
+  // new blocks overlap at the canvas centre, so select it through the model rather than by clicking
+  await page.evaluate(() => dsplab.select({ kind: 'node', id: [...dsplab.graph.nodes.values()].find((n) => n.type === 'pulse_shaper').id }));
   await panelControl(page, 'Pulse').selectOption('sinc');   // live change, no rebuild
   await sleep(300);
   assert.match(await page.textContent('#status'), /^Running/);

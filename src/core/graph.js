@@ -3,7 +3,7 @@
 // own `el` / `view` to nodes and `el` to edges.
 import { BLOCKS } from '../blocks/index.js';
 import { emit } from './events.js';
-import { optionsOf, portKind, portNames, validParam } from './params.js';
+import { optionsOf, portWire, portNames, wiresMatch, elementOf, validParam } from './params.js';
 
 export const MIN_ZOOM = 0.3;
 export const MAX_ZOOM = 2.5;
@@ -15,6 +15,7 @@ export const graph = {
   nextId: 1,          // shared by nodes and edges
   pan: { x: 0, y: 0 },
   zoom: 1,            // world -> screen scale; screen = pan + world * zoom
+  nativeRate: null,   // samples per second of the sound card, once known (see setNativeRate); not saved
 };
 // null | { kind: 'edge', id } | { kind: 'node', id, ids }  (`ids`: every selected block, `id`: the last one added)
 let selection = null;
@@ -69,23 +70,90 @@ export function clearGraph() {
   select(null);
 }
 
+// What an output port carries. A generic output ('T') carries the element type of the array on the cable
+// that feeds the block's `in`, and 'same' carries whatever that cable carries; both are anything ('*') while
+// that is unknown.
+export function outWire(node, port, seen = new Set()) {
+  let wire = portWire(BLOCKS[node.type], port);
+  if (typeof wire === 'string' && wire !== 'T' && wire !== 'same') return wire;
+  const e = graph.edges.find((e) => e.to.node === node.id && e.to.port === 'in');
+  const src = e && graph.nodes.get(e.from.node);
+  if (!src || seen.has(node.id)) return '*';
+  const up = outWire(src, e.from.port, seen.add(node.id));
+  if (typeof wire === 'function') return up === '*' ? '*' : wire(node.params, up);   // (params, the type that feeds `in`) -> type
+  return wire === 'same' ? up : elementOf(up) || '*';
+}
+
+// The sample rate of what an output port sends, in samples per second, or null for the sound card's (an output has
+// another one only if its block says so). A block's `rates` function gets its params and the rate of the cable on its
+// `in` (null when there is none or it is the sound card's), so a block can scale the rate it is given.
+export function outRate(node, port, seen = new Set()) {
+  const rate = BLOCKS[node.type].rates && BLOCKS[node.type].rates[port];
+  if (!rate) return null;
+  const e = graph.edges.find((e) => e.to.node === node.id && e.to.port === 'in');
+  const src = e && graph.nodes.get(e.from.node);
+  const up = src && !seen.has(node.id) ? outRate(src, e.from.port, seen.add(node.id)) : null;
+  return rate(node.params, up);
+}
+
+// Do the sample rates agree? (audio ports only; a null rate is the sound card's). An input port takes the sound card's
+// rate unless its block says `inputRate: 'any'` (the oscilloscope, which handles each input at its own rate) or
+// `'rated'` (a block that needs to be told a rate, like the upsampler: anything but the sound card's).
+// A rate equal to the sound card's (graph.nativeRate, when it is known) is the sound card's; a faster one can't be carried.
+function rateOk(from, to) {
+  const mode = BLOCKS[graph.nodes.get(to.node).type].inputRate;
+  const rate = outRate(graph.nodes.get(from.node), from.port);
+  if (rate !== null && graph.nativeRate && rate > graph.nativeRate) return false;
+  if (mode === 'any') return true;
+  const native = rate === null || rate === graph.nativeRate;
+  return mode === 'rated' ? !native : native;
+}
+
+// the sample rate of the sound card, once known (the engine and the app tell it): cables that don't fit it are dropped
+export function setNativeRate(rate) {
+  if (graph.nativeRate === rate) return;
+  graph.nativeRate = rate;
+  pruneEdges();
+}
+
+const wiresFit = (e) => {
+  const a = graph.nodes.get(e.from.node), b = graph.nodes.get(e.to.node);
+  const wire = outWire(a, e.from.port);
+  return wiresMatch(wire, portWire(BLOCKS[b.type], e.to.port)) && (wire !== 'audio' || rateOk(e.from, e.to));
+};
+
+// a cable that feeds a generic block can change what that block's output carries: drop the cables that no longer fit
+let pruning = false;
+function pruneEdges() {
+  if (pruning) return;
+  pruning = true;
+  try {
+    let bad;
+    while ((bad = graph.edges.find((e) => !wiresFit(e)))) removeEdge(bad);
+  } finally { pruning = false; }
+}
+
 export function addEdge(from, to) {
   const a = graph.nodes.get(from.node), b = graph.nodes.get(to.node);
-  // audio and message ports are different kinds of cable
-  if (!a || !b || portKind(BLOCKS[a.type], from.port) !== portKind(BLOCKS[b.type], to.port)) return null;
+  // ports that carry different things (another clock, or another sample type) can't be cabled together
+  if (!a || !b || !wiresMatch(outWire(a, from.port), portWire(BLOCKS[b.type], to.port))) return null;
+  // and audio ports need the same sample rate
+  if (outWire(a, from.port) === 'audio' && !rateOk(from, to)) return null;
   // an input accepts a single connection; replace any existing one
   graph.edges.filter((e) => e.to.node === to.node && e.to.port === to.port).forEach(removeEdge);
   const edge = { id: graph.nextId++, from, to };
   graph.edges.push(edge);
   emit('edge-added', edge);
   emit('changed');
-  return edge;
+  pruneEdges();
+  return graph.edges.includes(edge) ? edge : null;
 }
 
 export function removeEdge(edge) {
   graph.edges = graph.edges.filter((e) => e !== edge);
   emit('edge-removed', edge);
   emit('changed');
+  pruneEdges();
 }
 
 export function deleteSelection() {
@@ -117,6 +185,8 @@ export function setView(x, y, zoom) {
 export function setParam(node, key, value) {
   node.params[key] = value;
   emit('param', node, key);
+  // a param can change what the block's output carries (a wireTypes function): drop the cables that stop fitting
+  if (BLOCKS[node.type].rates || Object.values(BLOCKS[node.type].wireTypes || {}).some((w) => typeof w === 'function')) pruneEdges();
 }
 
 // a select whose options depend on other params may have lost its value

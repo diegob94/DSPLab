@@ -1,7 +1,7 @@
 // Entry point: wires the UI to the core and loads the saved (or a starter) diagram.
 import { BLOCKS } from './blocks/index.js';
 import {
-  graph, select, selectNodes, addNode, removeNode, addEdge, removeEdge, rebuildPorts, syncParams,
+  graph, select, selectNodes, addNode, removeNode, addEdge, removeEdge, rebuildPorts, syncParams, setNativeRate,
 } from './core/graph.js';
 import { engine } from './core/engine.js';
 import { serialize, restore, loadDiagram } from './core/persistence.js';
@@ -24,6 +24,13 @@ initScreen();
 initToolbar();
 initHelp();
 startRenderLoop();
+
+// the sample rate of the sound card, so that a signal at that rate can be cabled to audio ports before Run is pressed
+try {
+  const probe = new (window.AudioContext || window.webkitAudioContext)();
+  setNativeRate(probe.sampleRate);
+  probe.close();
+} catch (err) { /* no audio: signals at a rate of their own then can't be told from the sound card's */ }
 
 if (!restore()) loadDiagram(EXAMPLES[0].diagram);
 openSharedLink();   // a shared link wins over the saved diagram (it asks first if that has blocks)

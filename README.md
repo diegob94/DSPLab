@@ -46,7 +46,7 @@ You start with a **Wave Generator** already connected to an **Audio Sink**. Pres
   values, read-only; you change them here.
 - **Toolbar** (top): Run/Stop, delete, **Share** (copies a link to the diagram), the **Examples** menu, and the audio status (the sample rate while
   running).
-- **Examples** (toolbar): *Simple tone* (the starting diagram), *ASK modulation*, *ASK receiver* (microphone → carrier recovery → message) and *Audio source scope* (microphone → oscilloscope). Picking one replaces
+- **Examples** (toolbar): *Simple tone* (the starting diagram), *ASK modulation*, *ASK receiver* (microphone → carrier recovery → debug sink) and *Audio source scope* (microphone → oscilloscope). Picking one replaces
   the current diagram, so it asks for confirmation first (unless the canvas is empty); it can't be undone,
   because the autosave overwrites the old diagram.
 
@@ -66,7 +66,7 @@ mouse, and pinching the canvas zooms.
 | Add a block | Drag it from the palette onto the canvas, or double-click it in the palette |
 | Move a block | Drag it by any part of the block (title bar or body) |
 | Connect blocks | Drag from an **output** port (right side of a block) to an **input** port (left side of another) |
-| Select a block or a cable | Click it. Its settings (or, for a cable, where it goes from and to) appear in Properties |
+| Select a block or a cable | Click it. Its settings (or, for a cable, where it goes from and to, the **type** it carries, its clock and, while the audio runs, the **size** of the last sample that went through it, like `5 elements` or `3 × 4 (rows × columns)`) appear in Properties |
 | Edit a setting | Select the block, then use the controls in Properties |
 | Set an exact value | Type it in the number field under a slider and press Enter (or leave the field). Values outside the range are clamped to it |
 | Select several blocks | `Shift` (or `Ctrl`/`Cmd`) + click adds or removes a block; `Shift` + drag on the empty background draws a box that adds every block it touches; `Ctrl+A` selects all. Dragging any selected block moves them all; a plain click on one of them keeps just that one |
@@ -81,6 +81,7 @@ Connection rules:
 
 - A cable always goes from an output to an input, and never from a block to itself.
 - An **input takes one cable**: connecting a second one replaces the first.
+- Every port has a **clock**. Most are *audio* (round ports): a sample at every tick of the sound card. *Asynchronous* ports (square) carry samples at their own instants, like arrays of bytes. Async ports also have a sample type (`int`, `uint8`, `array[uint8]`, a list of bytes...); a few blocks are generic, like Array Reshape, whose output type follows its input. Only ports that carry the same thing can be cabled together. An audio signal also has a **sample rate**: the sound card's, unless the block that makes it says otherwise (the Serializer sends one at its baud rate, the Upsampler one at a multiple of the rate it is given). An audio port only takes a signal at its own rate, so a Serializer at 1000 baud can't be cabled to an Audio Sink (but an Upsampler that brings it to exactly the sound card's rate, 1000 baud × 48 on a 48 kHz card, can: the app asks the sound card for its rate when it starts, and again when you press Run). A signal faster than the sound card's can't be carried by any cable; the Oscilloscope takes any rate, on each input. Select a cable to read its rate.
 - An **output can feed many inputs**.
 - An unconnected input counts as silence (zero).
 
@@ -136,6 +137,23 @@ kept in memory only: it is not saved with the diagram, so after a reload you hav
 
 Shown on the block: Pause.
 
+**Strobe Source**: sends its data again and again, on an **asynchronous clock**. Output: `out` (async, `array[uint8]`).
+
+Every *Period* the whole data goes out as **one array of ints**: the bytes of a text (UTF-8, so `é` is two ints) or
+of some hex digits, as uint8 (0 to 255). `hello` is `[104, 101, 108, 108, 111]`, and `é` is `[195, 169]`. It starts when the audio starts, and sends nothing
+while the data is empty. To send the bytes one at a time at a baud rate, put a Serializer after it.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Type | *text*: UTF-8; *hex*: bytes (`FF`, `AA 55` or `0xAA 0x55`: spaces, commas and `0x` are ignored, and a last lone digit is dropped) | text, hex | text |
+| Data | What is sent, in that notation. A preamble is just the first characters of it | up to 100 characters | hello |
+| Period | Time between two sends | 10 ms – 10 s (logarithmic) | 1000 ms |
+
+Editing the data applies at once, without restarting the clock. Shown on the block: Data and Period.
+
+**Constant Source**: the same array, but sent only **once**, when the audio starts, and again whenever you change
+the data. Output: `out` (async, `array[uint8]`). Settings: Type and Data, as above. To repeat it, use a Strobe Source.
+
 ### Processing blocks
 
 **Math Operator**: combines two signals sample by sample. Inputs: `a`, `b`. Output: `out`.
@@ -167,24 +185,117 @@ opposite and removes that band. For both, Frequency is the centre of the band an
 
 Shown on the block: Type and Frequency.
 
-**Pulse Shaper**: turns a stream of 1 × 1 messages (symbols) into a waveform you can play or look at.
-Input: `msg`. Output: `out` (audio).
+**Concatenate**: joins arrays one after the other. Inputs: `a`, `b`, and up to `h` (set with *Inputs*, all
+async `array[uint8]`). Output: `out` (async, `array[uint8]`).
 
-A one is `1` (times the amplitude) and a zero is `0`; the train of symbols is convolved with a pulse shape,
-sampled at the audio sample rate. Symbols are placed one after the other on a grid of 1 / baud seconds,
-whatever the exact moment each message arrives; the first symbol after a pause starts about 50 ms ahead. Set
-the same baud rate here as on the Message Serializer, or the stream will fall behind or run ahead. Messages
-that aren't 1 × 1 are ignored.
+Every input remembers the latest array that arrived there, and every time one arrives at **any** input the block
+sends them all joined in the order of the inputs (`a`, then `b`, and so on). Nothing is sent while some input is
+still blank (it has received nothing yet since Run); the block shows which one it is waiting for, or the last join,
+like `2 + 5 → 7 bytes`. To put a preamble in front of a payload, feed the preamble (a Constant Source, say) to `a`
+and the payload to `b`: it goes out whenever the payload arrives, and also when you edit the preamble. Anything
+that is not an array of bytes is ignored.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
-| Pulse | *square* holds the level for the whole symbol; *sinc* is a band-limited pulse that crosses zero at the other symbols' centres | square, sinc | square |
-| Baud rate | Symbols per second | 50 – 20000 (logarithmic) | 1000 baud |
-| Amplitude | Level of a one | 0 – 1 | 0.5 |
+| Inputs | How many arrays are joined | 2 – 8 | 2 |
 
-The sinc pulse is cut off 4 symbols to each side of its peak. Changing a setting applies to the next symbol.
+Changing *Inputs* keeps the cables on the ports that remain (`a`, `b`...) and drops those on removed ones.
+Shown on the block: Inputs.
 
-Shown on the block: Pulse and Baud rate.
+**Array Unpack**: opens every integer of an array into its bits. Input: `in` (async, an array of integers of
+8, 16 or 32 bits: `array[uint8]`, `array[int16]`...). Output: `out` (async, `array[array[uint8]]`).
+
+An array of N integers of width W comes out as N arrays of W numbers (N × W), each 0 or 1, most significant bit
+first: `[0x41, 0xFF]` as `array[uint8]` gives `[[0,1,0,0,0,0,0,1], [1,1,1,1,1,1,1,1]]`. Negative numbers give their
+two's complement bits (`-1` as `int8` is `11111111`). W comes from the type of the cable on `in`; when that is not
+known (a generic block such as the Serializer feeds it before anything is connected to it) it uses 32. An array
+with a number outside the range of its type, or anything that is not an array of integers, is ignored. It has no
+settings.
+
+**Array Reshape**: lays the same elements out in another number of rows and columns, like `numpy.reshape`. Input:
+`in` (async, an array: `array[T]` or `array[array[T]]`). Output: `out` (async, `array[array[T]]`, or `array[T]` when
+a dimension is 0; anything while `in` has no cable).
+
+The elements of the input (a plain array, or N arrays of M elements read row by row) are laid out again as
+*Rows* × *Columns*, in the same order: a 3 × 4 array can become 4 × 3, 2 × 6 or a single row of 12, and back. The
+elements can be anything.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Rows | Rows of the output; −1 works it out from Columns; **0 removes the dimension** | −1 – 4096 | 1 |
+| Columns | Columns of the output; −1 works it out from Rows; **0 removes the dimension** | −1 – 4096 | −1 |
+
+The defaults put every element in a single row (1 × N, an array of one array). Set one of them to 0 to drop that
+dimension: the output is then a plain array and the other setting must be the number of elements or −1, so
+*Rows* 0 and *Columns* −1 flatten a 3 × 4 array into 12 elements. Both can't be 0. Otherwise rows × columns must
+equal the number of elements, and only one of them can be −1. If it doesn't fit, the array is **dropped** (numpy
+would raise an error) and the block shows what it could not do, like `3x4 can't be 5 x 2`; it also shows the last
+change, like `3x4 → 2x6` or `3x4 → 12`. An input that is not rectangular (inner arrays of different lengths), mixes
+numbers and arrays or is empty is ignored.
+
+Changing *Rows* or *Columns* between 0 and another value changes the type on `out`, so the cables on it that no
+longer fit are dropped.
+
+Shown on the block: Rows and Columns.
+
+**Upsampler**: raises the sample rate of a signal by inserting zeros. Input: `in` (a signal with a sample rate of its
+own, like a Serializer's). Output: `out` (a signal at *Factor* times that rate).
+
+After every input sample it inserts *Factor* − 1 zeros, so the output has *Factor* samples for each one of the input
+and its sample rate is *Factor* times as high: a Serializer at 1000 baud into an Upsampler with *Factor* 4 gives
+4000 samples/s, the first of each group being the input's sample and the other three 0. (Inserting *N* zeros would
+multiply the rate by *N* + 1; here *Factor* is the multiplier, so it inserts one less.) The input has to be a signal
+with a sample rate of its own: a plain audio signal, which has the sound card's rate, is refused, because the output
+would be faster than the sound card can carry. All the signals of a diagram put their samples on one time grid that starts when the audio does, so the sample the Upsampler
+copies from its input starts exactly where that input sample does, and the Oscilloscope shows both lined up. The rate of `out` follows the input's and the *Factor* live, also
+through a chain of Upsamplers, and a cable that needs the sound card's rate (an Audio Sink) is refused.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Factor | The multiplier of the sample rate | 2 – 64 | 2 |
+
+Shown on the block: Factor.
+
+**Serializer**: turns arrays of numbers into a continuous signal, one number per sample. Input: `in` (async, an array
+of integers or floats: `array[uint8]`, `array[int16]`, `array[float]`...; not an array of arrays). Output: `out`
+(a **signal**, like the audio of a Wave Generator or the microphone, but with a **sample rate equal to the baud rate**).
+
+The arrays that arrive go into a buffer, and the output takes a sample every 1 / baud seconds for as long as the
+audio runs: the next number of the buffer, or **0 when the buffer is empty**. So it never stops: with nothing to send
+it sends zeros, and an array that arrives is consumed from the next sample on, after whatever was already waiting.
+Integers (of any width) become floats implicitly, with the same value. The pacing is exact, to the sample (it runs
+in an audio worklet): each number is held for sampleRate / baud samples of the sound card, so the baud rate can be
+any number, not only a divisor of the sound card's rate. Because its sample rate is the baud rate and not the sound
+card's, `out` only goes to ports that take that rate (the Oscilloscope, an Upsampler); select the cable and its
+*Clock* reads, for example, `synchronous, 1000 samples/s`, following the setting. Anything that is not an array of
+numbers (strings, `null`, `NaN`, an array of arrays) is ignored. To feed it an array of arrays (like the output of
+Array Unpack) flatten it first with an Array Reshape with *Rows* 0.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Baud rate | Samples per second (the sample rate of `out`) | 50 – 20000 (logarithmic) | 1000 baud |
+
+Shown on the block: Baud rate.
+
+**Pulse Shaper**: a simple convolutional filter: it convolves its input signal with a pulse. Input: `in` (a signal, of
+any sample rate). Output: `out` (a signal, at the same sample rate).
+
+It is an FIR filter whose impulse response is the pulse: *square* is a level held for one symbol (*Samples / symbol*
+samples) and *sinc* is a band-limited pulse that crosses zero at the other symbols' centres, cut off 4 symbols to each
+side of its peak. Fed with an impulse train, a one every *Samples / symbol* samples and zeros between them, it puts one
+pulse per symbol, which is pulse shaping: a Strobe Source → Array Unpack → Array Reshape (*Rows* 0) → Serializer
+(the symbol rate) → Upsampler (*Factor* = *Samples / symbol*) → Pulse Shaper chain turns text into a waveform, and
+with a symbol rate of the sound card's rate ÷ *Samples / symbol* the result can go to an Audio Sink. The convolution
+is done at the sample rate of the input (a signal from an Upsampler at 24000 samples/s is convolved at 24000 samples/s),
+so the output has that same rate. The sinc is centred on its peak, so the output is delayed by 4 symbols.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Pulse | The shape of the kernel | square, sinc | square |
+| Samples / symbol | Length of one symbol, in samples of the input | 1 – 64 | 8 |
+
+The kernel has unit amplitude: a one in the input comes out as a pulse of level 1, so the level of the output is the level
+of the input (a Serializer sends the numbers you give it; use a Math Operator to scale). Changing a setting applies at once and keeps what the filter has heard so far. Shown on the block: Pulse and Samples / symbol.
 
 **Matched Filter**: the receiver's counterpart of the Pulse Shaper: it correlates the input with the pulse, which
 gives the best signal-to-noise ratio at the instant a symbol is sampled. Input: `in`. Output: `out`.
@@ -193,7 +304,7 @@ It is an FIR filter whose impulse response is the pulse (both shapes are symmetr
 changes nothing), scaled so that a symbol sent with amplitude A comes out with a peak of A. With the *square*
 pulse it is an integrate-and-dump: each output sample is the average of the last symbol; the peak falls at the end
 of the symbol. With *sinc* the peak comes 4 symbols after the pulse's centre (the filter's delay). Put it before
-Symbol Recovery, with the same pulse and baud rate as the Pulse Shaper.
+Symbol Recovery, with the same pulse as the Pulse Shaper and the baud rate of the Serializer that feeds it.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
@@ -205,12 +316,12 @@ Changing a setting rebuilds the filter and may click.
 Shown on the block: Pulse and Baud rate.
 
 **Symbol Recovery**: samples a digital-looking signal (like the output of a matched filter) at the
-right instants and returns the bits. Input: `in` (audio). Outputs: `msg`, and `phase` (audio).
+right instants and returns the bits. Input: `in` (audio). Outputs: `bits` (async, `int`), and `phase` (audio).
 
 It runs a simple phase-locked loop: an oscillator that ticks once per symbol (at the baud rate you set) looks
 at the signal at the symbol instant and halfway between symbols. A Gardner detector compares the two at every
 transition and nudges the oscillator's phase, and slowly its frequency, until the ticks fall on the
-symbols' centres. Each tick sends a **1 × 1** message: 1 if the sample is above the decision level, which is
+symbols' centres. Each tick sends a bit: 1 if the sample is above the decision level, which is
 halfway between the levels the loop sees at symbol instants, 0 otherwise.
 
 | Setting | What it does | Range | Default |
@@ -334,7 +445,7 @@ Input: `in`. Output: `out`.
 | Amplitude | Output level | 0 – 1 | 0.5 |
 
 The frequency at each instant is Frequency + Sensitivity × input, so a ±1 signal swings it by ±Sensitivity
-(frequency modulation). Feed it a message-shaped signal for FSK. A total below 0 Hz runs the wave backwards.
+(frequency modulation). Feed it a baseband signal for FSK. A total below 0 Hz runs the wave backwards.
 An unconnected input is 0, which gives a plain tone at Frequency.
 
 Shown on the block: Waveform, Frequency, Sensitivity.
@@ -348,7 +459,11 @@ turn amplitudes up so the sum exceeds 1, you'll hear distortion; lower the ampli
 Generator's Offset counts too: amplitude 0.5 with offset 0.8 already goes past 1.
 
 **Oscilloscope**: draws signals over time. Inputs: `ch1` … `chN`, each channel in its own colour. It
-only draws while the audio is running (otherwise it reads *Stopped*).
+only draws while the audio is running (otherwise it reads *Stopped*). **Each input is sampled at its own sample
+rate** and placed on the common time scale, so you can show at once the microphone (at the sound card's rate) and a
+Serializer at 1000 baud, or two Serializers at different baud rates; on the **big screen** a channel with a lower
+rate than the sound card's gets a dot at each of its own samples (when there are no more than about 300 on the screen);
+the small view on the block doesn't draw them.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
@@ -360,6 +475,7 @@ only draws while the audio is running (otherwise it reads *Stopped*).
 | X / div | Time per horizontal division (10 divisions, so the screen shows ten times this) | 0.1 ms – 1000 ms (logarithmic) | 1 ms |
 | X position | Time at the centre of the screen, relative to the trigger (0 puts the trigger, t = 0, in the middle); negative shows earlier time. The ↺ button next to it resets it to 0 | −10000 – 10000 ms | 0 ms |
 | Y / div | Signal units per vertical division (8 divisions), shared by all channels | 0.01 – 2 (logarithmic) | 0.25 |
+| Ch1 display … ChN display | How each channel is drawn between its own samples (see below); one setting per input | auto, linear, sample & hold, impulse | auto |
 
 Shown on the block: Trigger, Trig mode, X / div and Y / div. The screen has 10 × 8 divisions.
 The button in the block's top-right corner (title bar) opens a **big screen**: a window over the diagram with
@@ -382,6 +498,14 @@ While you change *Trig level* a dashed line shows it on the screen for a moment.
   different crossing from frame to frame and the trace jumps; set the holdoff a little shorter than the
   repetition period and the sweep locks onto one of them. 0 turns it off. While you change it, a dashed
   vertical line on the screen marks the holdoff, measured from the start of the sweep.
+- **Display mode.** Each channel is drawn from its own samples (one per tick of the sound card for a plain audio
+  signal; one per symbol for a signal at a lower sample rate, like a Serializer's). *linear* joins them with straight
+  lines; *sample & hold* keeps each value until the next sample (a staircase); *impulse* draws only a vertical line from
+  zero up to the value at each sample, with a dot on its tip (also on the zeros, so you see every sample; the dots appear
+  once there is at most one per pixel, zoom in with *X / div* if you only see the stems) and nothing between samples (what is called a stem plot, or a
+  Dirac impulse train). *auto* is *linear* for a channel at the sound card's rate and *sample & hold* for a slower one.
+  When there are too many samples on the screen to tell them apart (more than four per pixel) every mode draws the
+  signal's envelope instead. Only the settings of the channels that exist are listed.
 - The screen can span up to 10 s (X / div 1000 ms); the scope keeps 20 s of history.
 - Channels without a cable aren't drawn.
 - If you reduce *Inputs*, cables on the channels that disappear are removed, and the trigger returns to
@@ -401,129 +525,21 @@ draws while the audio is running.
 The vertical axis goes from 0 dB (full scale) down to −100 dB. The loudest frequency is printed in the corner
 as *peak … Hz*. Shown on the block: Window size and Freq. axis.
 
-### Message blocks
+**Debug Sink**: prints the type and the value of every sample that arrives. Input: `in` (async, any type). It is
+the one port that takes any async cable (a Strobe Source, a Serializer, a Symbol Recovery...), but not audio.
+It reads *Stopped* while the audio is off, and the log starts empty on every Run.
 
-Messages are discrete events rather than a continuous signal. Their ports are **square**, and they
-travel on their own cables: a message port can only be connected to another message port, never to an
-audio one.
-
-A message is a table of ones and zeros with some rows and some columns. Text travels as **8 × N**: one
-column per byte (UTF-8, so `é` takes two columns), with the most significant bit in the top row. For
-example `A` (0x41) is the single column `0 1 0 0 0 0 0 1`, read from top to bottom. A block never edits
-a message it receives; it builds a new one.
-
-**Message Strobe**: sends the same text, as an 8 × N message, again and again. Output: `msg`.
+Each line is the time (seconds of audio), the type and the value, like `2.000  array[uint8]  [104,101]`. The type is
+the one the cable declares (select it to read it) and, when that is not known yet, it is worked out from the sample: `int`, `float`, `array[uint8]` (ints from 0 to 255), `array[uint8]` (ints from −128 to 127 with a negative one), `array[int]` (other ints),
+`array[float]`, `array[mixed]`... Long values are cut short with `…`. The log shows the newest lines (older ones scroll out of view), and you can make it
+bigger or smaller by **dragging the grip in its bottom-right corner**; the size is saved with the diagram.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
-| Period | Time between messages | 10 ms – 10 s (logarithmic) | 1000 ms |
-| Message | The text sent | up to 100 characters | hello |
+| Lines | How many of the newest samples are kept | 4, 8, 16, 32, 64, 128 | 8 |
+| Width, Height | Size of the log on the block (also set by dragging its corner) | 120 – 1000 px, 40 – 800 px | 220 × 120 |
 
-It only sends while the audio is running, and sends nothing while the text is empty. Editing the
-message applies at once, without restarting the clock.
-
-**Message Constant**: holds a fixed message and sends it once, when the audio starts. Output: `msg`.
-
-| Setting | What it does | Range | Default |
-|---|---|---|---|
-| Type | *text*: sent as an 8 × N message (UTF-8); *hex*: bytes, also sent as 8 × N; *bits*: sent as a 1 × N row of bits | text, hex, bits | text |
-| Message | The text; the bytes in hexadecimal (`FF`, `AA 55` or `0xAA 0x55`: spaces, commas and `0x` are ignored, and a last lone digit is dropped); or the bits (every character other than `0` and `1` is ignored, so `1011 0111` works) | up to 100 characters | hello |
-
-It sends again whenever you change what it holds, and sends nothing while it is empty. Because it sends
-only once it is meant for blocks that remember what they receive, such as the `a` input of Message
-Concatenate (a preamble); to repeat a message use a Message Strobe. To put a byte that no text can spell,
-like `0xFF`, in front of a text, use *hex*: it is 8 rows high like the text, so the two join by columns. A *bits*
-message is 1 row high, so to join it to a text put a Message Reshape in between (or use *hex*).
-
-Shown on the block: Type and Message.
-
-**Message Debug**: prints the messages it receives, one per line, each with the time (in seconds of
-audio) at which it arrived. Input: `msg`. It reads *Stopped* while the audio is off, and the log starts
-empty on every Run.
-
-| Setting | What it does | Range | Default |
-|---|---|---|---|
-| Lines | How many of the newest messages stay on the block | 4, 8, 16 | 8 |
-| Decode | Turn an 8 × N message back into text | on, off | on |
-
-A message of any other shape, or any message when *Decode* is off, is printed as its bits: the size,
-then the rows separated by `/`, like `2x3  101 / 011`. Control characters in decoded text are shown as `·`.
-
-**Message Reshape**: changes the rows and columns of a message without changing its bits, like
-`numpy.reshape`. The bits are read row by row and laid out again in the new shape, so a 1 × 100 message can
-become 10 × 10 and back. Input: `msg`. Output: `msg`.
-
-| Setting | What it does | Range | Default |
-|---|---|---|---|
-| Rows | Rows of the output, or −1 to work it out from Columns | −1, 1 – 4096 | 1 |
-| Columns | Columns of the output, or −1 to work it out from Rows | −1, 1 – 4096 | −1 |
-
-Messages have at most two dimensions. The defaults flatten any message into a single row. Rows × columns
-must equal the number of bits, and only one of them can be −1. If it doesn't fit, the message is **dropped**
-(numpy would raise an error) and the block shows what it could not do, like `3x3 can't be 2 x -1`. The
-block also shows the last change, like `8x5 → 2x20`.
-
-**Message Serializer**: turns a message into a stream of single bits. Input: `msg`. Output: `msg`.
-
-Each bit of the incoming message goes out as its own **1 × 1** message, one per symbol, at the baud rate. The
-bits are read column by column, so an 8 × N message goes byte by byte, most significant bit first. Pacing
-follows the audio clock, so the average rate is exact; because a browser timer can't fire once per symbol at
-kilobaud, the symbols that are due are sent together every ~10 ms, and whoever receives them (the Pulse
-Shaper) does its own timing. A message that arrives while another is going out is queued behind it.
-
-| Setting | What it does | Range | Default |
-|---|---|---|---|
-| Baud rate | Symbols per second | 50 – 20000 (logarithmic) | 1000 baud |
-
-Shown on the block: Baud rate.
-
-**Message Deserializer**: collects single bits back into messages, the inverse of the Message Serializer.
-Input: `msg`. Output: `msg`.
-
-Every 1 × 1 message adds a bit; when there are *Rows* × *Columns* of them the block sends one message of that
-size, filled column by column. With the defaults (8 × 1) every 8 bits make one byte, most significant bit
-first, which Message Debug prints as a character.
-
-| Setting | What it does | Range | Default |
-|---|---|---|---|
-| Rows | Rows of the output message | 1 – 64 | 8 |
-| Columns | Columns of the output message | 1 – 4096 | 1 |
-| Preamble type | How *Preamble* is written: *text* (UTF-8), *hex* (bytes, like `FF` or `AA 55`) or *bits* (like `11111111`) | text, hex, bits | text |
-| Preamble | What marks where a message starts, in that notation (empty: no framing) | up to 100 characters | empty |
-
-Messages that aren't 1 × 1 are ignored. Changing a setting drops the bits collected so far, and so does
-pressing Run.
-
-With the *Preamble* empty the block counts bits from the first one it receives, so after a Symbol
-Recovery (which can output stray bits before and after a burst) the bytes may be shifted and the text read as
-garbage. With a preamble it ignores the stream until it sees the preamble's bits (as the Message
-Serializer sends them: 8 bits per character or byte), at any bit offset, then collects one message of Rows × Columns
-bits (the preamble itself is not in it) and goes back to looking. Pick a preamble that is unlikely to appear
-by chance in the data, such as two or three characters. The block shows what it is doing: *Looking for the
-preamble*, how many bits it has collected, or the size it last sent.
-
-Shown on the block: Rows, Columns and Preamble.
-
-**Message Concatenate**: joins messages one after the other. Inputs: `a`, `b`, and up to `h` (set with
-*Inputs*). Output: `msg`.
-
-Every input except the last remembers the latest message that arrived there; every time one arrives at the
-**last** input, the block sends them all joined in the order of the inputs (`a`, then `b`, and so on). To
-put a preamble in front of a payload, feed the preamble (a Message Constant, say) to `a` and the payload to
-`b`: the payload's clock sets the pace and the preamble is repeated in front of each one. With three inputs
-you can add a trailer after the payload, or a preamble and a header, feeding the one that sets the pace to `c`.
-Nothing is sent until every input has received something; the block shows which one it is still waiting for.
-
-| Setting | What it does | Range | Default |
-|---|---|---|---|
-| Inputs | How many messages are joined | 2 – 8 | 2 |
-| Join | *columns*: each message goes after the previous one side by side (all need the same rows, so 8 × N texts make a longer text); *rows*: each goes below the previous one (all need the same columns) | columns, rows | columns |
-
-If two of them don't fit, the message is dropped and the block says which two, like
-`2x1 and 1x1 can't join by columns`. It shows the last join, like `8x2 + 8x5 → 8x7`. Changing *Inputs*
-keeps the cables on the ports that remain (`a`, `b`...) and drops those on removed ones.
-
-Shown on the block: Join.
+Shown on the block: Lines.
 
 ## Recipes
 
@@ -541,8 +557,7 @@ signal (`ch1`) against the square wave (`ch2`, the trigger).
 microphone). The Audio Source feeds a Carrier Recovery, which rebuilds a clean 440 Hz carrier; a Math Operator
 set to *multiply* mixes it with the signal, so the keyed bursts come out at baseband; the Filter (low-pass,
 517 Hz) removes the double-frequency term, the Squelch silences the gaps, Symbol Recovery samples the symbols at
-1000 baud and the Message Deserializer waits for the preamble `ddd` and collects the 5 characters that follow,
-which Message Debug prints. It expects a transmitter that sends that at 1000 baud on a 440 Hz carrier. The
+1000 baud and the Debug Sink prints the bits it recovers. It expects a transmitter that sends that at 1000 baud on a 440 Hz carrier. The
 example is only a starting point: nobody has tried it here with a real microphone.
 
 **Compare two waves.** Add a second Wave Generator and connect it to `ch2`. Set the scope's X / div to
@@ -601,7 +616,7 @@ Things to know:
 
 Undo/redo, selecting several blocks on a touch screen (there is no Shift key), exporting or importing
 diagrams as files, a divide operation, and audio inputs from a microphone or file. Blocks are a short
-list for now (one generator, one operator, two sinks, four message blocks).
+list for now (sources, processing blocks and sinks, including the bit blocks).
 
 ## For developers
 

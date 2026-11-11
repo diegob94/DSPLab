@@ -87,4 +87,22 @@ const panelControl = (page, label) => page.locator(`#props .param:has(> label:te
 
 const snapshot = (page) => page.evaluate(() => JSON.stringify(dsplab.serialize()));
 
-module.exports = { assert, launch, withApp, sleep, selectNode, addFromPalette, connect, setRange, panelControl, startAudio, snapshot };
+// Builds a transmitter in the diagram: Strobe Source (text) -> Array Unpack -> Array Reshape (flat) -> Serializer ->
+// Upsampler -> Pulse Shaper, with 20 samples per symbol and the symbol rate that makes the signal run at exactly the
+// sound card's rate, so it can be cabled to audio blocks. Returns the symbol rate and the ids of its blocks.
+const buildTransmitter = (page, text, period) => page.evaluate(([text, period]) => {
+  const g = dsplab.graph;
+  const add = (type) => dsplab.addNode(type, 0, 0);
+  const [s, u, r, z, up, p] = ['strobe_source', 'array_unpack', 'array_reshape', 'serializer', 'upsampler', 'pulse_shaper'].map(add);
+  const baud = g.nativeRate / 20;
+  Object.assign(s.params, { data: text, period });
+  Object.assign(r.params, { rows: 0, cols: -1 });
+  z.params.baud = baud;
+  up.params.factor = 20;
+  Object.assign(p.params, { pulse: 'square', sps: 20 });
+  const e = (a, ap, b, bp) => dsplab.addEdge({ node: a.id, port: ap }, { node: b.id, port: bp });
+  e(s, 'out', u, 'in'); e(u, 'out', r, 'in'); e(r, 'out', z, 'in'); e(z, 'out', up, 'in'); e(up, 'out', p, 'in');
+  return { baud, shaper: p.id };
+}, [text, period]);
+
+module.exports = { buildTransmitter, assert, launch, withApp, sleep, selectNode, addFromPalette, connect, setRange, panelControl, startAudio, snapshot };
