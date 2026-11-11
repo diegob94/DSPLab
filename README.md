@@ -46,7 +46,7 @@ You start with a **Wave Generator** already connected to an **Audio Sink**. Pres
   values, read-only; you change them here.
 - **Toolbar** (top): Run/Stop, delete, **Share** (copies a link to the diagram), the **Examples** menu, and the audio status (the sample rate while
   running).
-- **Examples** (toolbar): *Simple tone* (the starting diagram), *ASK modulation*, *ASK receiver* (microphone → carrier recovery → debug sink) and *Audio source scope* (microphone → oscilloscope). Picking one replaces
+- **Examples** (toolbar): *Simple tone* (the starting diagram), *ASK modulation*, *ASK receiver* (microphone → carrier recovery → debug sink) and *Audio source scope* (microphone → oscilloscope) and *Pulse shaping with noise* (see the recipe below). Picking one replaces
   the current diagram, so it asks for confirmation first (unless the canvas is empty); it can't be undone,
   because the autosave overwrites the old diagram.
 
@@ -297,23 +297,22 @@ so the output has that same rate. The sinc is centred on its peak, so the output
 The kernel has unit amplitude: a one in the input comes out as a pulse of level 1, so the level of the output is the level
 of the input (a Serializer sends the numbers you give it; use a Math Operator to scale). Changing a setting applies at once and keeps what the filter has heard so far. Shown on the block: Pulse and Samples / symbol.
 
-**Matched Filter**: the receiver's counterpart of the Pulse Shaper: it correlates the input with the pulse, which
-gives the best signal-to-noise ratio at the instant a symbol is sampled. Input: `in`. Output: `out`.
+**Matched Filter**: the receiver's counterpart of the Pulse Shaper, also a simple convolutional filter: it convolves
+its input signal with the pulse, which gives the best signal-to-noise ratio at the instant a symbol is sampled.
+Input: `in` (a signal, of any rate). Output: `out` (a signal, at the same rate as the input).
 
-It is an FIR filter whose impulse response is the pulse (both shapes are symmetric, so reversing it in time
-changes nothing), scaled so that a symbol sent with amplitude A comes out with a peak of A. With the *square*
-pulse it is an integrate-and-dump: each output sample is the average of the last symbol; the peak falls at the end
-of the symbol. With *sinc* the peak comes 4 symbols after the pulse's centre (the filter's delay). Put it before
-Symbol Recovery, with the same pulse as the Pulse Shaper and the baud rate of the Serializer that feeds it.
+Its kernel is the Pulse Shaper's (both shapes are symmetric, so reversing it in time changes nothing), scaled so that a
+symbol sent with amplitude A comes out with a peak of A. With the *square* pulse it is an integrate-and-dump: each
+output sample is the average of the last symbol; the peak falls at the end of the symbol. With *sinc* the peak comes
+4 symbols after the pulse's centre (the filter's delay). Put it before Symbol Recovery, with the same settings as the
+Pulse Shaper that feeds the channel.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
 | Pulse | Shape to match | square, sinc | square |
-| Baud rate | Symbols per second | 50 – 20000 (logarithmic) | 1000 baud |
+| Samples / symbol | Length of one symbol, in samples of the input | 1 – 64 | 8 |
 
-Changing a setting rebuilds the filter and may click.
-
-Shown on the block: Pulse and Baud rate.
+Changing a setting applies at once and keeps what the filter has heard so far. Shown on the block: Pulse and Samples / symbol.
 
 **Symbol Recovery**: samples a digital-looking signal (like the output of a matched filter) at the
 right instants and returns the bits. Input: `in` (audio). Outputs: `bits` (async, `int`), and `phase` (audio).
@@ -416,17 +415,35 @@ silence.
 
 Shown on the block: Target.
 
-**AWGN**: adds white Gaussian noise to a signal (additive white Gaussian noise), to simulate a noisy channel.
-Input: `in`. Output: `out`.
+**Detector**: a comparator with a simple threshold: its output is 1 while the input is above the threshold and 0
+otherwise, sample by sample. Input: `in` (a signal, of any rate). Output: `out` (a signal, at the same rate as the
+input). It turns a waveform, like the output of a Matched Filter, into a clean 0 / 1 signal. An input exactly at the
+threshold counts as below it, and a block with nothing connected reads as 0.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
-| Noise σ | Standard deviation of the noise (its RMS level) | 0 – 1 | 0.1 |
+| Threshold | The level the input has to exceed | -2 – 2 | 0.5 |
 
-The output is the input plus σ times Gaussian noise. With nothing connected it outputs the noise alone. The
-noise repeats every 10 seconds. Noise above ±1 is clipped by the Audio Sink.
+Changing the threshold applies at once. Shown on the block: Threshold.
 
-Shown on the block: Noise σ.
+**AWGN**: adds white Gaussian noise to a signal (additive white Gaussian noise), to simulate a noisy channel, at a
+signal-to-noise ratio you set. Input: `in` (a signal, of any rate). Output: `out` (a signal, at the same rate).
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| SNR | Signal power over noise power, in dB | -20 – 60 dB | 20 dB |
+| Window | Time over which the input's power is averaged (panel only) | 10 – 5000 ms (logarithmic) | 500 ms |
+
+The output is the input plus Gaussian noise whose power is the input's power divided by 10^(SNR / 10): 0 dB is noise as
+strong as the signal, 20 dB is noise 100 times weaker in power (10 times in amplitude). The input's power is its mean square
+(DC included), followed with a moving average over *Window*, so the noise follows the level of the signal: a short window
+follows bursts, a long one gives steadier noise. An input of silence gets no noise (it has no power), so a block with nothing
+connected outputs silence. Noise above ±1 is clipped by the Audio Sink.
+
+The input can be at any sample rate (like the Pulse Shaper's): the noise is made at the input's rate, one sample per input
+sample, and the output has the input's rate.
+
+Shown on the block: SNR.
 
 **Delay**: delays a signal by a fixed time. Input: `in`. Output: `out`. Setting: **Delay** 0 – 1000 ms (default 10 ms).
 
@@ -562,6 +579,17 @@ set to *multiply* mixes it with the signal, so the keyed bursts come out at base
 517 Hz) removes the double-frequency term, the Squelch silences the gaps, Symbol Recovery samples the symbols at
 1000 baud and the Debug Sink prints the bits it recovers. It expects a transmitter that sends that at 1000 baud on a 440 Hz carrier. The
 example is only a starting point: nobody has tried it here with a real microphone.
+
+**Send text through a noisy channel.** Pick *Pulse shaping with noise* in the Examples menu and press Run. The Strobe
+Source sends "hello" every second; Array Unpack and Array Reshape turn it into 40 bits, the Serializer sends them at 1000
+baud, and the Upsampler (Factor 40) and the Pulse Shaper (*sinc*, 40 samples / symbol) turn them into a band-limited
+waveform. AWGN buries it in noise (SNR -15 dB), the Matched Filter (same pulse) pulls the symbols out and the Detector
+slices them at 0.75. The scope shows every stage: `ch1` the bits, `ch2` the impulses, `ch3` the shaped signal, `ch4` the noisy
+one, `ch5` the matched filter's output and `ch6` the detected bits. Each sinc filter delays its output by 4 symbols (4 ms
+here), so `ch3` and `ch4` lag `ch1` by 4 ms and `ch5` and `ch6` by 8 ms. Try changing the SNR to see when the detected bits
+stop matching the sent ones; nobody has checked here where that happens. The two sinc blocks have to keep the Upsampler's
+Factor as their *Samples / symbol*, and baud rate × Factor must not exceed the sound card's sample rate (a faster signal
+can't be carried, and its cables are dropped).
 
 **Compare two waves.** Add a second Wave Generator and connect it to `ch2`. Set the scope's X / div to
 0.5 ms, both generators to 1000 Hz, one to *sine* and the other to *square*, and set *Trigger* to `ch2`:

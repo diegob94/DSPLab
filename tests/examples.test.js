@@ -11,7 +11,7 @@ const accepting = (page) => { const seen = []; page.on('dialog', (d) => { seen.p
 const types = (page) => page.evaluate(() => [...dsplab.graph.nodes.values()].map((n) => n.type).sort());
 
 test('the Examples menu lists the examples under its title', () => withApp(app, async (page) => {
-  assert.deepEqual(await page.locator('#examples option').allTextContents(), ['Examples', 'Simple tone', 'ASK modulation', 'ASK receiver', 'Audio source scope']);
+  assert.deepEqual(await page.locator('#examples option').allTextContents(), ['Examples', 'Simple tone', 'ASK modulation', 'ASK receiver', 'Audio source scope', 'Pulse shaping with noise']);
   assert.equal(await page.locator('#examples').inputValue(), '');
 }));
 
@@ -93,4 +93,23 @@ test('an empty diagram is replaced without asking', () => withApp(app, async (pa
   await page.selectOption('#examples', { label: 'ASK modulation' });
   assert.equal(seen.length, 0);
   assert.equal(await page.locator('.node').count(), 5);
+}));
+
+test('Pulse shaping with noise loads with every block, cable and setting, and runs', () => withApp(app, async (page) => {
+  accepting(page);
+  await page.selectOption('#examples', { label: 'Pulse shaping with noise' });
+  assert.equal(await page.locator('.node').count(), 10);
+  assert.equal(await page.locator('#wires path.edge').count(), 14);
+  const r = await page.evaluate(() => {
+    const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
+    return { awgn: by('awgn').params.snr, det: by('detector').params.threshold, scope: by('oscilloscope').params, shaper: by('pulse_shaper').params };
+  });
+  assert.equal(r.awgn, -15);
+  assert.equal(r.det, 0.75);
+  assert.equal(r.scope.channels, 6);
+  assert.equal(r.scope.display2, 'impulse');
+  assert.deepEqual(r.shaper, { pulse: 'sinc', sps: 40 });
+  await startAudio(page);
+  await sleep(500);
+  assert.match(await page.textContent('#status'), /^Running/);
 }));

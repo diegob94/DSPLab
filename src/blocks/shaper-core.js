@@ -4,23 +4,28 @@ import { pulseSamples } from './pulse-shaper.js';
 // (a signal at sample rate inRate, each sample held for sampleRate / inRate output samples, as in serializer-core.js)
 // convolved with the kernel of the pulse, at the rate of the input. The kernel is the pulse of one symbol of
 // `sps` samples, with unit amplitude. Samples are taken on the grid that starts at frame 0 of the audio context.
-export function shaperKernel(pulse, sps) {
-  return pulseSamples(pulse, 0, sps, 1, 1).data;
+// `matched` scales it by 1 / (its energy), which is the Matched Filter: a pulse of amplitude A then comes out as a
+// peak of A (both pulses are symmetric, so the pulse reversed in time is the pulse itself).
+export function shaperKernel(pulse, sps, matched = false) {
+  const { data } = pulseSamples(pulse, 0, sps, 1, 1);
+  if (!matched) return data;
+  const energy = data.reduce((s, v) => s + v * v, 0);
+  return data.map((v) => v / energy);
 }
 
 export class ShaperSignal {
-  constructor(sampleRate, inRate, pulse, sps) {
+  constructor(sampleRate, inRate, pulse, sps, matched = false) {
     this.sampleRate = sampleRate;
     this.history = new Float32Array(0);
     this.head = 0;
     this.symbol = -1;
     this.value = 0;
-    this.set(inRate, pulse, sps);
+    this.set(inRate, pulse, sps, matched);
   }
 
-  set(inRate, pulse, sps) {
+  set(inRate, pulse, sps, matched = false) {
     this.inRate = inRate;
-    this.kernel = shaperKernel(pulse, sps);
+    this.kernel = shaperKernel(pulse, sps, matched);
     if (this.history.length !== this.kernel.length) {   // keep what was heard so far
       const next = new Float32Array(this.kernel.length);
       for (let k = 0; k < Math.min(next.length, this.history.length); k++) next[k] = this.history[(this.head - k + this.history.length) % this.history.length];

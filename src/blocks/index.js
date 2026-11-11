@@ -57,6 +57,7 @@ import { audioRecorder } from './audio-recorder.js';
 import { filter } from './filter.js';
 import { agc } from './agc.js';
 import { matchedFilter } from './matched-filter.js';
+import { detector } from './detector.js';
 import { awgn } from './awgn.js';
 import { delay } from './delay.js';
 import { vco } from './vco.js';
@@ -90,6 +91,7 @@ export const BLOCKS = {
   filter,
   agc,
   matched_filter: matchedFilter,
+  detector,
   awgn,
   delay,
   vco,

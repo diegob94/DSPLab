@@ -1,38 +1,94 @@
 'use strict';
 const { before, after, test } = require('node:test');
-const { assert, launch, withApp, addFromPalette } = require('./helpers');
+const { assert, launch, withApp, addFromPalette, startAudio, sleep } = require('./helpers');
 
 let app;
 before(async () => { app = await launch(); });
 after(async () => { await app.close(); });
 
-test('AWGN adds zero-mean Gaussian noise of standard deviation sigma', () => withApp(app, async (page) => {
-  const r = await page.evaluate(async () => {
-    const ctx = new OfflineAudioContext(1, 44100, 44100);
-    const blk = dsplab.BLOCKS.awgn.build(ctx, { sigma: 0.3 });
-    const dc = new ConstantSourceNode(ctx, { offset: 0.5 });
-    dc.connect(blk.inputs.in); dc.start();
-    blk.outputs.out.connect(ctx.destination);
-    const d = (await ctx.startRendering()).getChannelData(0);
-    let m = 0; for (const v of d) m += v; m /= d.length;
-    let s = 0; for (const v of d) s += (v - m) ** 2;
-    return { mean: m, std: Math.sqrt(s / d.length) };
-  });
-  assert.ok(Math.abs(r.mean - 0.5) < 0.02, `mean ${r.mean}`);
-  assert.ok(Math.abs(r.std - 0.3) < 0.02, `std ${r.std}`);
+// a 1 kHz sine of amplitude 0.5 (power 0.125) through an Awgn at `snr` dB, 1 s at 44.1 kHz; returns the noise alone
+const noiseOf = (page, snr, window = 500) => page.evaluate(async ([snr, window]) => {
+  const { Awgn } = await import('/src/blocks/awgn-core.js');
+  const n = 44100, x = new Float32Array(n), y = new Float32Array(n);
+  for (let i = 0; i < n; i++) x[i] = 0.5 * Math.sin(2 * Math.PI * 1000 * i / 44100);
+  new Awgn({ sampleRate: 44100, snr, window }).process(x, y);
+  return Array.from(y, (v, i) => v - x[i]);
+}, [snr, window]);
+
+const power = (a) => a.reduce((s, v) => s + v * v, 0) / a.length;
+
+test('AWGN adds zero-mean noise at the set SNR (in dB, relative to the input power)', () => withApp(app, async (page) => {
+  for (const snr of [0, 10, 20]) {
+    const d = await noiseOf(page, snr);
+    const measured = 10 * Math.log10(0.125 / power(d.slice(22050)));   // once the power estimate has settled
+    assert.ok(Math.abs(measured - snr) < 0.5, `SNR ${snr} dB measured ${measured}`);
+    assert.ok(Math.abs(d.reduce((s, v) => s + v, 0) / d.length) < 0.01, 'zero mean');
+  }
 }));
 
-test('AWGN with sigma 0 passes the signal unchanged', () => withApp(app, async (page) => {
-  const peak = await page.evaluate(async () => {
-    const ctx = new OfflineAudioContext(1, 4410, 44100);
-    const blk = dsplab.BLOCKS.awgn.build(ctx, { sigma: 0 });
-    const dc = new ConstantSourceNode(ctx, { offset: 0.25 });
-    dc.connect(blk.inputs.in); dc.start();
-    blk.outputs.out.connect(ctx.destination);
-    const d = (await ctx.startRendering()).getChannelData(0);
-    return Math.max(...d.map((v) => Math.abs(v - 0.25)));
+test('every 10 dB of SNR is a factor of 10 in noise power, and the noise follows the level of the input', () => withApp(app, async (page) => {
+  const r = await page.evaluate(async () => {
+    const { Awgn } = await import('/src/blocks/awgn-core.js');
+    const run = (level, snr) => {
+      const x = new Float32Array(44100).fill(level), y = new Float32Array(44100);
+      new Awgn({ sampleRate: 44100, snr, window: 100 }).process(x, y);
+      let p = 0; for (let i = 22050; i < y.length; i++) p += (y[i] - level) ** 2;
+      return p / 22050;
+    };
+    return { ratio: run(1, 0) / run(1, 10), loud: run(1, 10), quiet: run(0.1, 10) };
   });
-  assert.ok(peak < 1e-6);
+  assert.ok(Math.abs(r.ratio / 10 - 1) < 0.1, `ratio ${r.ratio}`);
+  assert.ok(Math.abs(r.loud / r.quiet / 100 - 1) < 0.15, `a 10x weaker input gets 100x less noise power: ${r.loud / r.quiet}`);
+}));
+
+test('AWGN leaves a silent input silent, and a changed SNR applies without a reset', () => withApp(app, async (page) => {
+  const r = await page.evaluate(async () => {
+    const { Awgn } = await import('/src/blocks/awgn-core.js');
+    const a = new Awgn({ sampleRate: 44100, snr: 0, window: 100 });
+    const y = new Float32Array(1000);
+    a.process(new Float32Array(1000), y);
+    const silent = Math.max(...y.map(Math.abs));
+    const x = new Float32Array(44100).fill(1), z = new Float32Array(44100);
+    a.process(x, z);
+    a.set(40, 100);
+    a.process(x, z);
+    return { silent, tail: Math.max(...z.slice(40000).map((v) => Math.abs(v - 1))) };
+  });
+  assert.equal(r.silent, 0);
+  assert.ok(r.tail < 0.05, `40 dB below a power of 1 is σ = 0.01: ${r.tail}`);
+}));
+
+test('AWGN on a slower signal: one noise sample per input sample, held with it, at the set SNR', () => withApp(app, async (page) => {
+  const r = await page.evaluate(async () => {
+    const { Awgn } = await import('/src/blocks/awgn-core.js');
+    // 4000 samples/s into a 48000 Hz card: every input sample lasts 12 card samples
+    const n = 48000, x = new Float32Array(n), y = new Float32Array(n);
+    for (let i = 0; i < n; i++) x[i] = (Math.floor(i / 12) % 2) ? 1 : -1;
+    new Awgn({ sampleRate: 48000, inRate: 4000, snr: 10, window: 100 }).process(x, y, 0);
+    let held = true, p = 0;
+    for (let i = 0; i < n; i++) {
+      const d = y[i] - x[i];
+      if (i % 12 && Math.abs(d - (y[i - 1] - x[i - 1])) > 1e-6) held = false;
+      if (i >= n / 2) p += d * d;
+    }
+    return { held, snr: 10 * Math.log10(1 / (p / (n / 2))) };
+  });
+  assert.ok(r.held, 'the noise is constant over the 12 samples of an input sample');
+  assert.ok(Math.abs(r.snr - 10) < 1, `SNR ${r.snr}`);
+}));
+
+test('AWGN runs in the engine and takes live changes', () => withApp(app, async (page) => {
+  for (const t of ['Wave Generator', 'AWGN', 'Audio Sink']) await addFromPalette(page, t);
+  await page.evaluate(() => {
+    const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
+    const [w, a, k] = ['wave_generator', 'awgn', 'audio_sink'].map(by);
+    dsplab.addEdge({ node: w.id, port: 'out' }, { node: a.id, port: 'in' });
+    dsplab.addEdge({ node: a.id, port: 'out' }, { node: k.id, port: 'in' });
+  });
+  await startAudio(page);
+  await page.evaluate(() => { [...dsplab.graph.nodes.values()].find((n) => n.type === 'awgn').params.snr = 5; });
+  await sleep(300);
+  assert.match(await page.textContent('#status'), /^Running/);
 }));
 
 test('Delay shifts the signal by the set time', () => withApp(app, async (page) => {
