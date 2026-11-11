@@ -473,7 +473,7 @@ the preamble drops the bits collected so far.
 Shown on the block: Format, Frame and Preamble.
 
 **Debug Sink**: prints the type and the value of every sample that arrives. Input: `in` (async, any type). It is
-the one port that takes any async cable (a Strobe Source, a Bit Serializer, a Symbol Recovery...), but not audio.
+the one port that takes any async cable (a Strobe Source, a Serializer, a Symbol Recovery...), but not audio.
 It reads *Stopped* while the audio is off, and the log starts empty on every Run.
 
 Each line is the time (seconds of audio), the type and the value, like `2.000  array[uint8]  [104,101]`. The type is
