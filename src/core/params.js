@@ -6,6 +6,10 @@ export const portNames = (def, dir, params) => (typeof def[dir] === 'function' ?
 // the clock of a port: 'audio' (sample rate) or 'async' (samples at their own instants)
 export const portClock = (def, name) => ((def.asyncPorts || []).includes(name) ? 'async' : 'audio');
 
+// what a port carries: 'audio', or for an async port the type of its samples ('int' unless the block's
+// wireTypes says otherwise, like 'array[int]'). Only ports that carry the same thing can be cabled together.
+export const portWire = (def, name) => (portClock(def, name) === 'audio' ? 'audio' : (def.wireTypes && def.wireTypes[name]) || 'int');
+
 // a saved value is only trusted if it still fits the parameter definition
 export function validParam(p, v, params) {
   if (p.type === 'select') return optionsOf(p, params).includes(v) ? v : p.default;

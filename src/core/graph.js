@@ -3,7 +3,7 @@
 // own `el` / `view` to nodes and `el` to edges.
 import { BLOCKS } from '../blocks/index.js';
 import { emit } from './events.js';
-import { optionsOf, portClock, portNames, validParam } from './params.js';
+import { optionsOf, portWire, portNames, validParam } from './params.js';
 
 export const MIN_ZOOM = 0.3;
 export const MAX_ZOOM = 2.5;
@@ -71,8 +71,8 @@ export function clearGraph() {
 
 export function addEdge(from, to) {
   const a = graph.nodes.get(from.node), b = graph.nodes.get(to.node);
-  // ports on different clocks can't be cabled together
-  if (!a || !b || portClock(BLOCKS[a.type], from.port) !== portClock(BLOCKS[b.type], to.port)) return null;
+  // ports that carry different things (another clock, or another sample type) can't be cabled together
+  if (!a || !b || portWire(BLOCKS[a.type], from.port) !== portWire(BLOCKS[b.type], to.port)) return null;
   // an input accepts a single connection; replace any existing one
   graph.edges.filter((e) => e.to.node === to.node && e.to.port === to.port).forEach(removeEdge);
   const edge = { id: graph.nextId++, from, to };

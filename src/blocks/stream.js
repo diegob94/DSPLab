@@ -25,6 +25,9 @@ export function hexToBytes(hex) {
   return Array.from({ length: digits.length >> 1 }, (_, i) => parseInt(digits.slice(2 * i, 2 * i + 2), 16));
 }
 
+// The bytes a text field stands for, as an array of ints: text (UTF-8) or hex.
+export const parseBytes = (type, value) => (type === 'hex' ? hexToBytes(value) : Array.from(new TextEncoder().encode(value)));
+
 // The bits a text field stands for: text (UTF-8), hex bytes, or bits as typed (anything but 0 and 1 is ignored,
 // so '1011 0111' works).
 export function parseBits(type, value) {

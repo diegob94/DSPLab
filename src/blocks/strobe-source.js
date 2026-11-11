@@ -1,26 +1,24 @@
-import { parseBits } from './stream.js';
-import { bitSender } from './bit-sender.js';
+import { streamOutput, parseBytes } from './stream.js';
 
-// A bit stream on an asynchronous clock: the bits of a text, hex bytes or a bit pattern go out one per symbol
-// at the baud rate, most significant bit of each byte first, and again every period.
+// On an asynchronous clock: the whole data (a text, or hex bytes) goes out as one array[int] of bytes every period.
 export const strobeSource = {
   title: 'Strobe Source',
   category: 'Source blocks',
   inputs: [],
-  outputs: ['bits'],
-  asyncPorts: ['bits'],
+  outputs: ['out'],
+  asyncPorts: ['out'],
+  wireTypes: { out: 'array[int]' },
   params: [
-    { key: 'type',   label: 'Type',      type: 'select', options: ['text', 'hex', 'bits'], default: 'text' },
-    { key: 'data',   label: 'Data',      show: true, type: 'text', default: 'hello' },
-    { key: 'baud',   label: 'Baud rate', show: true, type: 'range', scale: 'log', min: 50, max: 20000, step: 1, unit: 'baud', default: 1000 },
-    { key: 'period', label: 'Period',    show: true, type: 'range', scale: 'log', min: 10, max: 10000, step: 1, unit: 'ms', default: 1000 },
+    { key: 'type',   label: 'Type',   type: 'select', options: ['text', 'hex'], default: 'text' },
+    { key: 'data',   label: 'Data',   show: true, type: 'text', default: 'hello' },
+    { key: 'period', label: 'Period', show: true, type: 'range', scale: 'log', min: 10, max: 10000, step: 1, unit: 'ms', default: 1000 },
   ],
   build(ctx, p) {
     let params = p;
-    const sender = bitSender(ctx, () => params.baud);
+    const out = streamOutput();
     let timer = null;
     let period = null;
-    const emit = () => sender.send(parseBits(params.type, params.data));
+    const emit = () => { const bytes = parseBytes(params.type, params.data); if (bytes.length) out.send(Object.freeze(bytes)); };
     const start = (ms) => {
       clearInterval(timer);
       period = ms;
@@ -30,10 +28,10 @@ export const strobeSource = {
     const first = setTimeout(emit, 0);
     start(p.period);
     return {
-      outputs: { bits: sender.out },
+      outputs: { out },
       // retyping the data must not restart the clock
       update(next) { params = next; if (next.period !== period) start(next.period); },
-      dispose() { clearTimeout(first); clearInterval(timer); sender.dispose(); },
+      dispose() { clearTimeout(first); clearInterval(timer); out.disconnect(); },
     };
   },
 };

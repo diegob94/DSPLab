@@ -63,17 +63,18 @@ test('it is quiet on silence, talks while a signal moves, and goes quiet again o
 });
 
 test('Symbol Recovery: audio in, async bits out; a full chain recovers what the Strobe Source sent', () => withApp(app, async (page) => {
-  for (const t of ['Strobe Source', 'Pulse Shaper', 'Symbol Recovery']) await addFromPalette(page, t);
+  for (const t of ['Strobe Source', 'Bit Serializer', 'Pulse Shaper', 'Symbol Recovery']) await addFromPalette(page, t);
   assert.equal(await page.locator('.node:has-text("Symbol Recovery") .port.in.async').count(), 0, 'its input is audio');
   assert.equal(await page.locator('.node:has-text("Symbol Recovery") .port.out.async').count(), 1);
   const text = 'UUUUUUUUUU';   // 0x55: a transition at every symbol, so the loop has something to lock to
   await page.evaluate((text) => {
     const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
-    const [s, p, r] = ['strobe_source', 'pulse_shaper', 'symbol_timing'].map(by);
+    const [s, z, p, r] = ['strobe_source', 'bit_serializer', 'pulse_shaper', 'symbol_timing'].map(by);
     Object.assign(s.params, { period: 400, data: text });
-    for (const n of [s, p, r]) n.params.baud = 2000;
+    for (const n of [z, p, r]) n.params.baud = 2000;
     p.params.pulse = 'square';
-    dsplab.addEdge({ node: s.id, port: 'bits' }, { node: p.id, port: 'bits' });
+    dsplab.addEdge({ node: s.id, port: 'out' }, { node: z.id, port: 'in' });
+    dsplab.addEdge({ node: z.id, port: 'bits' }, { node: p.id, port: 'bits' });
     dsplab.addEdge({ node: p.id, port: 'out' }, { node: r.id, port: 'in' });
     window.recovered = [];
     window.addCollector = () => dsplab.engine.live.get(r.id).outputs.bits.connect({ receive: (b) => window.recovered.push(b) });

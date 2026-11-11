@@ -14,7 +14,8 @@
  * `asyncPorts` lists the port names (inputs or outputs) whose signal has an asynchronous clock: its samples
  * (bits) come at their own instants instead of at the audio sample rate. An output is any object with
  * connect(target) and send(sample) (see stream.js), an input any object with receive(sample).
- * Ports with different clocks cannot be cabled together.
+ * `wireTypes` maps an async port to the type of its samples when it isn't a plain int (e.g. { out: 'array[int]' }).
+ * Ports with different clocks or sample types cannot be cabled together.
  * Parameters are edited in the properties panel; those marked `show: true` are also
  * displayed (read-only) on the node itself.
  * A block may also define an async setup(ctx, inUse), awaited before the first build (e.g. to register
@@ -32,6 +33,7 @@ import { oscilloscope } from './oscilloscope.js';
 import { mathOperator } from './math-operator.js';
 import { strobeSource } from './strobe-source.js';
 import { constantSource } from './constant-source.js';
+import { bitSerializer } from './bit-serializer.js';
 import { bitMonitor } from './bit-monitor.js';
 import { pulseShaper } from './pulse-shaper.js';
 import { symbolTiming } from './symbol-timing.js';
@@ -60,6 +62,7 @@ export const BLOCKS = {
   math_operator: mathOperator,
   strobe_source: strobeSource,
   constant_source: constantSource,
+  bit_serializer: bitSerializer,
   bit_monitor: bitMonitor,
   pulse_shaper: pulseShaper,
   symbol_timing: symbolTiming,

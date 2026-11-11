@@ -81,7 +81,7 @@ Connection rules:
 
 - A cable always goes from an output to an input, and never from a block to itself.
 - An **input takes one cable**: connecting a second one replaces the first.
-- Every port has a **clock**. Most are *audio* (round ports): a sample at every tick of the sound card. *Asynchronous* ports (square) carry samples at their own instants, like one bit per symbol. Only ports with the same clock can be cabled together; a Pulse Shaper turns an async stream into audio and a Symbol Recovery does the opposite.
+- Every port has a **clock**. Most are *audio* (round ports): a sample at every tick of the sound card. *Asynchronous* ports (square) carry samples at their own instants, like one bit per symbol. Async ports also have a sample type (`int`, a single bit, or `array[int]`, a list of bytes). Only ports that carry the same thing can be cabled together; a Pulse Shaper turns an async stream into audio and a Symbol Recovery does the opposite.
 - An **output can feed many inputs**.
 - An unconnected input counts as silence (zero).
 
@@ -137,26 +137,22 @@ kept in memory only: it is not saved with the diagram, so after a reload you hav
 
 Shown on the block: Pause.
 
-**Strobe Source**: a stream of bits on an **asynchronous clock**, sent again and again. Output: `bits` (async).
+**Strobe Source**: sends its data again and again, on an **asynchronous clock**. Output: `out` (async, `array[int]`).
 
-The bits of a text, of some bytes or of a bit pattern go out one per symbol at the baud rate, the most
-significant bit of each byte first (`A` is `01000001`), starting when the audio starts, and the whole thing goes out again every *Period*. Pacing
-follows the audio clock, so the average rate is exact; because a browser timer can't fire once per symbol at
-kilobaud, the symbols that are due are sent together every ~10 ms, and whoever receives them (the Pulse Shaper)
-does its own timing. It only sends while the audio is running, and nothing while the data is empty.
+Every *Period* the whole data goes out as **one array of ints**: the bytes of a text (UTF-8, so `é` is two ints) or
+of some hex digits. `hello` is `[104, 101, 108, 108, 111]`. It starts when the audio starts, and sends nothing
+while the data is empty. To turn the bytes into bits at a baud rate, put a Bit Serializer after it.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
-| Type | *text*: UTF-8; *hex*: bytes (`FF`, `AA 55` or `0xAA 0x55`: spaces, commas and `0x` are ignored, and a last lone digit is dropped); *bits*: every character other than `0` and `1` is ignored, so `1011 0111` works | text, hex, bits | text |
+| Type | *text*: UTF-8; *hex*: bytes (`FF`, `AA 55` or `0xAA 0x55`: spaces, commas and `0x` are ignored, and a last lone digit is dropped) | text, hex | text |
 | Data | What is sent, in that notation. A preamble is just the first characters of it | up to 100 characters | hello |
-| Baud rate | Symbols per second | 50 – 20000 (logarithmic) | 1000 baud |
-| Period | Time between the starts of two sends (data that takes longer is queued behind the previous one) | 10 ms – 10 s (logarithmic) | 1000 ms |
+| Period | Time between two sends | 10 ms – 10 s (logarithmic) | 1000 ms |
 
-Editing the data applies at once, without restarting the clock. Shown on the block: Data, Baud rate and Period.
+Editing the data applies at once, without restarting the clock. Shown on the block: Data and Period.
 
-**Constant Source**: the same stream, but sent only **once**, when the audio starts, and again whenever you change
-the data. Output: `bits` (async). Its settings are the same as the Strobe Source's without *Period*. Use it for
-data that is sent a single time; to repeat it, use a Strobe Source. Shown on the block: Data and Baud rate.
+**Constant Source**: the same array, but sent only **once**, when the audio starts, and again whenever you change
+the data. Output: `out` (async, `array[int]`). Settings: Type and Data, as above. To repeat it, use a Strobe Source.
 
 ### Processing blocks
 
@@ -189,13 +185,28 @@ opposite and removes that band. For both, Frequency is the centre of the band an
 
 Shown on the block: Type and Frequency.
 
+**Bit Serializer**: turns arrays of bytes into a stream of single bits. Input: `in` (async, `array[int]`).
+Output: `bits` (async, `int`).
+
+Each int of the array is a byte and goes out as 8 bits, most significant bit first (`A` is `01000001`), one bit
+per symbol at the baud rate. Pacing follows the audio clock, so the average rate is exact; because a browser timer
+can't fire once per symbol at kilobaud, the symbols that are due are sent together every ~10 ms, and whoever
+receives them (the Pulse Shaper) does its own timing. An array that arrives while another is going out is queued
+behind it. Anything that is not an array of ints from 0 to 255 is ignored.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Baud rate | Symbols per second | 50 – 20000 (logarithmic) | 1000 baud |
+
+Shown on the block: Baud rate.
+
 **Pulse Shaper**: turns a stream of bits (symbols, on an asynchronous clock) into a waveform you can play or look at.
-Input: `bits` (async). Output: `out` (audio).
+Input: `bits` (async, `int`). Output: `out` (audio).
 
 A one is `1` (times the amplitude) and a zero is `0`; the train of symbols is convolved with a pulse shape,
 sampled at the audio sample rate. Symbols are placed one after the other on a grid of 1 / baud seconds,
 whatever the exact moment each bit arrives; the first symbol after a pause starts about 50 ms ahead. Set
-the same baud rate here as on the Strobe Source, or the stream will fall behind or run ahead.
+the same baud rate here as on the Bit Serializer, or the stream will fall behind or run ahead.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
@@ -226,7 +237,7 @@ Changing a setting rebuilds the filter and may click.
 Shown on the block: Pulse and Baud rate.
 
 **Symbol Recovery**: samples a digital-looking signal (like the output of a matched filter) at the
-right instants and returns the bits. Input: `in` (audio). Outputs: `bits` (async), and `phase` (audio).
+right instants and returns the bits. Input: `in` (audio). Outputs: `bits` (async, `int`), and `phase` (audio).
 
 It runs a simple phase-locked loop: an oscillator that ticks once per symbol (at the baud rate you set) looks
 at the signal at the symbol instant and halfway between symbols. A Gardner detector compares the two at every
@@ -423,7 +434,7 @@ The vertical axis goes from 0 dB (full scale) down to −100 dB. The loudest fre
 as *peak … Hz*. Shown on the block: Window size and Freq. axis.
 
 **Bit Monitor**: prints the bits it receives, a frame per line, each with the time (in seconds of audio) at which
-the frame was complete. Input: `bits` (async). It reads *Stopped* while the audio is off, and the log starts empty
+the frame was complete. Input: `bits` (async, `int`). It reads *Stopped* while the audio is off, and the log starts empty
 on every Run.
 
 | Setting | What it does | Range | Default |

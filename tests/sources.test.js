@@ -6,64 +6,54 @@ let app;
 before(async () => { app = await launch(); });
 after(async () => { await app.close(); });
 
-// a source block on a fake audio clock we move by hand; steps are [time, params to apply | null]
+// a source block running; steps are [ms to wait, params to apply | null]; returns the arrays received after each step
 const run = (page, type, params, steps) => page.evaluate(async ([type, params, steps]) => {
-  const ctx = { currentTime: 0 };
-  const base = { type: 'text', data: 'A', baud: 1000, period: 1000 };
-  const blk = dsplab.BLOCKS[type].build(ctx, { ...base, ...params });
+  const base = { type: 'text', data: 'A', period: 1000 };
+  const blk = dsplab.BLOCKS[type].build({ currentTime: 0 }, { ...base, ...params });
   const got = [];
-  blk.outputs.bits.connect({ receive: (b) => got.push(b) });
+  blk.outputs.out.connect({ receive: (a) => got.push(a) });
   const log = [];
-  for (const [time, update] of steps) {
-    ctx.currentTime = time;
+  for (const [ms, update] of steps) {
     if (update) blk.update({ ...base, ...params, ...update });
-    await new Promise((r) => setTimeout(r, 30));   // a few timer ticks
+    await new Promise((r) => setTimeout(r, ms));
     log.push(got.length);
   }
   blk.dispose();
   return { log, got };
 }, [type, params, steps]);
 
-const A = [0, 1, 0, 0, 0, 0, 0, 1];   // 'A' = 0x41
-
 for (const type of ['strobe_source', 'constant_source']) {
-  test(`${type}: text goes out one bit per symbol, most significant bit first`, () => withApp(app, async (page) => {
-    const { got } = await run(page, type, type === 'strobe_source' ? { period: 10000 } : {}, [[0, null], [1, null]]);
-    assert.deepEqual(got.slice(0, 8), A);
+  test(`${type}: the whole data goes out as one array[int] of bytes`, () => withApp(app, async (page) => {
+    assert.deepEqual((await run(page, type, { data: 'Hé' }, [[50, null]])).got, [[72, 195, 169]]);   // UTF-8
+    assert.deepEqual((await run(page, type, { type: 'hex', data: '0xA5 ff 1' }, [[50, null]])).got, [[0xa5, 0xff]]);
   }));
 
-  test(`${type}: hex and bits types`, () => withApp(app, async (page) => {
-    const p = type === 'strobe_source' ? { period: 10000 } : {};
-    assert.deepEqual((await run(page, type, { ...p, type: 'hex', data: '0xA5 ff' }, [[0, null], [1, null]])).got.slice(0, 16), [1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
-    assert.deepEqual((await run(page, type, { ...p, type: 'bits', data: '1011 0x' }, [[0, null], [1, null]])).got.slice(0, 5), [1, 0, 1, 1, 0]);
+  test(`${type}: nothing is sent while the data is empty`, () => withApp(app, async (page) => {
+    assert.deepEqual((await run(page, type, { data: '' }, [[50, null]])).got, []);
   }));
 
-  test(`${type}: the audio clock sets the pace, one symbol per 1 / baud, none early`, () => withApp(app, async (page) => {
-    // at t=0 the first is out; by 3.5 ms (1000 baud) four are due; by 20 ms all eight
-    const { log } = await run(page, type, type === 'strobe_source' ? { period: 10000 } : {}, [[0, null], [0.0035, null], [0.02, null]]);
-    assert.deepEqual(log, [1, 4, 8]);
-  }));
-
-  test(`${type}: has an async output only; cables only join ports on the same clock`, () => withApp(app, async (page) => {
+  test(`${type}: has an array[int] async output only; cables only join ports that carry the same thing`, () => withApp(app, async (page) => {
     const title = type === 'strobe_source' ? 'Strobe Source' : 'Constant Source';
     await addFromPalette(page, title);
     assert.equal(await page.locator(`.node:has-text("${title}") .port.out.async`).count(), 1);
     assert.equal(await page.locator(`.node:has-text("${title}") .port.in`).count(), 0);
-    await addFromPalette(page, 'Audio Sink');
+    for (const sink of ['Audio Sink', 'Bit Monitor', 'Pulse Shaper']) await addFromPalette(page, sink);
     const wired = await page.evaluate((type) => {
       const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
-      return !!dsplab.addEdge({ node: by(type).id, port: 'bits' }, { node: by('audio_sink').id, port: 'in' });
+      const to = (t, port) => !!dsplab.addEdge({ node: by(type).id, port: 'out' }, { node: by(t).id, port });
+      return [to('audio_sink', 'in'), to('bit_monitor', 'bits'), to('pulse_shaper', 'bits')];
     }, type);
-    assert.equal(wired, false);
+    assert.deepEqual(wired, [false, false, false]);
   }));
 }
 
-test('Strobe Source sends the data again every period, and editing it does not restart the clock', () => withApp(app, async (page) => {
-  const { got } = await run(page, 'strobe_source', { period: 10 }, [[0, null], [1, null], [1, { period: 10, data: 'B' }], [2, null]]);
-  assert.ok(got.length >= 16, `sent again: ${got.length}`);
+test('Strobe Source sends the array every period, and editing it does not restart the clock', () => withApp(app, async (page) => {
+  const { got } = await run(page, 'strobe_source', { period: 20 }, [[100, null], [100, { period: 20, data: 'B' }]]);
+  assert.ok(got.length >= 6, `sent again: ${got.length}`);
+  assert.deepEqual(got[got.length - 1], [66]);
 }));
 
 test('Constant Source sends once, and again only when its data changes', () => withApp(app, async (page) => {
-  const { got } = await run(page, 'constant_source', {}, [[0, null], [1, null], [1, { data: 'A', baud: 500 }], [2, { data: 'B' }], [3, null]]);
-  assert.deepEqual(got, [...A, 0, 1, 0, 0, 0, 0, 1, 0]);
+  const { got } = await run(page, 'constant_source', {}, [[50, null], [50, { data: 'A' }], [50, { data: 'B' }], [50, null]]);
+  assert.deepEqual(got, [[65], [66]]);
 }));
