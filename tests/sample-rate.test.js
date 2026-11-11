@@ -93,3 +93,32 @@ test('Upsamplers chain, and cutting the input leaves the output without a rate (
     return out;`);
   assert.deepEqual(r, { u1: true, u2: true, rate: 600, after: 0 });
 }));
+
+test('a signal at exactly the sound card rate is the sound card rate: it can go to an Audio Sink', () => withApp(app, async (page) => {
+  for (const t of ['Strobe Source', 'Serializer', 'Upsampler', 'Audio Sink', 'Filter']) await addFromPalette(page, t);
+  const r = await scenario(page, [], `
+    const [s, z, u, k, f] = [by('strobe_source'), by('serializer'), by('upsampler'), by('audio_sink'), by('filter')];
+    g.setNativeRate(48000);
+    z.params.baud = 1000; u.params.factor = 48;           // 48000 samples/s
+    edge(s, 'out', z, 'in'); edge(z, 'out', u, 'in');
+    const out = {};
+    out.sink = edge(u, 'out', k, 'in');
+    out.filter = edge(u, 'out', f, 'in');
+    u.params.factor = 64; g.setParam(u, 'factor', 64);     // 64000: faster than the sound card can carry
+    out.tooFast = dsplab.graph.edges.filter((x) => x.from.node === u.id).length;
+    u.params.factor = 47; g.setParam(u, 'factor', 47);     // 47000
+    out.slower = edge(u, 'out', k, 'in');
+    return out;`);
+  assert.deepEqual(r, { sink: true, filter: true, tooFast: 0, slower: false });
+}));
+
+test('the Upsampler refuses a signal at the sound card rate, also when it comes from another Upsampler', () => withApp(app, async (page) => {
+  for (const t of ['Strobe Source', 'Serializer', 'Upsampler', 'Upsampler']) await addFromPalette(page, t);
+  const r = await scenario(page, [], `
+    const [s, z, u1, u2] = [by('strobe_source'), by('serializer'), by('upsampler', 0), by('upsampler', 1)];
+    g.setNativeRate(48000);
+    z.params.baud = 1000; u1.params.factor = 48; u2.params.factor = 2;
+    edge(s, 'out', z, 'in');
+    return [edge(z, 'out', u1, 'in'), edge(u1, 'out', u2, 'in')];`);   // u1 sends 48000 samples/s: the sound card's
+  assert.deepEqual(r, [true, false]);
+}));

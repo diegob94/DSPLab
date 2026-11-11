@@ -15,6 +15,7 @@ export const graph = {
   nextId: 1,          // shared by nodes and edges
   pan: { x: 0, y: 0 },
   zoom: 1,            // world -> screen scale; screen = pan + world * zoom
+  nativeRate: null,   // samples per second of the sound card, once known (see setNativeRate); not saved
 };
 // null | { kind: 'edge', id } | { kind: 'node', id, ids }  (`ids`: every selected block, `id`: the last one added)
 let selection = null;
@@ -98,11 +99,21 @@ export function outRate(node, port, seen = new Set()) {
 // Do the sample rates agree? (audio ports only; a null rate is the sound card's). An input port takes the sound card's
 // rate unless its block says `inputRate: 'any'` (the oscilloscope, which handles each input at its own rate) or
 // `'rated'` (a block that needs to be told a rate, like the upsampler: anything but the sound card's).
+// A rate equal to the sound card's (graph.nativeRate, when it is known) is the sound card's; a faster one can't be carried.
 function rateOk(from, to) {
   const mode = BLOCKS[graph.nodes.get(to.node).type].inputRate;
-  if (mode === 'any') return true;
   const rate = outRate(graph.nodes.get(from.node), from.port);
-  return mode === 'rated' ? rate !== null : rate === null;
+  if (rate !== null && graph.nativeRate && rate > graph.nativeRate) return false;
+  if (mode === 'any') return true;
+  const native = rate === null || rate === graph.nativeRate;
+  return mode === 'rated' ? !native : native;
+}
+
+// the sample rate of the sound card, once known (the engine and the app tell it): cables that don't fit it are dropped
+export function setNativeRate(rate) {
+  if (graph.nativeRate === rate) return;
+  graph.nativeRate = rate;
+  pruneEdges();
 }
 
 const wiresFit = (e) => {

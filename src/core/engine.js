@@ -1,6 +1,6 @@
 // Audio engine: maps the graph onto Web Audio nodes and keeps them in sync with it.
 import { BLOCKS } from '../blocks/index.js';
-import { graph, outWire, outRate } from './graph.js';
+import { graph, outWire, outRate, setNativeRate } from './graph.js';
 import { on } from './events.js';
 import { portClock } from './params.js';
 
@@ -30,6 +30,7 @@ export const engine = {
       throw err;
     }
     this.ctx = ctx;
+    setNativeRate(ctx.sampleRate);   // the real one, in case the guess made at start-up was not
     this.rebuild();
     await ctx.resume();
   },
