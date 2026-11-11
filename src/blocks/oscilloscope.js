@@ -14,6 +14,7 @@ export const oscilloscope = {
   category: 'Sink blocks',
   inputs: inputNames,
   outputs: [],
+  inputRate: 'follow',   // it takes the sample rate of its inputs, which have to agree
   portColor: (port) => SCOPE_COLORS[(parseInt(port.slice(2), 10) - 1) % SCOPE_COLORS.length],
   params: [
     { key: 'channels', label: 'Inputs',     type: 'select', options: [1, 2, 3, 4, 5, 6, 7, 8], ports: true, default: 2 },
@@ -29,8 +30,10 @@ export const oscilloscope = {
   setup(ctx) {
     return ctx.audioWorklet.addModule(new URL('./scope-processor.js', import.meta.url).href);
   },
-  build(ctx, p) {
+  build(ctx, p, node, wires = {}, rates = {}) {
     const names = inputNames(p);
+    // the sample rate of what is connected (the sound card's when it is a plain audio signal, or when nothing is)
+    const rate = Object.values(rates).find((r) => r) || ctx.sampleRate;
     const maxWindow = Math.ceil(ctx.sampleRate * 10); // longest time span: 10 s
     const cap = 2 * maxWindow;                        // history kept per channel: 20 s
     const history = Math.ceil(ctx.sampleRate);        // how far back before the window a trigger is searched
@@ -79,6 +82,7 @@ export const oscilloscope = {
     return {
       inputs: Object.fromEntries(names.map((name, i) => [name, taps[i]])),
       outputs: {},
+      rate,
       update() {},
       onConnect(port) { connected[names.indexOf(port)] = true; },
       // One window per connected channel (null for unconnected ones), all starting at the same
@@ -212,6 +216,7 @@ export const oscilloscope = {
         g.textAlign = 'left';
       }
       if (!inst) g.fillText('Stopped', 6, 14);
+
 
       // the trigger level, drawn for a moment after it was changed (also while stopped)
       if (level !== lastLevel) { lastLevel = level; levelShownAt = performance.now(); }

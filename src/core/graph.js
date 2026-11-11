@@ -83,16 +83,28 @@ export function outWire(node, port, seen = new Set()) {
   return wire === 'same' ? up : elementOf(up) || '*';
 }
 
-// The sample rate of what an output port sends, in samples per second, or null when it has none (audio runs at the
-// sample rate of the sound card; an async port has a rate only if its block says so)
+// The sample rate of what an output port sends, in samples per second, or null for the sound card's rate (an output
+// has another one only if its block says so)
 export function outRate(node, port) {
   const rate = BLOCKS[node.type].rates && BLOCKS[node.type].rates[port];
   return rate ? rate(node.params) : null;
 }
 
+// Do the sample rates agree? (audio ports only; a null rate is the sound card's). An input port takes the sound card's
+// rate unless its block has `inputRate: 'follow'` (the oscilloscope), which takes the rate of its inputs: any, as long as
+// the others it already has are the same. `except` is the cable being replaced.
+function ratesFit(from, to, except = null) {
+  const rate = outRate(graph.nodes.get(from.node), from.port);
+  const dst = graph.nodes.get(to.node);
+  if (BLOCKS[dst.type].inputRate !== 'follow') return rate === null;
+  return graph.edges.every((x) => x === except || x.to.node !== to.node || x.to.port === to.port
+    || outRate(graph.nodes.get(x.from.node), x.from.port) === rate);
+}
+
 const wiresFit = (e) => {
   const a = graph.nodes.get(e.from.node), b = graph.nodes.get(e.to.node);
-  return wiresMatch(outWire(a, e.from.port), portWire(BLOCKS[b.type], e.to.port));
+  const wire = outWire(a, e.from.port);
+  return wiresMatch(wire, portWire(BLOCKS[b.type], e.to.port)) && (wire !== 'audio' || ratesFit(e.from, e.to, e));
 };
 
 // a cable that feeds a generic block can change what that block's output carries: drop the cables that no longer fit
@@ -110,6 +122,8 @@ export function addEdge(from, to) {
   const a = graph.nodes.get(from.node), b = graph.nodes.get(to.node);
   // ports that carry different things (another clock, or another sample type) can't be cabled together
   if (!a || !b || !wiresMatch(outWire(a, from.port), portWire(BLOCKS[b.type], to.port))) return null;
+  // and audio ports need the same sample rate
+  if (outWire(a, from.port) === 'audio' && !ratesFit(from, to)) return null;
   // an input accepts a single connection; replace any existing one
   graph.edges.filter((e) => e.to.node === to.node && e.to.port === to.port).forEach(removeEdge);
   const edge = { id: graph.nextId++, from, to };
@@ -157,7 +171,7 @@ export function setParam(node, key, value) {
   node.params[key] = value;
   emit('param', node, key);
   // a param can change what the block's output carries (a wireTypes function): drop the cables that stop fitting
-  if (Object.values(BLOCKS[node.type].wireTypes || {}).some((w) => typeof w === 'function')) pruneEdges();
+  if (BLOCKS[node.type].rates || Object.values(BLOCKS[node.type].wireTypes || {}).some((w) => typeof w === 'function')) pruneEdges();
 }
 
 // a select whose options depend on other params may have lost its value

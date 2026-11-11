@@ -6,104 +6,76 @@ let app;
 before(async () => { app = await launch(); });
 after(async () => { await app.close(); });
 
-// the serializer on a fake clock we move by hand; steps are [time, array to deliver | null]
-const run = (page, steps) => page.evaluate(async (steps) => {
-  const ctx = { currentTime: 0 };
-  const blk = dsplab.BLOCKS.serializer.build(ctx, { baud: 1000 });
-  const got = [];
-  blk.outputs.out.connect({ receive: (b) => got.push(b) });
-  const log = [];
-  for (const [time, bytes] of steps) {
-    ctx.currentTime = time;
-    if (bytes) blk.inputs.in.receive(bytes);
-    await new Promise((r) => setTimeout(r, 30));   // a few timer ticks
-    log.push(got.length);
+// the signal behind the block: [numbers to push | null, number of output samples to take] steps; returns what came out
+const run = (page, steps, { baud = 1000, sampleRate = 48000 } = {}) => page.evaluate(async ([steps, baud, sampleRate]) => {
+  const { SerializerSignal } = await import('/src/blocks/serializer-core.js');
+  const s = new SerializerSignal(sampleRate, baud);
+  const out = [];
+  for (const [items, n] of steps) {
+    if (items) s.push(items);
+    const buf = new Float32Array(n);
+    s.process(buf);
+    out.push(...buf);
   }
-  blk.dispose();
-  return { log, got };
-}, steps);
+  return out;
+}, [steps, baud, sampleRate]);
 
-test('the numbers of an array go out one by one, and then it is zeros', () => withApp(app, async (page) => {
-  assert.deepEqual((await run(page, [[0, [65, 255, 7]], [0.005, null]])).got, [65, 255, 7, 0, 0, 0]);
-  assert.deepEqual((await run(page, [[0, [-3, 0.5, 1e9]], [0.003, null]])).got, [-3, 0.5, 1e9, 0]);   // integers and floats alike
-  for (const bad of [[[1], 2], ['x', 1], [null], [NaN], [Infinity]]) {
-    assert.deepEqual((await run(page, [[0, bad], [0.003, null]])).got, [0, 0, 0, 0], `ignored: ${JSON.stringify(bad)}`);
-  }
+// one sample per symbol, from the output samples
+const every = (out, per) => out.filter((_, i) => i % per === 0);
+
+test('each number is held for a whole period (sampleRate / baud output samples), then the next one', () => withApp(app, async (page) => {
+  const out = await run(page, [[[3, -2.5, 7], 480]], { baud: 4800 });   // 10 output samples per symbol
+  assert.deepEqual(out.slice(0, 10), Array(10).fill(3));
+  assert.deepEqual(out.slice(10, 20), Array(10).fill(-2.5));
+  assert.deepEqual(out.slice(20, 30), Array(10).fill(7));
+  assert.ok(out.slice(30).every((v) => v === 0), 'then zeros');
 }));
 
-test('it delivers samples continuously at the baud rate, 0 while the buffer is empty, none early', () => withApp(app, async (page) => {
-  // 1000 baud: at t = 0 the first sample is due, by 3.5 ms four, by 20 ms twenty-one (an empty buffer gives zeros)
-  const { log, got } = await run(page, [[0, null], [0.0035, null], [0.0035, [9, 9]], [0.02, null], [0.03, null]]);
-  assert.deepEqual(log, [1, 4, 4, 21, 31]);
-  assert.deepEqual(got.slice(0, 4), [0, 0, 0, 0]);
-  assert.deepEqual(got.slice(4, 7), [9, 9, 0], 'the array that arrived is consumed from the next sample on');
+test('it never stops: an empty buffer gives zeros, and numbers that arrive later are consumed on the next symbol', () => withApp(app, async (page) => {
+  const out = await run(page, [[null, 100], [[1, 2], 40]], { baud: 4800 });
+  assert.ok(out.slice(0, 100).every((v) => v === 0));
+  assert.deepEqual(out.slice(100, 110), Array(10).fill(1));   // symbols start every 10 samples
+  assert.deepEqual(out.slice(110, 120), Array(10).fill(2));
+  assert.ok(out.slice(120).every((v) => v === 0));
 }));
 
-test('an array that arrives while another is being consumed waits in the buffer', () => withApp(app, async (page) => {
-  const { got } = await run(page, [[0, [7, 8]], [0, [9]], [0.006, null]]);
-  assert.deepEqual(got, [7, 8, 9, 0, 0, 0, 0]);
+test('the average rate is exactly the baud rate, also when it does not divide the sound card rate', () => withApp(app, async (page) => {
+  const out = await run(page, [[Array.from({ length: 1000 }, (_, i) => i + 1), 48000]], { baud: 700 });   // one second
+  const changes = out.filter((v, i) => i === 0 || v !== out[i - 1]).length;
+  assert.equal(changes, 700);
+  assert.equal(out[out.length - 1], 700);
 }));
 
-test('a new baud rate starts from now; a long stall skips ahead instead of delivering it all', () => withApp(app, async (page) => {
-  const r = await page.evaluate(async () => {
-    const ctx = { currentTime: 0 };
-    const blk = dsplab.BLOCKS.serializer.build(ctx, { baud: 1000 });
-    let n = 0;
-    blk.outputs.out.connect({ receive: () => n++ });
-    const wait = () => new Promise((r) => setTimeout(r, 30));
-    ctx.currentTime = 0.01; await wait();
-    const at1000 = n;                                   // 11
-    blk.update({ baud: 100 });
-    ctx.currentTime = 0.02; await wait();               // the new rate starts at 0.01: samples at 0.01 and 0.02
-    const at100 = n - at1000;
-    ctx.currentTime = 60; await wait();                 // a minute at once: at most a second of samples
-    const stalled = n - at1000 - at100;
-    blk.dispose();
-    return { at1000, at100, stalled };
+test('a new rate takes effect from the next sample', () => withApp(app, async (page) => {
+  const out = await page.evaluate(async () => {
+    const { SerializerSignal } = await import('/src/blocks/serializer-core.js');
+    const s = new SerializerSignal(48000, 4800);
+    s.push([1, 2, 3, 4, 5, 6]);
+    const a = new Float32Array(20); s.process(a);          // 1, 2
+    s.set(2400);
+    const b = new Float32Array(40); s.process(b);          // 20 samples per symbol from now on
+    return [Array.from(a), Array.from(b)];
   });
-  assert.equal(r.at1000, 11);
-  assert.equal(r.at100, 2);
-  assert.ok(r.stalled <= 100 + 1, `${r.stalled}`);
+  assert.deepEqual(out[0], [...Array(10).fill(1), ...Array(10).fill(2)]);
+  assert.deepEqual(out[1], [...Array(20).fill(3), ...Array(20).fill(4)]);
 }));
 
-test('anything that is not an array is ignored (the output stays at zero)', () => withApp(app, async (page) => {
-  assert.deepEqual((await run(page, [[0, 1], [0, 'ab'], [0, null], [0.003, null]])).got, [0, 0, 0, 0], 'nothing but zeros');
-}));
-
-test('Serializer takes an array of numbers and gives a float signal, both on an async clock', () => withApp(app, async (page) => {
-  for (const t of ['Strobe Source', 'Serializer', 'Pulse Shaper', 'Debug Sink']) await addFromPalette(page, t);
+test('Serializer takes an array of numbers (async) and gives a signal (audio); ignores what is not an array of numbers', () => withApp(app, async (page) => {
+  for (const t of ['Strobe Source', 'Serializer', 'Pulse Shaper', 'Audio Sink']) await addFromPalette(page, t);
   assert.equal(await page.locator('.node:has-text("Serializer") .port.in.async').count(), 1);
-  assert.equal(await page.locator('.node:has-text("Serializer") .port.out.async').count(), 1);
+  assert.equal(await page.locator('.node:has-text("Serializer") .port.out').count(), 1);
+  assert.equal(await page.locator('.node:has-text("Serializer") .port.out.async').count(), 0, 'its output is a signal');
   const r = await page.evaluate(() => {
     const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
-    const [s, z, p, d] = ['strobe_source', 'serializer', 'pulse_shaper', 'debug_sink'].map(by);
+    const [s, z, p, k] = ['strobe_source', 'serializer', 'pulse_shaper', 'audio_sink'].map(by);
     const e = (a, ap, b, bp) => !!dsplab.addEdge({ node: a.id, port: ap }, { node: b.id, port: bp });
     return {
-      fromStrobe: e(s, 'out', z, 'in'),                  // array[uint8]: integers are cast to float
-      toDebug: e(z, 'out', d, 'in'),
-      toPulse: e(z, 'out', p, 'bits'),                   // a float is not the int the Pulse Shaper takes (yet)
-      audioIn: e(p, 'out', z, 'in'),
-      edge: dsplab.graph.edges.find((x) => x.from.node === z.id).id,
+      fromStrobe: e(s, 'out', z, 'in'),     // array[uint8]
+      toSink: e(z, 'out', k, 'in'),         // a signal at the baud rate; the Audio Sink needs the sound card's
+      audioToIn: e(k, 'out', z, 'in') || e(p, 'out', z, 'in'),
     };
   });
-  assert.deepEqual([r.fromStrobe, r.toDebug, r.toPulse, r.audioIn], [true, true, false, false]);
-  await page.evaluate((id) => dsplab.select({ kind: 'edge', id }), r.edge);
-  const type = await page.evaluate(() => [...document.querySelectorAll('#props-body .kv')].find((el) => el.children[0].textContent === 'Type').children[1].textContent);
-  assert.equal(type, 'float');
-}));
-
-test('a Debug Sink on the Serializer prints the float samples as float', () => withApp(app, async (page) => {
-  for (const t of ['Strobe Source', 'Serializer', 'Debug Sink']) await addFromPalette(page, t);
-  await page.evaluate(() => {
-    const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
-    const [s, z, d] = ['strobe_source', 'serializer', 'debug_sink'].map(by);
-    s.params.period = 50;
-    z.params.baud = 200;
-    dsplab.addEdge({ node: s.id, port: 'out' }, { node: z.id, port: 'in' });
-    dsplab.addEdge({ node: z.id, port: 'out' }, { node: d.id, port: 'in' });
-  });
-  await startAudio(page);
-  await page.waitForFunction(() => /\d  float  104/.test(document.querySelector('.msg-log').textContent));   // 'h' of hello
+  assert.deepEqual(r, { fromStrobe: true, toSink: false, audioToIn: false });
 }));
 
 test('the input takes arrays of numbers, not arrays of arrays', () => withApp(app, async (page) => {
@@ -114,17 +86,33 @@ test('the input takes arrays of numbers, not arrays of arrays', () => withApp(ap
     const [s, u, z, k] = ['strobe_source', 'array_unpack', 'array_reshape', 'serializer'].map(by);
     const e = (a, ap, b, bp) => !!dsplab.addEdge({ node: a.id, port: ap }, { node: b.id, port: bp });
     const out = {};
-    out.flat = e(s, 'out', k, 'in');                  // array[uint8]
+    out.flat = e(s, 'out', k, 'in');
     e(s, 'out', u, 'in');
-    out.nested = e(u, 'out', k, 'in');                // array[array[uint8]]: its elements are arrays
-    out.stillFlat = dsplab.graph.edges.some((x) => x.from.node === s.id && x.to.node === k.id);   // the refused cable changed nothing
+    out.nested = e(u, 'out', k, 'in');
+    out.stillFlat = dsplab.graph.edges.some((x) => x.from.node === s.id && x.to.node === k.id);
     e(s, 'out', z, 'in');
-    out.reshapeNested = e(z, 'out', k, 'in');         // Array Reshape with Rows 1: array[array[uint8]]
-    g.setParam(z, 'rows', 0);                         // Rows 0: a plain array[uint8]
+    out.reshapeNested = e(z, 'out', k, 'in');
+    g.setParam(z, 'rows', 0);
     out.reshapeFlat = e(z, 'out', k, 'in');
-    g.setParam(z, 'rows', 3);                         // an array of arrays again: the cable to the Serializer no longer fits
+    g.setParam(z, 'rows', 3);
     out.dropped = !dsplab.graph.edges.some((x) => x.from.node === z.id && x.to.node === k.id);
     return out;
   });
   assert.deepEqual(r, { flat: true, nested: false, stillFlat: true, reshapeNested: false, reshapeFlat: true, dropped: true });
+}));
+
+test('the Serializer runs in the engine and an Oscilloscope takes it', () => withApp(app, async (page) => {
+  for (const t of ['Strobe Source', 'Serializer', 'Oscilloscope']) await addFromPalette(page, t);
+  await page.evaluate(() => {
+    const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
+    const [s, z, o] = ['strobe_source', 'serializer', 'oscilloscope'].map(by);
+    s.params.period = 50;
+    z.params.baud = 4800;
+    dsplab.addEdge({ node: s.id, port: 'out' }, { node: z.id, port: 'in' });
+    dsplab.addEdge({ node: z.id, port: 'out' }, { node: o.id, port: 'ch1' });
+  });
+  await startAudio(page);
+  const rate = await page.evaluate(() => dsplab.engine.live.get([...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope').id).rate);
+  assert.equal(rate, 4800, 'the scope takes the rate of its input');
+  assert.match(await page.textContent('#status'), /^Running/);
 }));

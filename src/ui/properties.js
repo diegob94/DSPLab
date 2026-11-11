@@ -132,12 +132,12 @@ function wireSize(e) {
   return shape.length === 1 ? `${shape[0]} element${shape[0] === 1 ? '' : 's'}` : `${shape.join(' × ')} (${['rows × columns'][shape.length - 2] || 'dimensions'})`;
 }
 
-// the clock of a cable: audio, or asynchronous with its sample rate when the block that sends sets one
+// the clock of a cable: asynchronous, or synchronous with its sample rate (the sound card's unless the block sets one)
 function wireClock(e) {
   const from = graph.nodes.get(e.from.node);
-  if (outWire(from, e.from.port) === 'audio') return 'audio (sample rate)';
+  if (outWire(from, e.from.port) !== 'audio') return 'asynchronous';
   const rate = outRate(from, e.from.port);
-  return rate ? `synchronous, ${rate} samples/s` : 'asynchronous';
+  return rate ? `synchronous, ${rate} samples/s` : 'synchronous, sound card rate';
 }
 
 let wireSizeEl = null;
