@@ -23,6 +23,16 @@ export function hexToBytes(hex) {
 // The bytes a text field stands for, as an array of uint8 (0..255): text (UTF-8) or hex.
 export const parseBytes = (type, value) => (type === 'hex' ? hexToBytes(value) : Array.from(new TextEncoder().encode(value)));
 
+// The dimensions of a sample: [] for a number, [N] for an array, [N, M] for an array of arrays... null when the
+// arrays are not rectangular
+export function sampleShape(s) {
+  if (!Array.isArray(s)) return [];
+  if (!s.length) return [0];
+  const inner = s.map(sampleShape);
+  const first = inner[0];
+  return inner.every((x) => x && x.join() === first.join()) ? [s.length, ...first] : null;
+}
+
 // The type of a sample on an async wire, worked out from the value: 'int', 'array[uint8]', 'array[int8]', 'array[int]', 'array[float]'...
 export function sampleType(s) {
   if (Number.isInteger(s)) return 'int';

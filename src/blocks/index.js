@@ -15,7 +15,7 @@
  * `asyncPorts` lists the port names (inputs or outputs) whose signal has an asynchronous clock: its samples
  * (bits) come at their own instants instead of at the audio sample rate. An output is any object with
  * connect(target) and send(sample) (see stream.js), an input any object with receive(sample).
- * `wireTypes` maps an async port to the type of its samples when it isn't a plain int (e.g. { out: 'array[uint8]' }); '*' takes any async port, 'array[T]' any array, 'array[int*]' any array of ints of 8, 16 or 32 bits, 'array[array[T]]' any array of arrays, 'same' (an output) whatever feeds the block's `in` and 'T' (an output) the element type of the array that feeds the block's `in`.
+ * `wireTypes` maps an async port to the type of its samples when it isn't a plain int (e.g. { out: 'array[uint8]' }); '*' takes any async port, 'array[T]' any array, 'array[int*]' any array of ints of 8, 16 or 32 bits, 'array[array[T]]' any array of arrays, a function (params, type of `in`) => type for an output that depends on the settings, 'same' (an output) whatever feeds the block's `in` and 'T' (an output) the element type of the array that feeds the block's `in`.
  * Ports with different clocks or sample types cannot be cabled together.
  * Parameters are edited in the properties panel; those marked `show: true` are also
  * displayed (read-only) on the node itself.

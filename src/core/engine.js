@@ -2,10 +2,12 @@
 import { BLOCKS } from '../blocks/index.js';
 import { graph, outWire } from './graph.js';
 import { on } from './events.js';
+import { portClock } from './params.js';
 
 export const engine = {
   ctx: null,
   live: new Map(), // node id -> built block instance
+  last: new Map(), // edge id -> the last sample that went through an async cable (to show its size)
 
   get running() { return !!this.ctx; },
 
@@ -35,6 +37,7 @@ export const engine = {
   teardown() {
     this.live.forEach((inst) => inst.dispose());
     this.live.clear();
+    this.last.clear();
   },
 
   rebuild() {
@@ -50,7 +53,8 @@ export const engine = {
       const dst = this.live.get(e.to.node);
       const from = src && src.outputs[e.from.port];
       const to = dst && dst.inputs[e.to.port];
-      if (from && to) { from.connect(to); if (dst.onConnect) dst.onConnect(e.to.port); }
+      // an async cable passes through a tap that remembers the last sample
+      if (from && to) { from.connect(portClock(BLOCKS[graph.nodes.get(e.from.node).type], e.from.port) === 'async' ? { receive: (s) => { this.last.set(e.id, s); to.receive(s); } } : to); if (dst.onConnect) dst.onConnect(e.to.port); }
     }
   },
 

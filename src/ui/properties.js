@@ -3,7 +3,9 @@ import { BLOCKS, CATEGORIES } from '../blocks/index.js';
 import { $, h } from '../dom.js';
 import { on } from '../core/events.js';
 import { optionsOf } from '../core/params.js';
-import { graph, getSelection, setParam, syncParams, rebuildPorts, dataChanged } from '../core/graph.js';
+import { graph, getSelection, setParam, syncParams, rebuildPorts, dataChanged, outWire } from '../core/graph.js';
+import { engine } from '../core/engine.js';
+import { sampleShape } from '../blocks/stream.js';
 import { clamp } from '../util.js';
 
 const propsBody = $('#props-body');
@@ -119,7 +121,21 @@ function actionButton(node, a) {
   return button;
 }
 
+// what to say about the size of what flows through a cable: the dimensions of the last sample it carried
+function wireSize(e) {
+  if (outWire(graph.nodes.get(e.from.node), e.from.port) === 'audio') return 'continuous signal';
+  if (!engine.running) return 'Run to see the size';
+  if (!engine.last.has(e.id)) return 'no sample yet';
+  const shape = sampleShape(engine.last.get(e.id));
+  if (!shape) return 'irregular (inner arrays differ)';
+  if (!shape.length) return 'single value';
+  return shape.length === 1 ? `${shape[0]} element${shape[0] === 1 ? '' : 's'}` : `${shape.join(' × ')} (${['rows × columns'][shape.length - 2] || 'dimensions'})`;
+}
+
+let wireSizeEl = null;
+
 function renderProps() {
+  wireSizeEl = null;
   const selection = getSelection();
   propsBody.replaceChildren();
   const hint = (text) => propsBody.append(h('p', { className: 'hint', textContent: text }));
@@ -132,6 +148,12 @@ function renderProps() {
     propsBody.append(h('div', { className: 'props-head', textContent: 'Connection' }));
     propsBody.append(h('div', { className: 'kv' }, h('span', { textContent: 'From' }), h('b', { textContent: name(e.from) })));
     propsBody.append(h('div', { className: 'kv' }, h('span', { textContent: 'To' }), h('b', { textContent: name(e.to) })));
+    const wire = outWire(graph.nodes.get(e.from.node), e.from.port);
+    const row = (label, text) => { const b = h('b', { textContent: text }); propsBody.append(h('div', { className: 'kv' }, h('span', { textContent: label }), b)); return b; };
+    row('Type', wire === 'audio' ? 'audio' : wire === '*' ? 'any (not known yet)' : wire);
+    row('Clock', wire === 'audio' ? 'audio (sample rate)' : 'asynchronous');
+    const size = row('Size', wireSize(e));
+    wireSizeEl = size;   // kept up to date while the cable stays selected
     return;
   }
 
@@ -148,4 +170,10 @@ function renderProps() {
 
 export function initProperties() {
   on('selection', renderProps);
+  // the size of a selected cable follows the samples that go through it
+  setInterval(() => {
+    const sel = getSelection();
+    const e = sel && sel.kind === 'edge' && graph.edges.find((e) => e.id === sel.id);
+    if (wireSizeEl && e) { const text = wireSize(e); if (wireSizeEl.textContent !== text) wireSizeEl.textContent = text; }
+  }, 250);
 }

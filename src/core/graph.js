@@ -73,12 +73,13 @@ export function clearGraph() {
 // that feeds the block's `in`, and 'same' carries whatever that cable carries; both are anything ('*') while
 // that is unknown.
 export function outWire(node, port, seen = new Set()) {
-  const wire = portWire(BLOCKS[node.type], port);
-  if (wire !== 'T' && wire !== 'same') return wire;
+  let wire = portWire(BLOCKS[node.type], port);
+  if (typeof wire === 'string' && wire !== 'T' && wire !== 'same') return wire;
   const e = graph.edges.find((e) => e.to.node === node.id && e.to.port === 'in');
   const src = e && graph.nodes.get(e.from.node);
   if (!src || seen.has(node.id)) return '*';
   const up = outWire(src, e.from.port, seen.add(node.id));
+  if (typeof wire === 'function') return up === '*' ? '*' : wire(node.params, up);   // (params, the type that feeds `in`) -> type
   return wire === 'same' ? up : elementOf(up) || '*';
 }
 
@@ -148,6 +149,8 @@ export function setView(x, y, zoom) {
 export function setParam(node, key, value) {
   node.params[key] = value;
   emit('param', node, key);
+  // a param can change what the block's output carries (a wireTypes function): drop the cables that stop fitting
+  if (Object.values(BLOCKS[node.type].wireTypes || {}).some((w) => typeof w === 'function')) pruneEdges();
 }
 
 // a select whose options depend on other params may have lost its value

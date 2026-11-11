@@ -22,9 +22,17 @@ test('the elements keep their order (row by row) in the new shape', () => withAp
   assert.deepEqual((await run(page, { rows: 2, cols: 6 }, [A])).got, [[[1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, 12]]]);
 }));
 
-test('the defaults flatten into one row, and -1 is worked out from the other dimension', () => withApp(app, async (page) => {
-  assert.deepEqual((await run(page, {}, [[[1, 2], [3, 4]]])).got, [[[1, 2, 3, 4]]]);
-  assert.deepEqual((await run(page, { rows: -1, cols: 1 }, [[[1, 2], [3, 4]]])).got, [[[1], [2], [3], [4]]]);
+test('the defaults give one row, -1 is worked out from the other dimension, and a dimension of 0 disappears', () => withApp(app, async (page) => {
+  assert.deepEqual((await run(page, {}, [[[1, 2], [3, 4]]])).got, [[[1, 2, 3, 4]]]);                      // the defaults: 1 x 4
+  assert.deepEqual((await run(page, { rows: -1, cols: 1 }, [[[1, 2], [3, 4]]])).got, [[[1], [2], [3], [4]]]);   // 4 x 1 keeps both dimensions
+  assert.deepEqual((await run(page, { rows: 2, cols: 2 }, [[1, 2, 3, 4]])).got, [[[1, 2], [3, 4]]], 'a plain array can be reshaped too');
+  // 0: that dimension disappears and the other one holds all the elements (or -1: worked out)
+  assert.deepEqual((await run(page, { rows: 0, cols: -1 }, [[[1, 2], [3, 4]]])).got, [[1, 2, 3, 4]]);
+  assert.deepEqual((await run(page, { rows: 0, cols: 4 }, [[[1, 2], [3, 4]]])).got, [[1, 2, 3, 4]]);
+  assert.deepEqual((await run(page, { rows: 4, cols: 0 }, [[[1, 2], [3, 4]]])).got, [[1, 2, 3, 4]]);
+  assert.deepEqual((await run(page, { rows: 0, cols: 3 }, [[[1, 2], [3, 4]]])).got, [], '3 is not all 4 elements');
+  assert.deepEqual((await run(page, { rows: 0, cols: 0 }, [[[1, 2], [3, 4]]])).got, [], 'a dimension has to stay');
+  assert.equal((await run(page, { rows: 0, cols: -1 }, [[[1, 2], [3, 4]]])).status, '2x2 → 4');
   assert.deepEqual((await run(page, { rows: 2, cols: -1 }, [A])).got[0].map((r) => r.length), [6, 6]);
 }));
 
@@ -40,27 +48,32 @@ test('what does not fit is dropped and the block says why; the elements can be a
 }));
 
 test('anything that is not a rectangular array of arrays is ignored', () => withApp(app, async (page) => {
-  assert.deepEqual((await run(page, {}, [1, [1, 2], [], 'ab', null])).got, []);
+  assert.deepEqual((await run(page, {}, [1, [], 'ab', null, [1, [2]]])).got, []);   // numbers and arrays mixed
+  assert.deepEqual((await run(page, {}, [[1, 2]])).got, [[[1, 2]]]);   // a plain array is fine too: 1 x 2
   assert.deepEqual((await run(page, {}, [[[1, 2], [3]]])).got, [], 'ragged');
 }));
 
-test('it takes array[array[T]] and gives the same type; cables that stop fitting are dropped', () => withApp(app, async (page) => {
+test('it takes an array, gives array[T] when a dimension is 0 and array[array[T]] otherwise; cables that stop fitting are dropped', () => withApp(app, async (page) => {
   for (const t of ['Strobe Source', 'Array Unpack', 'Array Reshape', 'Pulse Shaper', 'Debug Sink']) await addFromPalette(page, t);
   assert.equal(await page.locator('.node:has-text("Array Reshape") .port.in.async').count(), 1);
   assert.equal(await page.locator('.node:has-text("Array Reshape") .port.out.async').count(), 1);
-  const r = await page.evaluate(() => {
+  const r = await page.evaluate(async () => {
+    const g = await import('/src/core/graph.js');
     const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
     const [s, u, z, p, d] = ['strobe_source', 'array_unpack', 'array_reshape', 'pulse_shaper', 'debug_sink'].map(by);
     const e = (a, ap, b, bp) => !!dsplab.addEdge({ node: a.id, port: ap }, { node: b.id, port: bp });
+    const edgesFromZ = () => dsplab.graph.edges.filter((x) => x.from.node === z.id).length;
     const out = {};
-    out.flat = e(s, 'out', z, 'in');                         // array[uint8] is not an array of arrays
     out.nothingYet = e(z, 'out', p, 'bits');                 // the output is 'anything' until its input is cabled
-    out.unpack = e(s, 'out', u, 'in');
-    out.fed = e(u, 'out', z, 'in');                          // array[array[uint8]]: the output carries the same
-    out.dropped = dsplab.graph.edges.filter((x) => x.from.node === z.id).length;   // the cable to the Pulse Shaper no longer fits
+    out.fed = e(s, 'out', z, 'in');                          // array[uint8] in; Rows 1 (the default): array[array[uint8]] out
+    out.droppedPulse = edgesFromZ() === 0;                   // which doesn't fit the Pulse Shaper's int
+    out.nestedToUnpack = e(z, 'out', u, 'in');               // nor an Array Unpack, which takes array[int*]
+    g.setParam(z, 'rows', 0);                                // Rows 0 disappears: the output is array[uint8]
+    out.flatToUnpack = e(z, 'out', u, 'in');
+    g.setParam(z, 'rows', 2);                                // 2 x N: an array of arrays again, which Array Unpack doesn't take
+    out.droppedAfter = edgesFromZ() === 0;
     out.debug = e(z, 'out', d, 'in');
     return out;
   });
-  assert.deepEqual([r.flat, r.nothingYet, r.unpack, r.fed, r.debug], [false, true, true, true, true]);
-  assert.equal(r.dropped, 0);
+  assert.deepEqual(r, { nothingYet: true, fed: true, droppedPulse: true, nestedToUnpack: false, flatToUnpack: true, droppedAfter: true, debug: true });
 }));

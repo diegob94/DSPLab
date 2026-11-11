@@ -213,21 +213,28 @@ with a number outside the range of its type, or anything that is not an array of
 settings.
 
 **Array Reshape**: lays the same elements out in another number of rows and columns, like `numpy.reshape`. Input:
-`in` (async, `array[array[T]]`). Output: `out` (async, the same type as `in`; anything while `in` has no cable).
+`in` (async, an array: `array[T]` or `array[array[T]]`). Output: `out` (async, `array[array[T]]`, or `array[T]` when
+a dimension is 0; anything while `in` has no cable).
 
-An array of N arrays of M elements is read row by row and laid out again as *Rows* × *Columns*, so N × M elements
-stay N × M elements in the same order: a 3 × 4 array can become 4 × 3, 2 × 6 or a single row of 12, and back. The
+The elements of the input (a plain array, or N arrays of M elements read row by row) are laid out again as
+*Rows* × *Columns*, in the same order: a 3 × 4 array can become 4 × 3, 2 × 6 or a single row of 12, and back. The
 elements can be anything.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
-| Rows | Rows of the output, or −1 to work it out from Columns | −1, 1 – 4096 | 1 |
-| Columns | Columns of the output, or −1 to work it out from Rows | −1, 1 – 4096 | −1 |
+| Rows | Rows of the output; −1 works it out from Columns; **0 removes the dimension** | −1 – 4096 | 1 |
+| Columns | Columns of the output; −1 works it out from Rows; **0 removes the dimension** | −1 – 4096 | −1 |
 
-The defaults flatten any array into a single row. Rows × columns must equal the number of elements, and only one of
-them can be −1. If it doesn't fit, the array is **dropped** (numpy would raise an error) and the block shows what it
-could not do, like `3x4 can't be 5 x 2`; it also shows the last change, like `3x4 → 2x6`. An input that is not a
-rectangle (inner arrays of different lengths) or not an array of arrays is ignored.
+The defaults put every element in a single row (1 × N, an array of one array). Set one of them to 0 to drop that
+dimension: the output is then a plain array and the other setting must be the number of elements or −1, so
+*Rows* 0 and *Columns* −1 flatten a 3 × 4 array into 12 elements. Both can't be 0. Otherwise rows × columns must
+equal the number of elements, and only one of them can be −1. If it doesn't fit, the array is **dropped** (numpy
+would raise an error) and the block shows what it could not do, like `3x4 can't be 5 x 2`; it also shows the last
+change, like `3x4 → 2x6` or `3x4 → 12`. An input that is not rectangular (inner arrays of different lengths), mixes
+numbers and arrays or is empty is ignored.
+
+Changing *Rows* or *Columns* between 0 and another value changes the type on `out`, so the cables on it that no
+longer fit are dropped.
 
 Shown on the block: Rows and Columns.
 
