@@ -1,6 +1,6 @@
 'use strict';
 const { before, after, test } = require('node:test');
-const { assert, launch, withApp, addFromPalette } = require('./helpers');
+const { assert, launch, withApp, addFromPalette, startAudio } = require('./helpers');
 
 let app;
 before(async () => { app = await launch(); });
@@ -23,10 +23,12 @@ const run = (page, steps) => page.evaluate(async (steps) => {
   return { log, got };
 }, steps);
 
-test('the elements of an array go out one by one, whatever they are, and then it is zeros', () => withApp(app, async (page) => {
+test('the numbers of an array go out one by one, and then it is zeros', () => withApp(app, async (page) => {
   assert.deepEqual((await run(page, [[0, [65, 255, 7]], [0.005, null]])).got, [65, 255, 7, 0, 0, 0]);
-  assert.deepEqual((await run(page, [[0, ['x', 0.5, null]], [0.003, null]])).got, ['x', 0.5, null, 0]);
-  assert.deepEqual((await run(page, [[0, [[1], 2]], [0.003, null]])).got, [0, 0, 0, 0], 'an array of arrays is ignored');
+  assert.deepEqual((await run(page, [[0, [-3, 0.5, 1e9]], [0.003, null]])).got, [-3, 0.5, 1e9, 0]);   // integers and floats alike
+  for (const bad of [[[1], 2], ['x', 1], [null], [NaN], [Infinity]]) {
+    assert.deepEqual((await run(page, [[0, bad], [0.003, null]])).got, [0, 0, 0, 0], `ignored: ${JSON.stringify(bad)}`);
+  }
 }));
 
 test('it delivers samples continuously at the baud rate, 0 while the buffer is empty, none early', () => withApp(app, async (page) => {
@@ -68,7 +70,7 @@ test('anything that is not an array is ignored (the output stays at zero)', () =
   assert.deepEqual((await run(page, [[0, 1], [0, 'ab'], [0, null], [0.003, null]])).got, [0, 0, 0, 0], 'nothing but zeros');
 }));
 
-test('Serializer has array[T] in and T out, both async; the output type follows what feeds it', () => withApp(app, async (page) => {
+test('Serializer takes an array of numbers and gives a float signal, both on an async clock', () => withApp(app, async (page) => {
   for (const t of ['Strobe Source', 'Serializer', 'Pulse Shaper', 'Debug Sink']) await addFromPalette(page, t);
   assert.equal(await page.locator('.node:has-text("Serializer") .port.in.async').count(), 1);
   assert.equal(await page.locator('.node:has-text("Serializer") .port.out.async').count(), 1);
@@ -76,22 +78,35 @@ test('Serializer has array[T] in and T out, both async; the output type follows 
     const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
     const [s, z, p, d] = ['strobe_source', 'serializer', 'pulse_shaper', 'debug_sink'].map(by);
     const e = (a, ap, b, bp) => !!dsplab.addEdge({ node: a.id, port: ap }, { node: b.id, port: bp });
-    const out = {};
-    out.nothingYet = [e(z, 'out', p, 'bits'), e(z, 'out', d, 'in')];   // T is unknown: anything goes
-    out.fromStrobe = e(s, 'out', z, 'in');                             // array[uint8]: T = uint8
-    out.left = dsplab.graph.edges.filter((x) => x.from.node === z.id).map((x) => x.to.node === d.id ? 'debug' : 'other');
-    out.toPulse = e(z, 'out', p, 'bits');                              // a uint8 is not the int the Pulse Shaper takes (yet)
-    out.audioIn = e(p, 'out', z, 'in');
-    return out;
+    return {
+      fromStrobe: e(s, 'out', z, 'in'),                  // array[uint8]: integers are cast to float
+      toDebug: e(z, 'out', d, 'in'),
+      toPulse: e(z, 'out', p, 'bits'),                   // a float is not the int the Pulse Shaper takes (yet)
+      audioIn: e(p, 'out', z, 'in'),
+      edge: dsplab.graph.edges.find((x) => x.from.node === z.id).id,
+    };
   });
-  assert.deepEqual(r.nothingYet, [true, true]);
-  assert.equal(r.fromStrobe, true);
-  assert.deepEqual(r.left, ['debug'], 'the cable to the Pulse Shaper no longer fits and is dropped');
-  assert.equal(r.toPulse, false);
-  assert.equal(r.audioIn, false);
+  assert.deepEqual([r.fromStrobe, r.toDebug, r.toPulse, r.audioIn], [true, true, false, false]);
+  await page.evaluate((id) => dsplab.select({ kind: 'edge', id }), r.edge);
+  const type = await page.evaluate(() => [...document.querySelectorAll('#props-body .kv')].find((el) => el.children[0].textContent === 'Type').children[1].textContent);
+  assert.equal(type, 'float');
 }));
 
-test('the input takes array[T] only when T is not an array', () => withApp(app, async (page) => {
+test('a Debug Sink on the Serializer prints the float samples as float', () => withApp(app, async (page) => {
+  for (const t of ['Strobe Source', 'Serializer', 'Debug Sink']) await addFromPalette(page, t);
+  await page.evaluate(() => {
+    const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
+    const [s, z, d] = ['strobe_source', 'serializer', 'debug_sink'].map(by);
+    s.params.period = 50;
+    z.params.baud = 200;
+    dsplab.addEdge({ node: s.id, port: 'out' }, { node: z.id, port: 'in' });
+    dsplab.addEdge({ node: z.id, port: 'out' }, { node: d.id, port: 'in' });
+  });
+  await startAudio(page);
+  await page.waitForFunction(() => /\d  float  104/.test(document.querySelector('.msg-log').textContent));   // 'h' of hello
+}));
+
+test('the input takes arrays of numbers, not arrays of arrays', () => withApp(app, async (page) => {
   for (const t of ['Strobe Source', 'Array Unpack', 'Array Reshape', 'Serializer']) await addFromPalette(page, t);
   const r = await page.evaluate(async () => {
     const g = await import('/src/core/graph.js');

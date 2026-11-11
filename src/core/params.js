@@ -10,10 +10,13 @@ export const portClock = (def, name) => ((def.asyncPorts || []).includes(name) ?
 export const wiresMatch = (a, b) => a === b || (a === '*' && b !== 'audio') || (b === '*' && a !== 'audio')
   || (a === 'array[T]' && b.startsWith('array[')) || (b === 'array[T]' && a.startsWith('array['))
   || (a === 'array[int*]' && isIntArray(b)) || (b === 'array[int*]' && isIntArray(a))
+  || (a === 'array[numeric]' && isNumericArray(b)) || (b === 'array[numeric]' && isNumericArray(a))
   || (a === 'array[scalar]' && isFlatArray(b)) || (b === 'array[scalar]' && isFlatArray(a))
   || (a === 'array[array[T]]' && isArray2(b)) || (b === 'array[array[T]]' && isArray2(a));
 
 const isArray2 = (wire) => wire.startsWith('array[array[');
+// numeric sample types: integers of any width, signed or not, and float
+const isNumericArray = (wire) => /^array\[(u?int\d*|float)\]$/.test(wire);
 const isFlatArray = (wire) => wire.startsWith('array[') && !isArray2(wire);   // an array whose elements are not arrays
 
 // 'array[int*]' (in a block's wireTypes): an array of integers of a known width

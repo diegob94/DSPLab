@@ -238,22 +238,21 @@ longer fit are dropped.
 
 Shown on the block: Rows and Columns.
 
-**Serializer**: turns arrays into a continuous signal, one element per sample. Input: `in` (async, `array[T]`, where
-`T` is **not an array**: it takes a plain array, not an array of arrays). Output:
-`out` (`T`, **synchronous**, sample rate = baud rate).
+**Serializer**: turns arrays of numbers into a continuous signal, one number per sample. Input: `in` (async, an array
+of integers or floats: `array[uint8]`, `array[int16]`, `array[float]`...; not an array of arrays). Output: `out`
+(`float`, **synchronous**, sample rate = baud rate).
 
 The arrays that arrive go into a buffer, and the output delivers a sample every 1 / baud seconds for as long as the
-audio runs: the next element of the buffer, whatever it is, or **0 when the buffer is empty**. So it never stops: with
-nothing to send it sends zeros, and an array that arrives is consumed from the next sample on, after whatever was
-already waiting. Select the cable on `out` and its *Clock* in Properties reads, for example, `synchronous, 1000
-samples/s`, following the setting. `T` is the element type of the array on the cable that feeds `in`: after a Strobe
-Source (`array[uint8]`) the output carries `uint8`. While nothing is connected to `in` the output takes any async
-cable, and when you connect `in` the cables on `out` that no longer fit are dropped. Pacing follows the audio clock,
-so the average rate is exact; because a browser timer can't fire once per sample at kilobaud, the samples that are due
-are delivered together every ~10 ms, and whoever receives them does its own timing. A new baud rate starts from the
-moment you change it, and after a stall (a tab in the background) it skips ahead rather than delivering more than a
-second of samples at once. Anything that is not an array, or is an array of arrays, is ignored. To feed it an array of arrays (like the output of
-Array Unpack) flatten it first with an Array Reshape with *Rows* 0.
+audio runs: the next number of the buffer, or **0 when the buffer is empty**. So it never stops: with nothing to send
+it sends zeros, and an array that arrives is consumed from the next sample on, after whatever was already waiting.
+The output is a signal of **floats**: when the input is integral (`uint8`, `int16`...) every number is cast to float
+implicitly, with the same value. Select the cable on `out` and its *Type* reads `float` and its *Clock* reads, for
+example, `synchronous, 1000 samples/s`, following the setting. Pacing follows the audio clock, so the average rate is
+exact; because a browser timer can't fire once per sample at kilobaud, the samples that are due are delivered
+together every ~10 ms, and whoever receives them does its own timing. A new baud rate starts from the moment you
+change it, and after a stall (a tab in the background) it skips ahead rather than delivering more than a second of
+samples at once. Anything that is not an array of numbers (strings, `null`, `NaN`, an array of arrays) is ignored. To
+feed it an array of arrays (like the output of Array Unpack) flatten it first with an Array Reshape with *Rows* 0.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
@@ -499,7 +498,7 @@ the one port that takes any async cable (a Strobe Source, a Serializer, a Symbol
 It reads *Stopped* while the audio is off, and the log starts empty on every Run.
 
 Each line is the time (seconds of audio), the type and the value, like `2.000  array[uint8]  [104,101]`. The type is
-worked out from the sample: `int`, `float`, `array[uint8]` (ints from 0 to 255), `array[uint8]` (ints from −128 to 127 with a negative one), `array[int]` (other ints),
+the one the cable declares (select it to read it) and, when that is not known yet, it is worked out from the sample: `int`, `float`, `array[uint8]` (ints from 0 to 255), `array[uint8]` (ints from −128 to 127 with a negative one), `array[int]` (other ints),
 `array[float]`, `array[mixed]`... Long values are cut short with `…`. The log shows the newest lines (older ones scroll out of view), and you can make it
 bigger or smaller by **dragging the grip in its bottom-right corner**; the size is saved with the diagram.
 
