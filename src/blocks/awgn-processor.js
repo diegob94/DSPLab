@@ -4,14 +4,14 @@ import { Awgn } from './awgn-core.js';
 class AwgnProcessor extends AudioWorkletProcessor {
   constructor(options) {
     super();
-    const { snr, window } = options.processorOptions;
-    this.noise = new Awgn({ sampleRate, snr, window });
+    const { inRate, snr, window } = options.processorOptions;
+    this.noise = new Awgn({ sampleRate, inRate, snr, window });
     this.silence = new Float32Array(128);
-    this.port.onmessage = ({ data }) => this.noise.set(data.snr, data.window);
+    this.port.onmessage = ({ data }) => this.noise.set(data.snr, data.window, data.inRate);
   }
 
   process(inputs, outputs) {
-    this.noise.process((inputs[0] && inputs[0][0]) || this.silence, outputs[0][0]);
+    this.noise.process((inputs[0] && inputs[0][0]) || this.silence, outputs[0][0], currentFrame);
     return true;
   }
 }

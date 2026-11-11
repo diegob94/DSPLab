@@ -58,6 +58,25 @@ test('AWGN leaves a silent input silent, and a changed SNR applies without a res
   assert.ok(r.tail < 0.05, `40 dB below a power of 1 is σ = 0.01: ${r.tail}`);
 }));
 
+test('AWGN on a slower signal: one noise sample per input sample, held with it, at the set SNR', () => withApp(app, async (page) => {
+  const r = await page.evaluate(async () => {
+    const { Awgn } = await import('/src/blocks/awgn-core.js');
+    // 4000 samples/s into a 48000 Hz card: every input sample lasts 12 card samples
+    const n = 48000, x = new Float32Array(n), y = new Float32Array(n);
+    for (let i = 0; i < n; i++) x[i] = (Math.floor(i / 12) % 2) ? 1 : -1;
+    new Awgn({ sampleRate: 48000, inRate: 4000, snr: 10, window: 100 }).process(x, y, 0);
+    let held = true, p = 0;
+    for (let i = 0; i < n; i++) {
+      const d = y[i] - x[i];
+      if (i % 12 && Math.abs(d - (y[i - 1] - x[i - 1])) > 1e-6) held = false;
+      if (i >= n / 2) p += d * d;
+    }
+    return { held, snr: 10 * Math.log10(1 / (p / (n / 2))) };
+  });
+  assert.ok(r.held, 'the noise is constant over the 12 samples of an input sample');
+  assert.ok(Math.abs(r.snr - 10) < 1, `SNR ${r.snr}`);
+}));
+
 test('AWGN runs in the engine and takes live changes', () => withApp(app, async (page) => {
   for (const t of ['Wave Generator', 'AWGN', 'Audio Sink']) await addFromPalette(page, t);
   await page.evaluate(() => {
