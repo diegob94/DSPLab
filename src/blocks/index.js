@@ -5,6 +5,7 @@
  * in the node) and how it maps onto Web Audio nodes:
  *   build(ctx, params) -> { inputs: {port: AudioNode}, outputs: {port: AudioNode}, update(params), dispose() }
  * build() is also given the model node as a third argument (to keep per-node data, e.g. a recording, across rebuilds).
+ * build() is also given, as a fourth argument, the type carried by the cable on each input port, { port: wire } (ports with no cable are missing).
  * build() may also return onConnect(port), called when an edge feeds that input port.
  * `inputs` may be a function of the params (a block with a configurable number of ports); a
  * parameter flagged `ports: true` rebuilds the node's ports when it changes, and a select's
@@ -14,7 +15,7 @@
  * `asyncPorts` lists the port names (inputs or outputs) whose signal has an asynchronous clock: its samples
  * (bits) come at their own instants instead of at the audio sample rate. An output is any object with
  * connect(target) and send(sample) (see stream.js), an input any object with receive(sample).
- * `wireTypes` maps an async port to the type of its samples when it isn't a plain int (e.g. { out: 'array[uint8]' }); '*' takes any async port, 'array[T]' any array and 'T' (an output) the element type of the array that feeds the block's `in`.
+ * `wireTypes` maps an async port to the type of its samples when it isn't a plain int (e.g. { out: 'array[uint8]' }); '*' takes any async port, 'array[T]' any array, 'array[int*]' any array of ints of 8, 16 or 32 bits and 'T' (an output) the element type of the array that feeds the block's `in`.
  * Ports with different clocks or sample types cannot be cabled together.
  * Parameters are edited in the properties panel; those marked `show: true` are also
  * displayed (read-only) on the node itself.
@@ -34,6 +35,7 @@ import { mathOperator } from './math-operator.js';
 import { strobeSource } from './strobe-source.js';
 import { constantSource } from './constant-source.js';
 import { serializer } from './serializer.js';
+import { arrayUnpack } from './array-unpack.js';
 import { concatenate } from './concatenate.js';
 import { bitMonitor } from './bit-monitor.js';
 import { debugSink } from './debug-sink.js';
@@ -65,6 +67,7 @@ export const BLOCKS = {
   strobe_source: strobeSource,
   constant_source: constantSource,
   serializer,
+  array_unpack: arrayUnpack,
   concatenate,
   bit_monitor: bitMonitor,
   debug_sink: debugSink,

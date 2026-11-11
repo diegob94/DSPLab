@@ -202,6 +202,16 @@ that is not an array of bytes is ignored.
 Changing *Inputs* keeps the cables on the ports that remain (`a`, `b`...) and drops those on removed ones.
 Shown on the block: Inputs.
 
+**Array Unpack**: opens every integer of an array into its bits. Input: `in` (async, an array of integers of
+8, 16 or 32 bits: `array[uint8]`, `array[int16]`...). Output: `out` (async, `array[array[uint8]]`).
+
+An array of N integers of width W comes out as N arrays of W numbers (N × W), each 0 or 1, most significant bit
+first: `[0x41, 0xFF]` as `array[uint8]` gives `[[0,1,0,0,0,0,0,1], [1,1,1,1,1,1,1,1]]`. Negative numbers give their
+two's complement bits (`-1` as `int8` is `11111111`). W comes from the type of the cable on `in`; when that is not
+known (a generic block such as the Serializer feeds it before anything is connected to it) it uses 32. An array
+with a number outside the range of its type, or anything that is not an array of integers, is ignored. It has no
+settings.
+
 **Serializer**: sends the elements of an array one at a time. Input: `in` (async, `array[T]`). Output: `out`
 (async, `T`).
 

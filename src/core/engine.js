@@ -1,6 +1,6 @@
 // Audio engine: maps the graph onto Web Audio nodes and keeps them in sync with it.
 import { BLOCKS } from '../blocks/index.js';
-import { graph } from './graph.js';
+import { graph, outWire } from './graph.js';
 import { on } from './events.js';
 
 export const engine = {
@@ -40,7 +40,10 @@ export const engine = {
   rebuild() {
     this.teardown();
     for (const node of graph.nodes.values()) {
-      this.live.set(node.id, BLOCKS[node.type].build(this.ctx, node.params, node));
+      // what each input port is fed with, for the blocks whose behaviour depends on it
+      const wires = {};
+      graph.edges.filter((e) => e.to.node === node.id).forEach((e) => { wires[e.to.port] = outWire(graph.nodes.get(e.from.node), e.from.port); });
+      this.live.set(node.id, BLOCKS[node.type].build(this.ctx, node.params, node, wires));
     }
     for (const e of graph.edges) {
       const src = this.live.get(e.from.node);

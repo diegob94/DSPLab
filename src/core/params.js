@@ -8,7 +8,18 @@ export const portClock = (def, name) => ((def.asyncPorts || []).includes(name) ?
 
 // '*' (in a block's wireTypes) accepts any async port, whatever its sample type; audio only goes with audio
 export const wiresMatch = (a, b) => a === b || (a === '*' && b !== 'audio') || (b === '*' && a !== 'audio')
-  || (a === 'array[T]' && b.startsWith('array[')) || (b === 'array[T]' && a.startsWith('array['));
+  || (a === 'array[T]' && b.startsWith('array[')) || (b === 'array[T]' && a.startsWith('array['))
+  || (a === 'array[int*]' && isIntArray(b)) || (b === 'array[int*]' && isIntArray(a));
+
+// 'array[int*]' (in a block's wireTypes): an array of integers of a known width
+const INT_ARRAY = /^array\[(u?)int(8|16|32)\]$/;
+const isIntArray = (wire) => INT_ARRAY.test(wire);
+
+// the width in bits and the signedness of an integer array type, or null ('array[uint16]' -> { bits: 16, signed: false })
+export function intArrayInfo(wire) {
+  const m = INT_ARRAY.exec(wire || '');
+  return m ? { bits: Number(m[2]), signed: m[1] !== 'u' } : null;
+}
 
 // 'array[uint8]' -> 'uint8'; null when it isn't an array
 export const elementOf = (wire) => { const m = /^array\[(.*)\]$/.exec(wire); return m ? m[1] : null; };
