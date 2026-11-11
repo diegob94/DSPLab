@@ -42,3 +42,19 @@ export function bitsToText(bits) {
   const bytes = Uint8Array.from({ length: bits.length >> 3 }, (_, k) => bits.slice(8 * k, 8 * k + 8).reduce((v, b) => (v << 1) | b, 0));
   return new TextDecoder().decode(bytes);
 }
+
+// The type of a sample on an async wire, worked out from the value: 'int', 'array[int8]', 'array[int]', 'array[float]'...
+export function sampleType(s) {
+  if (Number.isInteger(s)) return 'int';
+  if (typeof s === 'number') return 'float';
+  if (Array.isArray(s)) {
+    const kinds = new Set(s.map(sampleType));
+    if (!kinds.size) return 'array[]';
+    if (kinds.size === 1) {
+      const k = [...kinds][0];
+      return k === 'int' && s.every((v) => v >= -128 && v <= 127) ? 'array[int8]' : `array[${k}]`;
+    }
+    return 'array[mixed]';
+  }
+  return s === null ? 'null' : typeof s;
+}

@@ -453,6 +453,20 @@ the preamble drops the bits collected so far.
 
 Shown on the block: Format, Frame and Preamble.
 
+**Debug Sink**: prints the type and the value of every sample that arrives. Input: `in` (async, any type). It is
+the one port that takes any async cable (a Strobe Source, a Bit Serializer, a Symbol Recovery...), but not audio.
+It reads *Stopped* while the audio is off, and the log starts empty on every Run.
+
+Each line is the time (seconds of audio), the type and the value, like `2.000  array[int8]  [104,101]`. The type is
+worked out from the sample: `int`, `float`, `array[int8]` (ints from −128 to 127), `array[int]` (other ints),
+`array[float]`, `array[mixed]`... Long values are cut short with `…`.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Lines | How many of the newest samples stay on the block | 4, 8, 16 | 8 |
+
+Shown on the block: Lines.
+
 ## Recipes
 
 **Hear a tone.** Wave Generator → Audio Sink (this is the starting diagram). Press Run and move the
