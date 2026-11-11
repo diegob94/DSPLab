@@ -606,3 +606,27 @@ test('a channel offset moves its trace on the screen', () => withApp(app, async 
   const centre = await rows(0), up = await rows(2);
   assert.ok(Math.abs(up - (centre - 2 / 8)) < 0.03, `two divisions up: ${centre} -> ${up}`);
 }));
+
+test('overlapping tags fan out to the left while the pointer is over them, and each can then be dragged', () => withApp(app, async (page) => {
+  await openBig(page);
+  const box = await page.locator('.screen-canvas').boundingBox();
+  const cy = box.y + box.height / 2, right = box.x + box.width;
+  // away from the tags nothing changes; over them ch2 (on top) is at the edge, ch1 slides left
+  await page.mouse.move(box.x + 100, cy);
+  await page.mouse.move(right - 8, cy);
+  await page.waitForTimeout(100);
+  // pressing where ch1 is now drags ch1, not ch2
+  await page.mouse.move(right - 8 - 24, cy);
+  await page.mouse.down();
+  await page.mouse.move(right - 8 - 24, cy - box.height / 8, { steps: 5 });
+  await page.mouse.up();
+  const [o1, o2] = await page.evaluate(() => [scope.params.off1, scope.params.off2]);
+  assert.ok(Math.abs(o1 - 1) < 0.05 && o2 === 0, `ch1 moved, ch2 stayed: ${o1}, ${o2}`);
+  // leaving the strip puts everything back: a press at the edge on the centre line now finds ch2
+  await page.mouse.move(box.x + 100, cy);
+  await page.mouse.move(right - 8, cy);
+  await page.mouse.down();
+  await page.mouse.move(right - 8, cy + box.height / 8, { steps: 5 });
+  await page.mouse.up();
+  assert.ok(Math.abs((await page.evaluate(() => scope.params.off2)) + 1) < 0.05);
+}));

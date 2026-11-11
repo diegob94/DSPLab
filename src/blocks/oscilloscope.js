@@ -172,6 +172,14 @@ export const oscilloscope = {
 
     // where channel k's tag sits (y of its zero line) on a screen H pixels tall
     const tagY = (k, H) => H / 2 - node.params[`off${k + 1}`] * H / DIV_Y;
+    // Tags that overlap fan out to the left while the pointer is over them, so each can be reached.
+    let fan = false;
+    const tagBox = (k, H, spread = fan) => {
+      const y = Math.min(Math.max(tagY(k, H), TAG_H / 2), H - TAG_H / 2);
+      let rank = 0;
+      for (let j = k + 1; j < node.params.channels; j++) if (Math.abs(Math.min(Math.max(tagY(j, H), TAG_H / 2), H - TAG_H / 2) - y) < TAG_H) rank++;
+      return { y, dx: spread ? rank * (TAG_W + 2) : 0 };
+    };
     // one tag per channel on the right edge, in the channel's colour, with a faint line across at its zero
     // when it has been moved; the tags are what the big screen lets you drag up and down
     function drawTags(g, W, H, fontPx) {
@@ -180,20 +188,21 @@ export const oscilloscope = {
       g.textAlign = 'center';
       g.textBaseline = 'middle';
       for (let k = 0; k < n; k++) {
-        const y = Math.min(Math.max(tagY(k, H), TAG_H / 2), H - TAG_H / 2), c = SCOPE_COLORS[k % SCOPE_COLORS.length];
+        const { y, dx } = tagBox(k, H), c = SCOPE_COLORS[k % SCOPE_COLORS.length];
+        const R = W - dx;   // right edge of this tag
         if (node.params[`off${k + 1}`] !== 0) {
           g.globalAlpha = .35; g.strokeStyle = c; g.setLineDash([2, 4]);
-          g.beginPath(); g.moveTo(0, Math.round(y) + .5); g.lineTo(W - TAG_W, Math.round(y) + .5); g.stroke();
+          g.beginPath(); g.moveTo(0, Math.round(y) + .5); g.lineTo(W - TAG_W - dx, Math.round(y) + .5); g.stroke();
           g.setLineDash([]); g.globalAlpha = 1;
         }
         g.fillStyle = c;
         g.beginPath();
-        g.moveTo(W, y - TAG_H / 2); g.lineTo(W - TAG_W + 6, y - TAG_H / 2); g.lineTo(W - TAG_W, y);
-        g.lineTo(W - TAG_W + 6, y + TAG_H / 2); g.lineTo(W, y + TAG_H / 2);
+        g.moveTo(R, y - TAG_H / 2); g.lineTo(R - TAG_W + 6, y - TAG_H / 2); g.lineTo(R - TAG_W, y);
+        g.lineTo(R - TAG_W + 6, y + TAG_H / 2); g.lineTo(R, y + TAG_H / 2);
         g.closePath(); g.fill();
         g.fillStyle = '#0d0f12';
         g.font = `bold ${fontPx}px system-ui, sans-serif`;
-        g.fillText(String(k + 1), W - (TAG_W - 6) / 2 - 1, y + .5);
+        g.fillText(String(k + 1), R - (TAG_W - 6) / 2 - 1, y + .5);
       }
       g.restore();
     }
@@ -335,12 +344,11 @@ export const oscilloscope = {
       };
       const lift = (e) => { if (pointers.delete(e.pointerId)) restart(); };
       // the channel tag under a pointer event, if any (the last one is drawn on top, so it wins)
-      const tagAt = (e) => {
+      const tagAt = (e, spread = fan) => {
         const r = canvas.getBoundingClientRect(), H = canvas.clientHeight;
-        if (e.clientX < r.right - TAG_W) return -1;
         for (let k = node.params.channels - 1; k >= 0; k--) {
-          const y = Math.min(Math.max(tagY(k, H), TAG_H / 2), H - TAG_H / 2);
-          if (Math.abs(e.clientY - r.top - y) <= TAG_H / 2) return k;
+          const { y, dx } = tagBox(k, H, spread);
+          if (e.clientX >= r.right - TAG_W - dx && e.clientX <= r.right - dx && Math.abs(e.clientY - r.top - y) <= TAG_H / 2) return k;
         }
         return -1;
       };
@@ -351,6 +359,7 @@ export const oscilloscope = {
         if (k >= 0) {
           try { canvas.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
           tag = { k, id: e.pointerId, y: e.clientY, off: node.params[`off${k + 1}`] };
+          fan = false;   // the others fall back into place while this one is dragged
           canvas.style.cursor = 'ns-resize';
           return;
         }
@@ -362,13 +371,18 @@ export const oscilloscope = {
       canvas.addEventListener('pointermove', (e) => {
         if (tag) {
           if (e.pointerId === tag.id) set(`off${tag.k + 1}`, tag.off - (e.clientY - tag.y) / canvas.clientHeight * DIV_Y);
-        } else if (!pointers.size) canvas.style.cursor = tagAt(e) >= 0 ? 'ns-resize' : 'grab';
+        } else if (!pointers.size) {
+          // over a tag, in its resting place or fanned out: spread the overlapping ones
+          fan = tagAt(e, false) >= 0 || tagAt(e, true) >= 0;
+          canvas.style.cursor = tagAt(e) >= 0 ? 'ns-resize' : 'grab';
+        }
         move(e);
       });
       const end = (e) => {
-        if (tag && e.pointerId === tag.id) { tag = null; canvas.style.cursor = 'grab'; }
+        if (tag && e.pointerId === tag.id) { tag = null; canvas.style.cursor = 'grab'; fan = false; }
         lift(e);
       };
+      canvas.addEventListener('pointerleave', () => { if (!tag) fan = false; });
       canvas.addEventListener('pointerup', end);
       canvas.addEventListener('pointercancel', end);
       // a double click on a tag puts that channel back on the centre line

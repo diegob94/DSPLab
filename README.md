@@ -368,7 +368,7 @@ On the big screen, **drag the waveform** sideways to move in time (it changes *X
 wheel** over it, or **pinch with two fingers**, to zoom in time (it changes *X / div*, keeping the time under the pointer or fingers in place).
 On the right edge each channel has a **tag** in its colour (`1`, `2`, …) marking where that channel's zero is.
 **Drag a tag up or down** to move that channel's trace on the Y axis (the offset is saved with the diagram, up to ±4 divisions);
-**double-click** it to put the channel back on the centre line. When tags overlap, the highest-numbered one is on top; drag it away to reach the others.
+**double-click** it to put the channel back on the centre line. When tags overlap, move the pointer over them and they fan out to the left so each one can be grabbed.
 While you change *Trig level* a dashed line shows it on the screen for a moment.
 
 - **Trigger.** Each sweep starts where the trigger channel rises through *Trig level*, and every
