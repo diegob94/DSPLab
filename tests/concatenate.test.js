@@ -15,14 +15,14 @@ const run = (page, inputs, sends) => page.evaluate(([inputs, sends]) => {
   return { got, status: blk.status };
 }, [inputs, sends]);
 
-test('what arrives at the last input goes out joined after the held ones, in input order', () => withApp(app, async (page) => {
-  const { got, status } = await run(page, 3, [['b', [3, 4]], ['a', [1, 2]], ['c', [5]], ['c', [6, 7]]]);
-  assert.deepEqual(got, [[1, 2, 3, 4, 5], [1, 2, 3, 4, 6, 7]]);   // a and b are remembered; c sets the pace
-  assert.equal(status, '2 + 2 + 2 → 6 bytes');
+test('every input is remembered and a new array at any of them sends the join, in input order', () => withApp(app, async (page) => {
+  const { got, status } = await run(page, 3, [['b', [3, 4]], ['a', [1, 2]], ['c', [5]], ['c', [6, 7]], ['a', [0]], ['b', [8]]]);
+  assert.deepEqual(got, [[1, 2, 3, 4, 5], [1, 2, 3, 4, 6, 7], [0, 3, 4, 6, 7], [0, 8, 6, 7]]);
+  assert.equal(status, '1 + 1 + 2 → 4 bytes');
 }));
 
 test('nothing is sent until every input has received something', () => withApp(app, async (page) => {
-  const r = await run(page, 2, [['b', [9]]]);
+  const r = await run(page, 3, [['b', [9]], ['c', [8]]]);
   assert.deepEqual(r.got, []);
   assert.equal(r.status, 'Waiting for a');
 }));

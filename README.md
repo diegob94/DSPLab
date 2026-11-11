@@ -188,13 +188,12 @@ Shown on the block: Type and Frequency.
 **Concatenate**: joins arrays one after the other. Inputs: `a`, `b`, and up to `h` (set with *Inputs*, all
 async `array[uint8]`). Output: `out` (async, `array[uint8]`).
 
-Every input except the last remembers the latest array that arrived there; every time one arrives at the **last**
-input, the block sends them all joined in the order of the inputs (`a`, then `b`, and so on). To put a preamble in
-front of a payload, feed the preamble (a Constant Source, say) to `a` and the payload to `b`: the payload's clock
-sets the pace and the preamble is repeated in front of each one. With three inputs you can add a trailer after
-the payload, feeding the one that sets the pace to `c`. Nothing is sent until every input has received something;
-the block shows which one it is still waiting for, or the last join, like `2 + 5 → 7 bytes`. Anything that is not
-an array of bytes is ignored.
+Every input remembers the latest array that arrived there, and every time one arrives at **any** input the block
+sends them all joined in the order of the inputs (`a`, then `b`, and so on). Nothing is sent while some input is
+still blank (it has received nothing yet since Run); the block shows which one it is waiting for, or the last join,
+like `2 + 5 → 7 bytes`. To put a preamble in front of a payload, feed the preamble (a Constant Source, say) to `a`
+and the payload to `b`: it goes out whenever the payload arrives, and also when you edit the preamble. Anything
+that is not an array of bytes is ignored.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|

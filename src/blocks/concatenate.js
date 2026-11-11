@@ -6,9 +6,9 @@ const inputNames = (p) => LETTERS.slice(0, p.inputs);
 
 const isBytes = (x) => Array.isArray(x) && x.every((b) => Number.isInteger(b) && b >= 0 && b <= 255);
 
-// Joins the arrays that arrive at its inputs, in the order of the inputs (a, b, c...). Every input but the last
-// one remembers the latest array it received; the joined array goes out when one arrives at the last input, so
-// that input's clock sets the pace. Typical use: a preamble (a Constant Source) in front of a payload.
+// Joins the arrays that arrive at its inputs, in the order of the inputs (a, b, c...). Every input remembers the
+// latest array it received, and the joined array goes out whenever one arrives at any input, unless some input
+// is still blank. Typical use: a preamble (a Constant Source) in front of a payload.
 export const concatenate = {
   title: 'Concatenate',
   category: 'Processing blocks',
@@ -30,12 +30,10 @@ export const concatenate = {
       update() {},
       dispose() { out.disconnect(); },
     };
-    names.forEach((name, i) => {
-      const last = i === names.length - 1;
+    names.forEach((name) => {
       inst.inputs[name] = { receive(bytes) {
         if (!isBytes(bytes)) return;
         held.set(name, bytes);
-        if (!last) return;
         const missing = names.find((n) => !held.has(n));
         if (missing) { inst.status = `Waiting for ${missing}`; return; }
         const joined = Object.freeze(names.flatMap((n) => held.get(n)));
