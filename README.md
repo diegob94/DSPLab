@@ -297,23 +297,22 @@ so the output has that same rate. The sinc is centred on its peak, so the output
 The kernel has unit amplitude: a one in the input comes out as a pulse of level 1, so the level of the output is the level
 of the input (a Serializer sends the numbers you give it; use a Math Operator to scale). Changing a setting applies at once and keeps what the filter has heard so far. Shown on the block: Pulse and Samples / symbol.
 
-**Matched Filter**: the receiver's counterpart of the Pulse Shaper: it correlates the input with the pulse, which
-gives the best signal-to-noise ratio at the instant a symbol is sampled. Input: `in`. Output: `out`.
+**Matched Filter**: the receiver's counterpart of the Pulse Shaper, also a simple convolutional filter: it convolves
+its input signal with the pulse, which gives the best signal-to-noise ratio at the instant a symbol is sampled.
+Input: `in` (a signal, of any rate). Output: `out` (a signal, at the same rate as the input).
 
-It is an FIR filter whose impulse response is the pulse (both shapes are symmetric, so reversing it in time
-changes nothing), scaled so that a symbol sent with amplitude A comes out with a peak of A. With the *square*
-pulse it is an integrate-and-dump: each output sample is the average of the last symbol; the peak falls at the end
-of the symbol. With *sinc* the peak comes 4 symbols after the pulse's centre (the filter's delay). Put it before
-Symbol Recovery, with the same pulse as the Pulse Shaper and the baud rate of the Serializer that feeds it.
+Its kernel is the Pulse Shaper's (both shapes are symmetric, so reversing it in time changes nothing), scaled so that a
+symbol sent with amplitude A comes out with a peak of A. With the *square* pulse it is an integrate-and-dump: each
+output sample is the average of the last symbol; the peak falls at the end of the symbol. With *sinc* the peak comes
+4 symbols after the pulse's centre (the filter's delay). Put it before Symbol Recovery, with the same settings as the
+Pulse Shaper that feeds the channel.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
 | Pulse | Shape to match | square, sinc | square |
-| Baud rate | Symbols per second | 50 – 20000 (logarithmic) | 1000 baud |
+| Samples / symbol | Length of one symbol, in samples of the input | 1 – 64 | 8 |
 
-Changing a setting rebuilds the filter and may click.
-
-Shown on the block: Pulse and Baud rate.
+Changing a setting applies at once and keeps what the filter has heard so far. Shown on the block: Pulse and Samples / symbol.
 
 **Symbol Recovery**: samples a digital-looking signal (like the output of a matched filter) at the
 right instants and returns the bits. Input: `in` (audio). Outputs: `bits` (async, `int`), and `phase` (audio).

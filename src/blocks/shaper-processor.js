@@ -1,13 +1,13 @@
-// AudioWorklet processor behind the Pulse Shaper: its output is the ShaperSignal (shaper-core.js) of its input.
+// AudioWorklet processor behind the Pulse Shaper and the Matched Filter (`matched` in the options): its output is the ShaperSignal (shaper-core.js) of its input.
 import { ShaperSignal } from './shaper-core.js';
 
 class ShaperProcessor extends AudioWorkletProcessor {
   constructor(options) {
     super();
-    const { inRate, pulse, sps } = options.processorOptions;
-    this.signal = new ShaperSignal(sampleRate, inRate, pulse, sps);
+    const { inRate, pulse, sps, matched } = options.processorOptions;
+    this.signal = new ShaperSignal(sampleRate, inRate, pulse, sps, matched);
     this.silence = new Float32Array(128);
-    this.port.onmessage = ({ data }) => this.signal.set(data.inRate, data.pulse, data.sps);
+    this.port.onmessage = ({ data }) => this.signal.set(data.inRate, data.pulse, data.sps, data.matched);
   }
 
   process(inputs, outputs) {
