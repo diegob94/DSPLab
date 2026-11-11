@@ -72,4 +72,37 @@ export const EXAMPLES = [
       edges: [edge(1, 'out', 2, 'ch1')],
     },
   },
+  {
+    // A text sent as a baseband signal through a noisy channel and detected again: the Strobe Source's "hello" is
+    // unpacked to bytes, reshaped to 40 bits and serialized at 1000 baud; the Upsampler (Factor 40) and the Pulse Shaper
+    // (sinc, 40 samples / symbol) turn the bits into a band-limited waveform (1000 baud x 40 = 40 kHz: a faster signal
+    // than the sound card's, e.g. 48 kHz on a 44.1 kHz card, can't be carried and its cables would be dropped); AWGN adds noise well above the signal
+    // (-15 dB); the Matched Filter (same pulse) pulls the symbols out of it and the Detector slices them at 0.75
+    // (a sinc pulse comes out of the matched filter with a peak of 1 at the symbol instant, so 0.75 sits between 0 and 1).
+    // The scope shows every stage: ch1 the bits, ch2 the impulses, ch3 the shaped signal, ch4 the noisy one, ch5 the
+    // matched filter's output and ch6 the detected bits. Press Run.
+    id: 'baseband-noise',
+    title: 'Pulse shaping with noise',
+    diagram: {
+      version: 1, pan: { x: 0, y: 0 }, zoom: 1,
+      nodes: [
+        { id: 1, type: 'strobe_source', x: 535, y: 41, params: { data: 'hello', period: 1000 } },
+        { id: 2, type: 'array_unpack', x: 755, y: 47, params: {} },
+        { id: 3, type: 'array_reshape', x: 964, y: 50, params: { rows: 0, cols: -1 } },
+        { id: 4, type: 'serializer', x: 131, y: 380, params: { baud: 1000 } },
+        { id: 5, type: 'upsampler', x: 336, y: 452, params: { factor: 40 } },
+        { id: 6, type: 'pulse_shaper', x: 545, y: 527, params: { pulse: 'sinc', sps: 40 } },
+        { id: 7, type: 'awgn', x: 751, y: 600, params: { snr: -15 } },
+        { id: 8, type: 'matched_filter', x: 966, y: 681, params: { pulse: 'sinc', sps: 40 } },
+        { id: 9, type: 'detector', x: 1171, y: 749, params: { threshold: 0.75 } },
+        { id: 10, type: 'oscilloscope', x: 1389, y: 339, params: { channels: 6, trigger: 'ch1', mode: 'normal', level: 0.5, xdiv: 7.7512, ydiv: 2, display1: 'sample & hold', display2: 'impulse' } },
+      ],
+      edges: [
+        edge(1, 'out', 2, 'in'), edge(2, 'out', 3, 'in'), edge(3, 'out', 4, 'in'), edge(4, 'out', 5, 'in'),
+        edge(5, 'out', 6, 'in'), edge(6, 'out', 7, 'in'), edge(7, 'out', 8, 'in'), edge(8, 'out', 9, 'in'),
+        edge(4, 'out', 10, 'ch1'), edge(5, 'out', 10, 'ch2'), edge(6, 'out', 10, 'ch3'),
+        edge(7, 'out', 10, 'ch4'), edge(8, 'out', 10, 'ch5'), edge(9, 'out', 10, 'ch6'),
+      ],
+    },
+  },
 ];
