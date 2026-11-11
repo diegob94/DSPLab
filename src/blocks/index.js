@@ -34,6 +34,7 @@ import { mathOperator } from './math-operator.js';
 import { strobeSource } from './strobe-source.js';
 import { constantSource } from './constant-source.js';
 import { bitSerializer } from './bit-serializer.js';
+import { concatenate } from './concatenate.js';
 import { bitMonitor } from './bit-monitor.js';
 import { debugSink } from './debug-sink.js';
 import { pulseShaper } from './pulse-shaper.js';
@@ -64,6 +65,7 @@ export const BLOCKS = {
   strobe_source: strobeSource,
   constant_source: constantSource,
   bit_serializer: bitSerializer,
+  concatenate,
   bit_monitor: bitMonitor,
   debug_sink: debugSink,
   pulse_shaper: pulseShaper,
