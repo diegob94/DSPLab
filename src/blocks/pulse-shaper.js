@@ -21,8 +21,8 @@ export function pulseSamples(pulse, k, sps, bit, amplitude) {
 // A simple convolutional filter: its input is a signal and its output is that signal convolved with a pulse (an FIR
 // filter whose impulse response is the pulse, `sps` samples per symbol), at the same sample rate. Fed with an impulse
 // train (a one every `sps` samples, zeros between: what a Serializer followed by an Upsampler gives) it puts one pulse
-// per symbol, which is what pulse shaping is. The kernel is the pulse of pulseSamples, scaled by the amplitude; a sinc
-// is centred on its peak, so the output is delayed by half the kernel (4 symbols).
+// per symbol, which is what pulse shaping is. The kernel is the pulse of pulseSamples with unit amplitude (the level
+// is the one of the input); a sinc is centred on its peak, so the output is delayed by half the kernel (4 symbols).
 export const pulseShaper = {
   title: 'Pulse Shaper',
   category: 'Processing blocks',
@@ -34,7 +34,6 @@ export const pulseShaper = {
   params: [
     { key: 'pulse',     label: 'Pulse',     show: true, type: 'select', options: ['square', 'sinc'], default: 'square' },
     { key: 'sps',       label: 'Samples / symbol', show: true, type: 'range', min: 1, max: 64, step: 1, default: 8 },
-    { key: 'amplitude', label: 'Amplitude', type: 'range', min: 0, max: 1, step: 0.01, default: 0.5 },
   ],
   // the processor must be registered before build() can create the worklet node
   setup(ctx) {
@@ -46,13 +45,13 @@ export const pulseShaper = {
     const worklet = new AudioWorkletNode(ctx, 'dsplab-shaper', {
       numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
       channelCount: 1, channelCountMode: 'explicit',
-      processorOptions: { inRate, pulse: p.pulse, sps: p.sps, amplitude: p.amplitude },
+      processorOptions: { inRate, pulse: p.pulse, sps: p.sps },
     });
     // the node only runs if it reaches the destination, so keep a muted copy of it going there
     const mute = ctx.createGain();
     mute.gain.value = 0;
     worklet.connect(mute).connect(ctx.destination);
-    const send = () => worklet.port.postMessage({ inRate, pulse: params.pulse, sps: params.sps, amplitude: params.amplitude });
+    const send = () => worklet.port.postMessage({ inRate, pulse: params.pulse, sps: params.sps });
     return {
       inputs: { in: worklet },
       outputs: { out: worklet },

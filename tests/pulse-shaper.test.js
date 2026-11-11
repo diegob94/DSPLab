@@ -45,12 +45,12 @@ test('a lone sinc pulse: peak 1, zeros at whole symbols, symmetric, sinc(0.5) = 
 }));
 
 // an input signal at `inRate` made of `symbols` (each held for sampleRate / inRate samples) through a ShaperSignal
-const shape = (page, { symbols, inRate = 48000, sampleRate = 48000, pulse = 'square', sps = 4, amplitude = 1, late = 0 }) => page.evaluate(async ([symbols, inRate, sampleRate, pulse, sps, amplitude, late]) => {
+const shape = (page, { symbols, inRate = 48000, sampleRate = 48000, pulse = 'square', sps = 4, late = 0 }) => page.evaluate(async ([symbols, inRate, sampleRate, pulse, sps, late]) => {
   const { SerializerSignal } = await import('/src/blocks/serializer-core.js');
   const { ShaperSignal } = await import('/src/blocks/shaper-core.js');
   const src = new SerializerSignal(sampleRate, inRate);
   src.push(symbols);
-  const sh = new ShaperSignal(sampleRate, inRate, pulse, sps, amplitude);
+  const sh = new ShaperSignal(sampleRate, inRate, pulse, sps);
   const n = Math.ceil((symbols.length + 12 * sps) * sampleRate / inRate / 128) * 128;
   const inp = new Float32Array(n), out = new Float32Array(n);
   for (let i = 0; i < n; i += 128) {
@@ -59,7 +59,7 @@ const shape = (page, { symbols, inRate = 48000, sampleRate = 48000, pulse = 'squ
     if (i >= late) sh.process(a, out.subarray(i, i + 128), i);
   }
   return Array.from(out);
-}, [symbols, inRate, sampleRate, pulse, sps, amplitude, late]);
+}, [symbols, inRate, sampleRate, pulse, sps, late]);
 
 test('it convolves its input with the pulse: an impulse train becomes one square pulse per one', () => withApp(app, async (page) => {
   // symbols at the sound card's rate (sps 4): 1 0 0 0 | 0 0 0 0 | 1 0 0 0 | 0 0 0 0 ...
@@ -67,10 +67,10 @@ test('it convolves its input with the pulse: an impulse train becomes one square
   assert.deepEqual(y.slice(0, 16), [1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0]);
 }));
 
-test('a run of impulses tiles the square pulses, and the amplitude scales the kernel', () => withApp(app, async (page) => {
-  const y = await shape(page, { symbols: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], sps: 4, amplitude: 0.5 });
-  assert.deepEqual(y.slice(0, 12), Array(12).fill(0.5));
-  assert.deepEqual((await shape(page, { symbols: [3, 0, 0, 0], sps: 4, amplitude: 0.5 })).slice(0, 5), [1.5, 1.5, 1.5, 1.5, 0]);   // linear
+test('a run of impulses tiles the square pulses, and the output is linear in the input (the level is the input\'s)', () => withApp(app, async (page) => {
+  const y = await shape(page, { symbols: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0], sps: 4 });
+  assert.deepEqual(y.slice(0, 12), Array(12).fill(1));
+  assert.deepEqual((await shape(page, { symbols: [1.5, 0, 0, 0], sps: 4 })).slice(0, 5), [1.5, 1.5, 1.5, 1.5, 0]);
 }));
 
 test('a sinc pulse: peak at the middle of the kernel, zeros at whole symbols, symmetric', () => withApp(app, async (page) => {

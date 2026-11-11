@@ -3,25 +3,24 @@ import { pulseSamples } from './pulse-shaper.js';
 // The signal behind the Pulse Shaper, with no Web Audio in it so that it can be tested alone: the input signal
 // (a signal at sample rate inRate, each sample held for sampleRate / inRate output samples, as in serializer-core.js)
 // convolved with the kernel of the pulse, at the rate of the input. The kernel is the pulse of one symbol of
-// `sps` samples, times the amplitude. Samples are taken on the grid that starts at frame 0 of the audio context.
-export function shaperKernel(pulse, sps, amplitude) {
-  const s = pulseSamples(pulse, 0, sps, 1, amplitude);
-  return s ? s.data : new Float32Array(1);
+// `sps` samples, with unit amplitude. Samples are taken on the grid that starts at frame 0 of the audio context.
+export function shaperKernel(pulse, sps) {
+  return pulseSamples(pulse, 0, sps, 1, 1).data;
 }
 
 export class ShaperSignal {
-  constructor(sampleRate, inRate, pulse, sps, amplitude) {
+  constructor(sampleRate, inRate, pulse, sps) {
     this.sampleRate = sampleRate;
     this.history = new Float32Array(0);
     this.head = 0;
     this.symbol = -1;
     this.value = 0;
-    this.set(inRate, pulse, sps, amplitude);
+    this.set(inRate, pulse, sps);
   }
 
-  set(inRate, pulse, sps, amplitude) {
+  set(inRate, pulse, sps) {
     this.inRate = inRate;
-    this.kernel = shaperKernel(pulse, sps, amplitude);
+    this.kernel = shaperKernel(pulse, sps);
     if (this.history.length !== this.kernel.length) {   // keep what was heard so far
       const next = new Float32Array(this.kernel.length);
       for (let k = 0; k < Math.min(next.length, this.history.length); k++) next[k] = this.history[(this.head - k + this.history.length) % this.history.length];

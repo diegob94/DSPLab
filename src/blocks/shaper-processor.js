@@ -4,10 +4,10 @@ import { ShaperSignal } from './shaper-core.js';
 class ShaperProcessor extends AudioWorkletProcessor {
   constructor(options) {
     super();
-    const { inRate, pulse, sps, amplitude } = options.processorOptions;
-    this.signal = new ShaperSignal(sampleRate, inRate, pulse, sps, amplitude);
+    const { inRate, pulse, sps } = options.processorOptions;
+    this.signal = new ShaperSignal(sampleRate, inRate, pulse, sps);
     this.silence = new Float32Array(128);
-    this.port.onmessage = ({ data }) => this.signal.set(data.inRate, data.pulse, data.sps, data.amplitude);
+    this.port.onmessage = ({ data }) => this.signal.set(data.inRate, data.pulse, data.sps);
   }
 
   process(inputs, outputs) {
