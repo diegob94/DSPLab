@@ -363,9 +363,12 @@ only draws while the audio is running (otherwise it reads *Stopped*).
 
 Shown on the block: Trigger, Trig mode, X / div and Y / div. The screen has 10 × 8 divisions.
 The button in the block's top-right corner (title bar) opens a **big screen**: a window over the diagram with
-the waveform on the left and all the settings on the right; its grid is labelled with the time and level of each division. Close it with × , Esc or a click outside.
+the waveform on the left and all the settings on the right; its grid is labelled with the time along the bottom and the level up the **left** side. Close it with × , Esc or a click outside.
 On the big screen, **drag the waveform** sideways to move in time (it changes *X position*) and **scroll the
 wheel** over it, or **pinch with two fingers**, to zoom in time (it changes *X / div*, keeping the time under the pointer or fingers in place).
+On the right edge each channel has a **tag** in its colour (`1`, `2`, …) marking where that channel's zero is.
+**Drag a tag up or down** to move that channel's trace on the Y axis (the offset is saved with the diagram, up to ±4 divisions);
+**double-click** it to put the channel back on the centre line. When tags overlap, the highest-numbered one is on top; drag it away to reach the others.
 While you change *Trig level* a dashed line shows it on the screen for a moment.
 
 - **Trigger.** Each sweep starts where the trigger channel rises through *Trig level*, and every

@@ -541,3 +541,68 @@ test('the X position setting in the panel has a reset button too', () => withApp
   assert.equal(await panelControl(page, 'X position').inputValue(), '0');
   assert.equal(await page.locator('#props .param:has(label:text-is("X / div")) button.reset').count(), 0, 'only the params that ask for it');
 }));
+
+test('the big screen has the level scale on the left and a draggable tag per channel on the right', () => withApp(app, async (page) => {
+  await openBig(page);
+  const box = await page.locator('.screen-canvas').boundingBox();
+  // the level labels are drawn at the left edge
+  const xs = await page.evaluate(async () => {
+    const out = new Set();
+    const orig = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (t, x) { if (this.canvas.className === 'screen-canvas' && t === '0.75') out.add(x); return orig.apply(this, arguments); };
+    await new Promise((r) => setTimeout(r, 200));
+    CanvasRenderingContext2D.prototype.fillText = orig;
+    return [...out];
+  });
+  assert.deepEqual(xs, [4], 'the scale sits at the left edge');
+  const offsets = () => page.evaluate(() => [scope.params.off1, scope.params.off2]);
+  assert.deepEqual(await offsets(), [0, 0]);
+  // both tags sit on the centre line; the last one is on top, so dragging there moves ch2
+  const tag = { x: box.x + box.width - 8, y: box.y + box.height / 2 };
+  await page.mouse.move(tag.x, tag.y);
+  await page.mouse.down();
+  await page.mouse.move(tag.x, tag.y - box.height / 8, { steps: 5 });   // one division up
+  await page.mouse.up();
+  const [o1, o2] = await offsets();
+  assert.equal(o1, 0);
+  assert.ok(Math.abs(o2 - 1) < 0.05, `ch2 moved one division up: ${o2}`);
+  assert.equal(await page.evaluate(() => scope.params.xpos), 0, 'dragging a tag does not pan the time');
+  // the panel does not list the offsets
+  assert.equal(await page.locator('.screen-side .param:has(label:text-is("ch2 offset"))').count(), 0);
+  // ch1's tag is now free: drag it down, then double-click it to bring it back
+  await page.mouse.move(tag.x, tag.y);
+  await page.mouse.down();
+  await page.mouse.move(tag.x, tag.y + box.height / 4, { steps: 5 });
+  await page.mouse.up();
+  assert.ok(Math.abs((await offsets())[0] + 2) < 0.05);
+  await page.mouse.dblclick(tag.x, tag.y + box.height / 4);
+  assert.equal((await offsets())[0], 0);
+  // the offset is validated like any param: it can't leave the screen
+  assert.equal(await page.evaluate(() => { scope.params.off1 = 99; return dsplab.BLOCKS.oscilloscope.params.find((p) => p.key === 'off1').max; }), 4);
+}));
+
+test('a channel offset moves its trace on the screen', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  await page.evaluate(() => {
+    window.scope = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
+    dsplab.addEdge({ node: [...dsplab.graph.nodes.values()][0].id, port: 'out' }, { node: scope.id, port: 'ch1' });
+  });
+  await startAudio(page);
+  await page.click('.node:has-text("Oscilloscope") .title-button');
+  const rows = (offset) => page.evaluate(async (offset) => {
+    scope.params.off1 = offset;
+    const c = document.querySelector('.screen-canvas');
+    await new Promise((r) => setTimeout(r, 150));
+    const g = c.getContext('2d'), W = c.width, H = c.height;
+    // the lowest and highest rows that hold the orange ch1 trace
+    const d = g.getImageData(0, 0, W - 60, H).data;
+    let lo = H, hi = 0;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W - 60; x += 3) {
+      const i = (y * (W - 60) + x) * 4;
+      if (d[i] > 200 && d[i + 1] > 130 && d[i + 1] < 190 && d[i + 2] < 120) { lo = Math.min(lo, y); hi = Math.max(hi, y); }
+    }
+    return (lo + hi) / 2 / H;
+  }, offset);
+  const centre = await rows(0), up = await rows(2);
+  assert.ok(Math.abs(up - (centre - 2 / 8)) < 0.03, `two divisions up: ${centre} -> ${up}`);
+}));

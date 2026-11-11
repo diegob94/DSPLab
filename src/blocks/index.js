@@ -11,6 +11,7 @@
  * `options` (strings or numbers) may be a function of the params too. A `type: 'text'` param is a
  * free string (optional `maxLength`, default 100).
  * A range param flagged `reset: true` gets a ↺ button next to its value that puts it back to the default.
+ * A param flagged `hidden: true` is saved and validated like any other but has no widget (a view edits it directly).
  * `messagePorts` lists the port names (inputs or outputs) that carry messages instead of audio: an output
  * is any object with connect(target) and send(msg) (see message.js), an input any object with receive(msg).
  * Message and audio ports cannot be cabled together.

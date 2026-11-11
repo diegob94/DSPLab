@@ -20,7 +20,7 @@ export function closeScreen() {
 
 function renderOptions(side, node) {
   side.replaceChildren(h('div', { className: 'props-head', textContent: 'Settings' }));
-  for (const p of BLOCKS[node.type].params) side.append(paramWidget(node, p, 'big'));
+  for (const p of BLOCKS[node.type].params) if (!p.hidden) side.append(paramWidget(node, p, 'big'));
 }
 
 function openScreen(node) {

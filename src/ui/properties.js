@@ -142,7 +142,7 @@ function renderProps() {
   head.style.setProperty('--cat', CATEGORIES[def.category]);
   propsBody.append(head, h('div', { className: 'props-cat', textContent: def.category }));
   if (!def.params.length && !def.actions) return hint('This block has no properties.');
-  for (const p of def.params) propsBody.append(paramWidget(node, p));
+  for (const p of def.params) if (!p.hidden) propsBody.append(paramWidget(node, p));
   for (const a of def.actions || []) propsBody.append(actionButton(node, a));
 }
 
