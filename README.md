@@ -415,6 +415,17 @@ silence.
 
 Shown on the block: Target.
 
+**Detector**: a comparator with a simple threshold: its output is 1 while the input is above the threshold and 0
+otherwise, sample by sample. Input: `in` (a signal, of any rate). Output: `out` (a signal, at the same rate as the
+input). It turns a waveform, like the output of a Matched Filter, into a clean 0 / 1 signal. An input exactly at the
+threshold counts as below it, and a block with nothing connected reads as 0.
+
+| Setting | What it does | Range | Default |
+|---|---|---|---|
+| Threshold | The level the input has to exceed | -2 – 2 | 0.5 |
+
+Changing the threshold applies at once. Shown on the block: Threshold.
+
 **AWGN**: adds white Gaussian noise to a signal (additive white Gaussian noise), to simulate a noisy channel.
 Input: `in`. Output: `out`.
 
