@@ -8,9 +8,12 @@ class ScopeCapture extends AudioWorkletProcessor {
     this.batch = 1024;
     this.bufs = Array.from({ length: this.inputCount }, () => new Float32Array(this.batch * 2));
     this.fill = 0;
+    this.started = false;
   }
 
   process(inputs) {
+    // tell the main thread which context frame the first sample is, so that it can tell where the symbols of a signal fall
+    if (!this.started) { this.started = true; this.port.postMessage({ origin: currentFrame }); }
     const frames = inputs.reduce((m, input) => (input[0] ? Math.max(m, input[0].length) : m), 0) || 128;
     for (let c = 0; c < this.inputCount; c++) {
       const ch = inputs[c] && inputs[c][0];

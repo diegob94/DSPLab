@@ -5,16 +5,26 @@
  * in the node) and how it maps onto Web Audio nodes:
  *   build(ctx, params) -> { inputs: {port: AudioNode}, outputs: {port: AudioNode}, update(params), dispose() }
  * build() is also given the model node as a third argument (to keep per-node data, e.g. a recording, across rebuilds).
+ * build() is also given, as a fourth argument, the type carried by the cable on each input port, { port: wire } (ports with no cable are missing).
  * build() may also return onConnect(port), called when an edge feeds that input port.
  * `inputs` may be a function of the params (a block with a configurable number of ports); a
  * parameter flagged `ports: true` rebuilds the node's ports when it changes, and a select's
  * `options` (strings or numbers) may be a function of the params too. A `type: 'text'` param is a
  * free string (optional `maxLength`, default 100).
+ * A param with `visible: (params) => boolean` is only listed in the panel and the big screen while that holds (the
+ * oscilloscope's display mode of each channel).
  * A range param flagged `reset: true` gets a ↺ button next to its value that puts it back to the default.
  * A param flagged `hidden: true` is saved and validated like any other but has no widget (a view edits it directly).
- * `messagePorts` lists the port names (inputs or outputs) that carry messages instead of audio: an output
- * is any object with connect(target) and send(msg) (see message.js), an input any object with receive(msg).
- * Message and audio ports cannot be cabled together.
+ * `asyncPorts` lists the port names (inputs or outputs) whose signal has an asynchronous clock: its samples
+ * (bits) come at their own instants instead of at the audio sample rate. An output is any object with
+ * connect(target) and send(sample) (see stream.js), an input any object with receive(sample).
+ * `rates` maps an audio output port to a function of the params giving its sample rate (samples per second) when it is
+ * not the sound card's; it is called with the params and the rate of the cable on `in`. An audio input takes only the
+ * sound card's rate unless the block says `inputRate: 'any'` (every input at its own rate, like the oscilloscope) or
+ * `'rated'` (anything but the sound card's, like the upsampler). build() gets the rate of each input cable as a fifth
+ * argument, { port: samples per second or null }; a block may define setRates(rates) to be told when they change.
+ * `wireTypes` maps an async port to the type of its samples when it isn't a plain int (e.g. { out: 'array[uint8]' }); '*' takes any async port, 'array[T]' any array, 'array[int*]' any array of ints of 8, 16 or 32 bits, 'array[array[T]]' any array of arrays, 'array[scalar]' any array whose elements are not arrays, 'array[numeric]' any array of integers or floats, a function (params, type of `in`) => type for an output that depends on the settings, 'same' (an output) whatever feeds the block's `in` and 'T' (an output) the element type of the array that feeds the block's `in`.
+ * Ports with different clocks or sample types cannot be cabled together.
  * Parameters are edited in the properties panel; those marked `show: true` are also
  * displayed (read-only) on the node itself.
  * A block may also define an async setup(ctx, inUse), awaited before the first build (e.g. to register
@@ -30,13 +40,14 @@ import { audioSource } from './audio-source.js';
 import { audioSink } from './audio-sink.js';
 import { oscilloscope } from './oscilloscope.js';
 import { mathOperator } from './math-operator.js';
-import { messageStrobe } from './message-strobe.js';
-import { messageConstant } from './message-constant.js';
-import { messageDebug } from './message-debug.js';
-import { messageReshape } from './message-reshape.js';
-import { messageSerialize } from './message-serialize.js';
-import { messageDeserialize } from './message-deserialize.js';
-import { messageConcatenate } from './message-concatenate.js';
+import { strobeSource } from './strobe-source.js';
+import { constantSource } from './constant-source.js';
+import { serializer } from './serializer.js';
+import { upsampler } from './upsampler.js';
+import { arrayUnpack } from './array-unpack.js';
+import { arrayReshape } from './array-reshape.js';
+import { concatenate } from './concatenate.js';
+import { debugSink } from './debug-sink.js';
 import { pulseShaper } from './pulse-shaper.js';
 import { symbolTiming } from './symbol-timing.js';
 import { squelch } from './squelch.js';
@@ -54,7 +65,6 @@ export const CATEGORIES = {
   'Source blocks': 'var(--source)',
   'Processing blocks': 'var(--proc)',
   'Sink blocks':   'var(--sink)',
-  'Message blocks': 'var(--message)',
 };
 
 export const BLOCKS = {
@@ -63,13 +73,14 @@ export const BLOCKS = {
   audio_sink: audioSink,
   oscilloscope,
   math_operator: mathOperator,
-  message_strobe: messageStrobe,
-  message_constant: messageConstant,
-  message_debug: messageDebug,
-  message_reshape: messageReshape,
-  message_serialize: messageSerialize,
-  message_deserialize: messageDeserialize,
-  message_concatenate: messageConcatenate,
+  strobe_source: strobeSource,
+  constant_source: constantSource,
+  serializer,
+  upsampler,
+  array_unpack: arrayUnpack,
+  array_reshape: arrayReshape,
+  concatenate,
+  debug_sink: debugSink,
   pulse_shaper: pulseShaper,
   symbol_timing: symbolTiming,
   squelch,

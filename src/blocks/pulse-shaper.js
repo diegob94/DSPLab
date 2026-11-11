@@ -1,7 +1,4 @@
-import { isBits } from './message.js';
-
 const SPAN = 4;     // the sinc pulse is cut off this many symbols to each side of its peak
-const LEAD = 0.05;  // s of head start when the shaper is idle, so symbols that arrive in a burst can be placed
 const sinc = (x) => (x === 0 ? 1 : Math.sin(Math.PI * x) / (Math.PI * x));
 
 // The samples of symbol k on a grid of sps samples per symbol: { start, data }, start being the first
@@ -21,56 +18,46 @@ export function pulseSamples(pulse, k, sps, bit, amplitude) {
   return { start, data: new Float32Array(Math.round((k + 1) * sps) - start).fill(amplitude) };
 }
 
-// Pulse-shapes a train of symbols: the convolution of an impulse train (1 for a one, 0 for a zero, one per
-// 1x1 message) with the pulse, done by adding one pulse per one rather than convolving with all the zeros.
-// Symbols are placed on a grid of 1 / baud, one slot after the other: it doesn't matter when exactly a
-// message arrives (a serializer sends them in bursts), only in which order.
+// A simple convolutional filter: its input is a signal and its output is that signal convolved with a pulse (an FIR
+// filter whose impulse response is the pulse, `sps` samples per symbol), at the same sample rate. Fed with an impulse
+// train (a one every `sps` samples, zeros between: what a Serializer followed by an Upsampler gives) it puts one pulse
+// per symbol, which is what pulse shaping is. The kernel is the pulse of pulseSamples with unit amplitude (the level
+// is the one of the input); a sinc is centred on its peak, so the output is delayed by half the kernel (4 symbols).
 export const pulseShaper = {
   title: 'Pulse Shaper',
   category: 'Processing blocks',
-  inputs: ['msg'],
+  inputs: ['in'],
   outputs: ['out'],
-  messagePorts: ['msg'],
+  inputRate: 'any',
+  rates: { out: (params, inRate) => inRate },   // a convolution keeps the sample rate
   pulseSamples,
   params: [
     { key: 'pulse',     label: 'Pulse',     show: true, type: 'select', options: ['square', 'sinc'], default: 'square' },
-    { key: 'baud',      label: 'Baud rate', show: true, type: 'range', scale: 'log', min: 50, max: 20000, step: 1, unit: 'baud', default: 1000 },
-    { key: 'amplitude', label: 'Amplitude', type: 'range', min: 0, max: 1, step: 0.01, default: 0.5 },
+    { key: 'sps',       label: 'Samples / symbol', show: true, type: 'range', min: 1, max: 64, step: 1, default: 8 },
   ],
-  build(ctx, p) {
+  // the processor must be registered before build() can create the worklet node
+  setup(ctx) {
+    return ctx.audioWorklet.addModule(new URL('./shaper-processor.js', import.meta.url).href);
+  },
+  build(ctx, p, node, wires, rates = {}) {
+    let inRate = rates.in || ctx.sampleRate;
     let params = p;
-    const out = ctx.createGain();
-    const playing = new Set();
-    let origin = 0;     // sample at which slot 0 starts
-    let k = -1;         // slot of the last symbol; -1 when idle
+    const worklet = new AudioWorkletNode(ctx, 'dsplab-shaper', {
+      numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
+      channelCount: 1, channelCountMode: 'explicit',
+      processorOptions: { inRate, pulse: p.pulse, sps: p.sps },
+    });
+    // the node only runs if it reaches the destination, so keep a muted copy of it going there
+    const mute = ctx.createGain();
+    mute.gain.value = 0;
+    worklet.connect(mute).connect(ctx.destination);
+    const send = () => worklet.port.postMessage({ inRate, pulse: params.pulse, sps: params.sps });
     return {
-      outputs: { out },
-      inputs: { msg: { receive(m) {
-        if (!isBits(m) || m.length !== 1 || m[0].length !== 1) return;
-        const sps = ctx.sampleRate / params.baud;
-        // idle, or the stream fell behind real time: begin a new one a little ahead (the sinc's lead-in needs room)
-        if (k < 0 || origin + Math.round((k + 1) * sps) < ctx.currentTime * ctx.sampleRate) {
-          origin = Math.ceil(ctx.currentTime * ctx.sampleRate + Math.max(LEAD * ctx.sampleRate, (SPAN + 1) * sps));
-          k = -1;
-        }
-        k++;
-        const s = pulseSamples(params.pulse, k, sps, m[0][0], params.amplitude);
-        if (!s) return;
-        const buffer = ctx.createBuffer(1, s.data.length, ctx.sampleRate);
-        buffer.copyToChannel(s.data, 0);
-        const src = ctx.createBufferSource();
-        src.buffer = buffer;
-        src.connect(out);
-        src.onended = () => { playing.delete(src); src.disconnect(); };
-        playing.add(src);
-        src.start((origin + s.start) / ctx.sampleRate);
-      } } },
-      update(p) { params = p; },
-      dispose() {
-        playing.forEach((src) => { src.onended = null; src.stop(); src.disconnect(); });
-        playing.clear();
-        out.disconnect();
-      },
+      inputs: { in: worklet },
+      outputs: { out: worklet },
+      update(p) { params = p; send(); },
+      setRates(r) { inRate = r.in || ctx.sampleRate; send(); },
+      dispose() { worklet.port.onmessage = null; worklet.disconnect(); mute.disconnect(); },
     };
   },
 };

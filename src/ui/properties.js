@@ -3,7 +3,9 @@ import { BLOCKS, CATEGORIES } from '../blocks/index.js';
 import { $, h } from '../dom.js';
 import { on } from '../core/events.js';
 import { optionsOf } from '../core/params.js';
-import { graph, getSelection, setParam, syncParams, rebuildPorts, dataChanged } from '../core/graph.js';
+import { graph, getSelection, setParam, syncParams, rebuildPorts, dataChanged, outWire, outRate } from '../core/graph.js';
+import { engine } from '../core/engine.js';
+import { sampleShape } from '../blocks/stream.js';
 import { clamp } from '../util.js';
 
 const propsBody = $('#props-body');
@@ -119,7 +121,31 @@ function actionButton(node, a) {
   return button;
 }
 
+// what to say about the size of what flows through a cable: the dimensions of the last sample it carried
+function wireSize(e) {
+  if (outWire(graph.nodes.get(e.from.node), e.from.port) === 'audio') return 'continuous signal';
+  if (!engine.running) return 'Run to see the size';
+  if (!engine.last.has(e.id)) return 'no sample yet';
+  const shape = sampleShape(engine.last.get(e.id));
+  if (!shape) return 'irregular (inner arrays differ)';
+  if (!shape.length) return 'single value';
+  return shape.length === 1 ? `${shape[0]} element${shape[0] === 1 ? '' : 's'}` : `${shape.join(' × ')} (${['rows × columns'][shape.length - 2] || 'dimensions'})`;
+}
+
+// the clock of a cable: asynchronous, or synchronous with its sample rate (the sound card's unless the block sets one)
+function wireClock(e) {
+  const from = graph.nodes.get(e.from.node);
+  if (outWire(from, e.from.port) !== 'audio') return 'asynchronous';
+  const rate = outRate(from, e.from.port);
+  return rate ? `synchronous, ${rate} samples/s` : 'synchronous, sound card rate';
+}
+
+let wireSizeEl = null;
+let wireClockEl = null;
+
 function renderProps() {
+  wireSizeEl = null;
+  wireClockEl = null;
   const selection = getSelection();
   propsBody.replaceChildren();
   const hint = (text) => propsBody.append(h('p', { className: 'hint', textContent: text }));
@@ -132,6 +158,11 @@ function renderProps() {
     propsBody.append(h('div', { className: 'props-head', textContent: 'Connection' }));
     propsBody.append(h('div', { className: 'kv' }, h('span', { textContent: 'From' }), h('b', { textContent: name(e.from) })));
     propsBody.append(h('div', { className: 'kv' }, h('span', { textContent: 'To' }), h('b', { textContent: name(e.to) })));
+    const wire = outWire(graph.nodes.get(e.from.node), e.from.port);
+    const row = (label, text) => { const b = h('b', { textContent: text }); propsBody.append(h('div', { className: 'kv' }, h('span', { textContent: label }), b)); return b; };
+    row('Type', wire === 'audio' ? 'audio' : wire === '*' ? 'any (not known yet)' : wire);
+    wireClockEl = row('Clock', wireClock(e));
+    wireSizeEl = row('Size', wireSize(e));   // both kept up to date while the cable stays selected
     return;
   }
 
@@ -142,10 +173,17 @@ function renderProps() {
   head.style.setProperty('--cat', CATEGORIES[def.category]);
   propsBody.append(head, h('div', { className: 'props-cat', textContent: def.category }));
   if (!def.params.length && !def.actions) return hint('This block has no properties.');
-  for (const p of def.params) if (!p.hidden) propsBody.append(paramWidget(node, p));
+  for (const p of def.params.filter((p) => !p.hidden && (!p.visible || p.visible(node.params)))) propsBody.append(paramWidget(node, p));
   for (const a of def.actions || []) propsBody.append(actionButton(node, a));
 }
 
 export function initProperties() {
   on('selection', renderProps);
+  // the size of a selected cable follows the samples that go through it
+  setInterval(() => {
+    const sel = getSelection();
+    const e = sel && sel.kind === 'edge' && graph.edges.find((e) => e.id === sel.id);
+    if (!e || !wireSizeEl) return;
+    for (const [el, text] of [[wireSizeEl, wireSize(e)], [wireClockEl, wireClock(e)]]) if (el.textContent !== text) el.textContent = text;
+  }, 250);
 }

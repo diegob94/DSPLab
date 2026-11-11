@@ -189,7 +189,7 @@ test('the trigger level is honoured', () => withApp(app, async (page) => {
 test('trace colours, trigger, X / div and Y / div are shown on the node', () => withApp(app, async (page) => {
   await addFromPalette(page, 'Oscilloscope');
   assert.deepEqual(await page.locator('.node:has-text("Oscilloscope") .kv').allTextContents(), ['Triggerch1', 'Trig modeauto', 'X / div1 ms', 'Y / div0.25']);
-  assert.equal(await page.locator('#props .param').count(), 8);
+  assert.equal(await page.locator('#props .param').count(), 10);   // the 8 settings and the display of each of the 2 channels
 }));
 
 test('the screen carries no text besides "Stopped", "Waiting for trigger" and the trigger level line (the settings are on the node)', () => withApp(app, async (page) => {
