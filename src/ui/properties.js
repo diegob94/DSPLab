@@ -3,7 +3,7 @@ import { BLOCKS, CATEGORIES } from '../blocks/index.js';
 import { $, h } from '../dom.js';
 import { on } from '../core/events.js';
 import { optionsOf } from '../core/params.js';
-import { graph, getSelection, setParam, syncParams, rebuildPorts, dataChanged, outWire } from '../core/graph.js';
+import { graph, getSelection, setParam, syncParams, rebuildPorts, dataChanged, outWire, outRate } from '../core/graph.js';
 import { engine } from '../core/engine.js';
 import { sampleShape } from '../blocks/stream.js';
 import { clamp } from '../util.js';
@@ -132,10 +132,20 @@ function wireSize(e) {
   return shape.length === 1 ? `${shape[0]} element${shape[0] === 1 ? '' : 's'}` : `${shape.join(' × ')} (${['rows × columns'][shape.length - 2] || 'dimensions'})`;
 }
 
+// the clock of a cable: audio, or asynchronous with its sample rate when the block that sends sets one
+function wireClock(e) {
+  const from = graph.nodes.get(e.from.node);
+  if (outWire(from, e.from.port) === 'audio') return 'audio (sample rate)';
+  const rate = outRate(from, e.from.port);
+  return rate ? `asynchronous, ${rate} samples/s` : 'asynchronous';
+}
+
 let wireSizeEl = null;
+let wireClockEl = null;
 
 function renderProps() {
   wireSizeEl = null;
+  wireClockEl = null;
   const selection = getSelection();
   propsBody.replaceChildren();
   const hint = (text) => propsBody.append(h('p', { className: 'hint', textContent: text }));
@@ -151,9 +161,8 @@ function renderProps() {
     const wire = outWire(graph.nodes.get(e.from.node), e.from.port);
     const row = (label, text) => { const b = h('b', { textContent: text }); propsBody.append(h('div', { className: 'kv' }, h('span', { textContent: label }), b)); return b; };
     row('Type', wire === 'audio' ? 'audio' : wire === '*' ? 'any (not known yet)' : wire);
-    row('Clock', wire === 'audio' ? 'audio (sample rate)' : 'asynchronous');
-    const size = row('Size', wireSize(e));
-    wireSizeEl = size;   // kept up to date while the cable stays selected
+    wireClockEl = row('Clock', wireClock(e));
+    wireSizeEl = row('Size', wireSize(e));   // both kept up to date while the cable stays selected
     return;
   }
 
@@ -174,6 +183,7 @@ export function initProperties() {
   setInterval(() => {
     const sel = getSelection();
     const e = sel && sel.kind === 'edge' && graph.edges.find((e) => e.id === sel.id);
-    if (wireSizeEl && e) { const text = wireSize(e); if (wireSizeEl.textContent !== text) wireSizeEl.textContent = text; }
+    if (!e || !wireSizeEl) return;
+    for (const [el, text] of [[wireSizeEl, wireSize(e)], [wireClockEl, wireClock(e)]]) if (el.textContent !== text) el.textContent = text;
   }, 250);
 }

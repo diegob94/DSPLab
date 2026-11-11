@@ -85,3 +85,21 @@ test('selecting a cable shows its type, clock and, while running, the size of wh
   await page.waitForFunction(() => /5 × 8 \(rows × columns\)/.test(document.querySelector('#props-body').textContent));   // 5 bytes of 8 bits
   assert.match(await page.textContent('#props-body'), /array\[array\[uint8\]\]/);
 }));
+
+test('the Serializer sends a signal whose sample rate is its baud rate, and the cable says so', () => withApp(app, async (page) => {
+  for (const t of ['Strobe Source', 'Serializer', 'Debug Sink']) await addFromPalette(page, t);
+  const ids = await page.evaluate(() => {
+    const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
+    const [s, z, d] = ['strobe_source', 'serializer', 'debug_sink'].map(by);
+    const e = (a, ap, b, bp) => dsplab.addEdge({ node: a.id, port: ap }, { node: b.id, port: bp }).id;
+    z.params.baud = 2400;
+    return { sz: e(s, 'out', z, 'in'), zd: e(z, 'out', d, 'in'), z: z.id };
+  });
+  const clock = () => page.evaluate(() => [...document.querySelectorAll('#props-body .kv')].find((el) => el.children[0].textContent === 'Clock').children[1].textContent);
+  await page.evaluate((id) => dsplab.select({ kind: 'edge', id }), ids.zd);
+  assert.equal(await clock(), 'asynchronous, 2400 samples/s');
+  await page.evaluate((id) => { dsplab.graph.nodes.get(id).params.baud = 500; }, ids.z);   // the panel follows the setting
+  await page.waitForFunction(() => /500 samples\/s/.test(document.querySelector('#props-body').textContent));
+  await page.evaluate((id) => dsplab.select({ kind: 'edge', id }), ids.sz);
+  assert.equal(await clock(), 'asynchronous', 'a Strobe Source sets no sample rate');
+}));

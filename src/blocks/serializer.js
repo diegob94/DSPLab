@@ -1,6 +1,6 @@
 import { bitSender } from './bit-sender.js';
 
-// array[T] in, T out: the elements of each array go out one by one, one per symbol at the baud rate. T is whatever
+// array[T] in, T out: the elements of each array go out one by one: a signal whose sample rate is the baud rate. T is whatever
 // the array holds (see graph.js, where the output type follows the cable that feeds the input).
 // An array that arrives while another is going out is queued behind it.
 export const serializer = {
@@ -10,6 +10,7 @@ export const serializer = {
   outputs: ['out'],
   asyncPorts: ['in', 'out'],
   wireTypes: { in: 'array[T]', out: 'T' },
+  rates: { out: (params) => params.baud },   // samples per second of the output's clock
   params: [
     { key: 'baud', label: 'Baud rate', show: true, type: 'range', scale: 'log', min: 50, max: 20000, step: 1, unit: 'baud', default: 1000 },
   ],

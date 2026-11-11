@@ -241,8 +241,9 @@ Shown on the block: Rows and Columns.
 **Serializer**: sends the elements of an array one at a time. Input: `in` (async, `array[T]`). Output: `out`
 (async, `T`).
 
-Each array that arrives is taken apart and its elements go out one by one, one per symbol at the baud rate, whatever
-they are. `T` is the element type of the array on the cable that feeds `in`: after a Strobe Source (`array[uint8]`)
+Each array that arrives is taken apart and its elements go out one by one, whatever they are. What leaves `out` is a
+signal whose **sample rate is the baud rate**: one sample per 1 / baud seconds. Select the cable and its *Clock* in
+Properties reads, for example, `asynchronous, 1000 samples/s`, following the setting. `T` is the element type of the array on the cable that feeds `in`: after a Strobe Source (`array[uint8]`)
 the output carries `uint8`. While nothing is connected to `in` the output takes any async cable, and when you connect
 `in` the cables on `out` that no longer fit are dropped. Pacing follows the audio clock, so the average rate is
 exact; because a browser timer can't fire once per symbol at kilobaud, the symbols that are due are sent together

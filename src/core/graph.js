@@ -83,6 +83,13 @@ export function outWire(node, port, seen = new Set()) {
   return wire === 'same' ? up : elementOf(up) || '*';
 }
 
+// The sample rate of what an output port sends, in samples per second, or null when it has none (audio runs at the
+// sample rate of the sound card; an async port has a rate only if its block says so)
+export function outRate(node, port) {
+  const rate = BLOCKS[node.type].rates && BLOCKS[node.type].rates[port];
+  return rate ? rate(node.params) : null;
+}
+
 const wiresFit = (e) => {
   const a = graph.nodes.get(e.from.node), b = graph.nodes.get(e.to.node);
   return wiresMatch(outWire(a, e.from.port), portWire(BLOCKS[b.type], e.to.port));
