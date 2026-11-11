@@ -542,6 +542,32 @@ test('the X position setting in the panel has a reset button too', () => withApp
   assert.equal(await page.locator('#props .param:has(label:text-is("X / div")) button.reset').count(), 0, 'only the params that ask for it');
 }));
 
+test('the channel tags are drawn after the traces, so no trace passes over them', () => withApp(app, async (page) => {
+  await addFromPalette(page, 'Oscilloscope');
+  await startAudio(page);
+  await page.evaluate(() => {
+    window.scope = [...dsplab.graph.nodes.values()].find((n) => n.type === 'oscilloscope');
+    dsplab.addEdge({ node: [...dsplab.graph.nodes.values()][0].id, port: 'out' }, { node: scope.id, port: 'ch1' });
+  });
+  await page.click('.node:has-text("Oscilloscope") .title-button');
+  const ops = await page.evaluate(async () => {
+    const ops = [];
+    const proto = CanvasRenderingContext2D.prototype, { stroke, fillText } = proto;
+    proto.stroke = function () {
+      if (this.canvas.className === 'screen-canvas') ops.push(this.strokeStyle === '#242a33' ? 'frame' : this.lineWidth === 1.5 ? 'trace' : 'other');
+      return stroke.apply(this, arguments);
+    };
+    proto.fillText = function () { if (this.canvas.className === 'screen-canvas' && this.fillStyle === '#0d0f12') ops.push('tag'); return fillText.apply(this, arguments); };
+    await new Promise((r) => setTimeout(r, 300));
+    proto.stroke = stroke; proto.fillText = fillText;
+    return ops;
+  });
+  // a frame starts with its grid; within it, the traces come first and the tags last
+  const frames = ops.join(' ').split('frame').slice(1, -1);
+  assert.ok(frames.length > 2, `some frames were drawn: ${ops}`);
+  for (const f of frames) assert.match(f.replace(/other/g, '').trim(), /^(trace )+(tag ?)+$/, f);
+}));
+
 test('the big screen has the level scale on the left and a draggable tag per channel on the right', () => withApp(app, async (page) => {
   await openBig(page);
   const box = await page.locator('.screen-canvas').boundingBox();

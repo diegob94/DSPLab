@@ -314,8 +314,7 @@ export const oscilloscope = {
         g.fillText(`holdoff ${holdoff} ms`, flip ? hx - 4 : hx + 4, 28);
         g.textAlign = 'left';
       }
-      if (labels) drawTags(g, W, H, fontPx);
-      if (!inst) return;
+      if (!inst) { if (labels) drawTags(g, W, H, fontPx); return; }
 
       g.lineWidth = 1.5;
       const sweeps = inst.sample(span, level, trigger, mode, holdoff, xpos);
@@ -370,6 +369,7 @@ export const oscilloscope = {
           for (const i of points) { g.beginPath(); g.arc(X(i), yK(data[i]), 2.5, 0, 2 * Math.PI); g.fill(); }
         }
       });
+      if (labels) drawTags(g, W, H, fontPx);   // last, so the traces pass under the tags
     }
     // pan and zoom in time on the big screen; set(key, value) applies a parameter change
     function attach(canvas, set) {
