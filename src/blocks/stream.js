@@ -14,7 +14,6 @@ export function streamOutput() {
 export const isBit = (b) => b === 0 || b === 1;
 
 // bytes -> bits in transmission order, most significant bit first
-// (a negative int8 gives its two's complement byte, the shift by i < 8 only sees the low 8 bits)
 export const bytesToBits = (bytes) => Array.from(bytes, (b) => Array.from({ length: 8 }, (_, i) => (b >> (7 - i)) & 1)).flat();
 
 export const textToBits = (text) => bytesToBits(new TextEncoder().encode(text));
@@ -26,8 +25,8 @@ export function hexToBytes(hex) {
   return Array.from({ length: digits.length >> 1 }, (_, i) => parseInt(digits.slice(2 * i, 2 * i + 2), 16));
 }
 
-// The bytes a text field stands for, as an array of int8 (-128..127: 0xFF is -1): text (UTF-8) or hex.
-export const parseBytes = (type, value) => (type === 'hex' ? hexToBytes(value) : Array.from(new TextEncoder().encode(value))).map((b) => (b << 24) >> 24);
+// The bytes a text field stands for, as an array of uint8 (0..255): text (UTF-8) or hex.
+export const parseBytes = (type, value) => (type === 'hex' ? hexToBytes(value) : Array.from(new TextEncoder().encode(value)));
 
 // The bits a text field stands for: text (UTF-8), hex bytes, or bits as typed (anything but 0 and 1 is ignored,
 // so '1011 0111' works).
@@ -43,7 +42,7 @@ export function bitsToText(bits) {
   return new TextDecoder().decode(bytes);
 }
 
-// The type of a sample on an async wire, worked out from the value: 'int', 'array[int8]', 'array[int]', 'array[float]'...
+// The type of a sample on an async wire, worked out from the value: 'int', 'array[uint8]', 'array[int8]', 'array[int]', 'array[float]'...
 export function sampleType(s) {
   if (Number.isInteger(s)) return 'int';
   if (typeof s === 'number') return 'float';
@@ -52,7 +51,9 @@ export function sampleType(s) {
     if (!kinds.size) return 'array[]';
     if (kinds.size === 1) {
       const k = [...kinds][0];
-      return k === 'int' && s.every((v) => v >= -128 && v <= 127) ? 'array[int8]' : `array[${k}]`;
+      if (k !== 'int') return `array[${k}]`;
+      if (s.every((v) => v >= 0 && v <= 255)) return 'array[uint8]';
+      return s.every((v) => v >= -128 && v <= 127) ? 'array[int8]' : 'array[int]';
     }
     return 'array[mixed]';
   }

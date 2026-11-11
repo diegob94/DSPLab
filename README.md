@@ -81,7 +81,7 @@ Connection rules:
 
 - A cable always goes from an output to an input, and never from a block to itself.
 - An **input takes one cable**: connecting a second one replaces the first.
-- Every port has a **clock**. Most are *audio* (round ports): a sample at every tick of the sound card. *Asynchronous* ports (square) carry samples at their own instants, like one bit per symbol. Async ports also have a sample type (`int`, a single bit, or `array[int8]`, a list of bytes). Only ports that carry the same thing can be cabled together; a Pulse Shaper turns an async stream into audio and a Symbol Recovery does the opposite.
+- Every port has a **clock**. Most are *audio* (round ports): a sample at every tick of the sound card. *Asynchronous* ports (square) carry samples at their own instants, like one bit per symbol. Async ports also have a sample type (`int`, a single bit, or `array[uint8]`, a list of bytes). Only ports that carry the same thing can be cabled together; a Pulse Shaper turns an async stream into audio and a Symbol Recovery does the opposite.
 - An **output can feed many inputs**.
 - An unconnected input counts as silence (zero).
 
@@ -137,10 +137,10 @@ kept in memory only: it is not saved with the diagram, so after a reload you hav
 
 Shown on the block: Pause.
 
-**Strobe Source**: sends its data again and again, on an **asynchronous clock**. Output: `out` (async, `array[int8]`).
+**Strobe Source**: sends its data again and again, on an **asynchronous clock**. Output: `out` (async, `array[uint8]`).
 
 Every *Period* the whole data goes out as **one array of ints**: the bytes of a text (UTF-8, so `é` is two ints) or
-of some hex digits, as int8 (−128 to 127). `hello` is `[104, 101, 108, 108, 111]`, and a byte above 127 shows as negative (`é` is `[-61, -87]`, `0xFF` is `-1`). It starts when the audio starts, and sends nothing
+of some hex digits, as uint8 (0 to 255). `hello` is `[104, 101, 108, 108, 111]`, and `é` is `[195, 169]`. It starts when the audio starts, and sends nothing
 while the data is empty. To turn the bytes into bits at a baud rate, put a Bit Serializer after it.
 
 | Setting | What it does | Range | Default |
@@ -152,7 +152,7 @@ while the data is empty. To turn the bytes into bits at a baud rate, put a Bit S
 Editing the data applies at once, without restarting the clock. Shown on the block: Data and Period.
 
 **Constant Source**: the same array, but sent only **once**, when the audio starts, and again whenever you change
-the data. Output: `out` (async, `array[int8]`). Settings: Type and Data, as above. To repeat it, use a Strobe Source.
+the data. Output: `out` (async, `array[uint8]`). Settings: Type and Data, as above. To repeat it, use a Strobe Source.
 
 ### Processing blocks
 
@@ -185,14 +185,14 @@ opposite and removes that band. For both, Frequency is the centre of the band an
 
 Shown on the block: Type and Frequency.
 
-**Bit Serializer**: turns arrays of bytes into a stream of single bits. Input: `in` (async, `array[int8]`).
+**Bit Serializer**: turns arrays of bytes into a stream of single bits. Input: `in` (async, `array[uint8]`).
 Output: `bits` (async, `int`).
 
-Each int8 of the array is a byte (`-1` is `0xFF`) and goes out as 8 bits, most significant bit first (`A` is `01000001`), one bit
+Each uint8 of the array is a byte and goes out as 8 bits, most significant bit first (`A` is `01000001`), one bit
 per symbol at the baud rate. Pacing follows the audio clock, so the average rate is exact; because a browser timer
 can't fire once per symbol at kilobaud, the symbols that are due are sent together every ~10 ms, and whoever
 receives them (the Pulse Shaper) does its own timing. An array that arrives while another is going out is queued
-behind it. Anything that is not an array of ints from −128 to 127 is ignored.
+behind it. Anything that is not an array of ints from 0 to 255 is ignored.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
@@ -457,8 +457,8 @@ Shown on the block: Format, Frame and Preamble.
 the one port that takes any async cable (a Strobe Source, a Bit Serializer, a Symbol Recovery...), but not audio.
 It reads *Stopped* while the audio is off, and the log starts empty on every Run.
 
-Each line is the time (seconds of audio), the type and the value, like `2.000  array[int8]  [104,101]`. The type is
-worked out from the sample: `int`, `float`, `array[int8]` (ints from −128 to 127), `array[int]` (other ints),
+Each line is the time (seconds of audio), the type and the value, like `2.000  array[uint8]  [104,101]`. The type is
+worked out from the sample: `int`, `float`, `array[uint8]` (ints from 0 to 255), `array[uint8]` (ints from −128 to 127 with a negative one), `array[int]` (other ints),
 `array[float]`, `array[mixed]`... Long values are cut short with `…`.
 
 | Setting | What it does | Range | Default |

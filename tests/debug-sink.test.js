@@ -13,14 +13,15 @@ const lines = (page, samples, params = {}) => page.evaluate(([samples, params]) 
 }, [samples, params]);
 
 test('it prints the type of each sample with its value and the audio time', () => withApp(app, async (page) => {
-  assert.deepEqual(await lines(page, [1, [104, -61], [200, 3], [0.5], 'x', [1.5, 2], [[1], [2]], []]), [
+  assert.deepEqual(await lines(page, [1, [104, 200], [-61, 3], [200, -3, 300], [0.5], 'x', [1.5, 2], [[1], [2]], []], { lines: 16 }), [
     '2.000  int  1',
-    '2.000  array[int8]  [104,-61]',
-    '2.000  array[int]  [200,3]',
+    '2.000  array[uint8]  [104,200]',
+    '2.000  array[int8]  [-61,3]',
+    '2.000  array[int]  [200,-3,300]',
     '2.000  array[float]  [0.5]',
     '2.000  string  "x"',
     '2.000  array[mixed]  [1.5,2]',
-    '2.000  array[array[int8]]  [[1],[2]]',
+    '2.000  array[array[uint8]]  [[1],[2]]',
     '2.000  array[]  []',
   ]);
 }));
@@ -43,6 +44,6 @@ test('it accepts any async port but not audio, and shows the type live on the bl
   });
   assert.deepEqual(wired, [false, true]);
   await startAudio(page);
-  await page.waitForFunction(() => /array\[int8\]/.test(document.querySelector('.msg-log').textContent));
-  assert.match(await page.locator('.msg-log').textContent(), /array\[int8\]  \[104,101,108,108,111\]/);
+  await page.waitForFunction(() => /array\[uint8\]/.test(document.querySelector('.msg-log').textContent));
+  assert.match(await page.locator('.msg-log').textContent(), /array\[uint8\]  \[104,101,108,108,111\]/);
 }));

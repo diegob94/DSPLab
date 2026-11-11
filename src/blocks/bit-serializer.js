@@ -1,7 +1,7 @@
 import { bitSender } from './bit-sender.js';
 import { bytesToBits } from './stream.js';
 
-// array[int8] in, a stream of single bits out: each int8 is a byte (two's complement), sent most significant bit first, one bit per
+// array[uint8] in, a stream of single bits out: each uint8 is a byte, sent most significant bit first, one bit per
 // symbol at the baud rate. An array that arrives while another is going out is queued behind it.
 export const bitSerializer = {
   title: 'Bit Serializer',
@@ -9,7 +9,7 @@ export const bitSerializer = {
   inputs: ['in'],
   outputs: ['bits'],
   asyncPorts: ['in', 'bits'],
-  wireTypes: { in: 'array[int8]' },
+  wireTypes: { in: 'array[uint8]' },
   params: [
     { key: 'baud', label: 'Baud rate', show: true, type: 'range', scale: 'log', min: 50, max: 20000, step: 1, unit: 'baud', default: 1000 },
   ],
@@ -19,7 +19,7 @@ export const bitSerializer = {
     return {
       outputs: { bits: sender.out },
       inputs: { in: { receive(bytes) {
-        if (Array.isArray(bytes) && bytes.every((b) => Number.isInteger(b) && b >= -128 && b <= 127)) sender.send(bytesToBits(bytes));
+        if (Array.isArray(bytes) && bytes.every((b) => Number.isInteger(b) && b >= 0 && b <= 255)) sender.send(bytesToBits(bytes));
       } } },
       update(p) { baud = p.baud; },
       dispose() { sender.dispose(); },

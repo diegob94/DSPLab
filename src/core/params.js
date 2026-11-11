@@ -10,7 +10,7 @@ export const portClock = (def, name) => ((def.asyncPorts || []).includes(name) ?
 export const wiresMatch = (a, b) => a === b || (a === '*' && b !== 'audio') || (b === '*' && a !== 'audio');
 
 // what a port carries: 'audio', or for an async port the type of its samples ('int' unless the block's
-// wireTypes says otherwise, like 'array[int8]'). Only ports that carry the same thing can be cabled together.
+// wireTypes says otherwise, like 'array[uint8]'). Only ports that carry the same thing can be cabled together.
 export const portWire = (def, name) => (portClock(def, name) === 'audio' ? 'audio' : (def.wireTypes && def.wireTypes[name]) || 'int');
 
 // a saved value is only trusted if it still fits the parameter definition

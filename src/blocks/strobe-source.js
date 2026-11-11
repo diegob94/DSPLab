@@ -1,13 +1,13 @@
 import { streamOutput, parseBytes } from './stream.js';
 
-// On an asynchronous clock: the whole data (a text, or hex bytes) goes out as one array[int8] of bytes every period.
+// On an asynchronous clock: the whole data (a text, or hex bytes) goes out as one array[uint8] of bytes every period.
 export const strobeSource = {
   title: 'Strobe Source',
   category: 'Source blocks',
   inputs: [],
   outputs: ['out'],
   asyncPorts: ['out'],
-  wireTypes: { out: 'array[int8]' },
+  wireTypes: { out: 'array[uint8]' },
   params: [
     { key: 'type',   label: 'Type',   type: 'select', options: ['text', 'hex'], default: 'text' },
     { key: 'data',   label: 'Data',   show: true, type: 'text', default: 'hello' },
