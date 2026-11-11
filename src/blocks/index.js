@@ -38,7 +38,6 @@ import { serializer } from './serializer.js';
 import { arrayUnpack } from './array-unpack.js';
 import { arrayReshape } from './array-reshape.js';
 import { concatenate } from './concatenate.js';
-import { bitMonitor } from './bit-monitor.js';
 import { debugSink } from './debug-sink.js';
 import { pulseShaper } from './pulse-shaper.js';
 import { symbolTiming } from './symbol-timing.js';
@@ -71,7 +70,6 @@ export const BLOCKS = {
   array_unpack: arrayUnpack,
   array_reshape: arrayReshape,
   concatenate,
-  bit_monitor: bitMonitor,
   debug_sink: debugSink,
   pulse_shaper: pulseShaper,
   symbol_timing: symbolTiming,

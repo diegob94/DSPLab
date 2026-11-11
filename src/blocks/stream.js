@@ -13,11 +13,6 @@ export function streamOutput() {
 
 export const isBit = (b) => b === 0 || b === 1;
 
-// bytes -> bits in transmission order, most significant bit first
-export const bytesToBits = (bytes) => Array.from(bytes, (b) => Array.from({ length: 8 }, (_, i) => (b >> (7 - i)) & 1)).flat();
-
-export const textToBits = (text) => bytesToBits(new TextEncoder().encode(text));
-
 // 'AA 55' or '0xAA 0x55' -> [0xAA, 0x55]: 0x prefixes and anything that isn't a hex digit are ignored,
 // and a last lone digit is dropped
 export function hexToBytes(hex) {
@@ -27,20 +22,6 @@ export function hexToBytes(hex) {
 
 // The bytes a text field stands for, as an array of uint8 (0..255): text (UTF-8) or hex.
 export const parseBytes = (type, value) => (type === 'hex' ? hexToBytes(value) : Array.from(new TextEncoder().encode(value)));
-
-// The bits a text field stands for: text (UTF-8), hex bytes, or bits as typed (anything but 0 and 1 is ignored,
-// so '1011 0111' works).
-export function parseBits(type, value) {
-  if (type === 'bits') return [...value].filter((c) => c === '0' || c === '1').map(Number);
-  if (type === 'hex') return bytesToBits(hexToBytes(value));
-  return value ? textToBits(value) : [];
-}
-
-// bits (a multiple of 8) -> text; most significant bit first
-export function bitsToText(bits) {
-  const bytes = Uint8Array.from({ length: bits.length >> 3 }, (_, k) => bits.slice(8 * k, 8 * k + 8).reduce((v, b) => (v << 1) | b, 0));
-  return new TextDecoder().decode(bytes);
-}
 
 // The type of a sample on an async wire, worked out from the value: 'int', 'array[uint8]', 'array[int8]', 'array[int]', 'array[float]'...
 export function sampleType(s) {

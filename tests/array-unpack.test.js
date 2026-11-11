@@ -40,20 +40,20 @@ test('without a known type it takes 32 bits; anything that is not an array of in
 }));
 
 test('it takes arrays of ints of 8, 16 and 32 bits only, gives array[array[uint8]], and the engine tells it the type', () => withApp(app, async (page) => {
-  for (const t of ['Strobe Source', 'Array Unpack', 'Debug Sink', 'Wave Generator', 'Bit Monitor']) await addFromPalette(page, t);
+  for (const t of ['Strobe Source', 'Array Unpack', 'Debug Sink', 'Wave Generator', 'Pulse Shaper']) await addFromPalette(page, t);
   assert.equal(await page.locator('.node:has-text("Array Unpack") .port.in.async').count(), 1);
   assert.equal(await page.locator('.node:has-text("Array Unpack") .port.out.async').count(), 1);
   const r = await page.evaluate(async () => {
     const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
-    const [s, u, d, w, m] = ['strobe_source', 'array_unpack', 'debug_sink', 'wave_generator', 'bit_monitor'].map(by);
+    const [s, u, d, w, m] = ['strobe_source', 'array_unpack', 'debug_sink', 'wave_generator', 'pulse_shaper'].map(by);
     const e = (a, ap, b, bp) => !!dsplab.addEdge({ node: a.id, port: ap }, { node: b.id, port: bp });
     s.params.period = 50;
-    const out = { audio: e(w, 'out', u, 'in'), bitMonitor: e(u, 'out', m, 'bits'), strobe: e(s, 'out', u, 'in'), debug: e(u, 'out', d, 'in') };
+    const out = { audio: e(w, 'out', u, 'in'), pulse: e(u, 'out', m, 'bits'), strobe: e(s, 'out', u, 'in'), debug: e(u, 'out', d, 'in') };
     await dsplab.engine.start();
     out.width = dsplab.engine.live.get(u.id).width;
     await dsplab.engine.stop();
     return out;
   });
-  assert.deepEqual([r.audio, r.bitMonitor, r.strobe, r.debug], [false, false, true, true]);
+  assert.deepEqual([r.audio, r.pulse, r.strobe, r.debug], [false, false, true, true]);
   assert.equal(r.width, 8, 'fed by a Strobe Source: array[uint8]');
 }));

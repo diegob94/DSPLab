@@ -44,26 +44,24 @@ test('anything that is not an array is ignored', () => withApp(app, async (page)
 }));
 
 test('Serializer has array[T] in and T out, both async; the output type follows what feeds it', () => withApp(app, async (page) => {
-  for (const t of ['Strobe Source', 'Serializer', 'Pulse Shaper', 'Bit Monitor', 'Debug Sink']) await addFromPalette(page, t);
+  for (const t of ['Strobe Source', 'Serializer', 'Pulse Shaper', 'Debug Sink']) await addFromPalette(page, t);
   assert.equal(await page.locator('.node:has-text("Serializer") .port.in.async').count(), 1);
   assert.equal(await page.locator('.node:has-text("Serializer") .port.out.async').count(), 1);
   const r = await page.evaluate(() => {
     const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
-    const [s, z, p, m, d] = ['strobe_source', 'serializer', 'pulse_shaper', 'bit_monitor', 'debug_sink'].map(by);
+    const [s, z, p, d] = ['strobe_source', 'serializer', 'pulse_shaper', 'debug_sink'].map(by);
     const e = (a, ap, b, bp) => !!dsplab.addEdge({ node: a.id, port: ap }, { node: b.id, port: bp });
     const out = {};
-    out.nothingYet = [e(z, 'out', m, 'bits'), e(z, 'out', d, 'in')];   // T is unknown: anything goes
+    out.nothingYet = [e(z, 'out', p, 'bits'), e(z, 'out', d, 'in')];   // T is unknown: anything goes
     out.fromStrobe = e(s, 'out', z, 'in');                             // array[uint8]: T = uint8
     out.left = dsplab.graph.edges.filter((x) => x.from.node === z.id).map((x) => x.to.node === d.id ? 'debug' : 'other');
     out.toPulse = e(z, 'out', p, 'bits');                              // a uint8 is not the int the Pulse Shaper takes (yet)
-    out.toMonitor = e(z, 'out', m, 'bits');
     out.audioIn = e(p, 'out', z, 'in');
     return out;
   });
   assert.deepEqual(r.nothingYet, [true, true]);
   assert.equal(r.fromStrobe, true);
-  assert.deepEqual(r.left, ['debug'], 'the cable to the Bit Monitor no longer fits and is dropped');
+  assert.deepEqual(r.left, ['debug'], 'the cable to the Pulse Shaper no longer fits and is dropped');
   assert.equal(r.toPulse, false);
-  assert.equal(r.toMonitor, false);
   assert.equal(r.audioIn, false);
 }));

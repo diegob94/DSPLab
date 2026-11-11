@@ -37,13 +37,13 @@ for (const type of ['strobe_source', 'constant_source']) {
     await addFromPalette(page, title);
     assert.equal(await page.locator(`.node:has-text("${title}") .port.out.async`).count(), 1);
     assert.equal(await page.locator(`.node:has-text("${title}") .port.in`).count(), 0);
-    for (const sink of ['Audio Sink', 'Bit Monitor', 'Pulse Shaper']) await addFromPalette(page, sink);
+    for (const sink of ['Audio Sink', 'Pulse Shaper']) await addFromPalette(page, sink);
     const wired = await page.evaluate((type) => {
       const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
       const to = (t, port) => !!dsplab.addEdge({ node: by(type).id, port: 'out' }, { node: by(t).id, port });
-      return [to('audio_sink', 'in'), to('bit_monitor', 'bits'), to('pulse_shaper', 'bits')];
+      return [to('audio_sink', 'in'), to('pulse_shaper', 'bits')];
     }, type);
-    assert.deepEqual(wired, [false, false, false]);
+    assert.deepEqual(wired, [false, false]);
   }));
 }
 

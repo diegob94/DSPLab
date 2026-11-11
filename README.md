@@ -46,7 +46,7 @@ You start with a **Wave Generator** already connected to an **Audio Sink**. Pres
   values, read-only; you change them here.
 - **Toolbar** (top): Run/Stop, delete, **Share** (copies a link to the diagram), the **Examples** menu, and the audio status (the sample rate while
   running).
-- **Examples** (toolbar): *Simple tone* (the starting diagram), *ASK modulation*, *ASK receiver* (microphone → carrier recovery → bit monitor) and *Audio source scope* (microphone → oscilloscope). Picking one replaces
+- **Examples** (toolbar): *Simple tone* (the starting diagram), *ASK modulation*, *ASK receiver* (microphone → carrier recovery → debug sink) and *Audio source scope* (microphone → oscilloscope). Picking one replaces
   the current diagram, so it asks for confirmation first (unless the canvas is empty); it can't be undone,
   because the autosave overwrites the old diagram.
 
@@ -481,27 +481,6 @@ draws while the audio is running.
 The vertical axis goes from 0 dB (full scale) down to −100 dB. The loudest frequency is printed in the corner
 as *peak … Hz*. Shown on the block: Window size and Freq. axis.
 
-**Bit Monitor**: prints the bits it receives, a frame per line, each with the time (in seconds of audio) at which
-the frame was complete. Input: `bits` (async, `int`). It reads *Stopped* while the audio is off, and the log starts empty
-on every Run.
-
-| Setting | What it does | Range | Default |
-|---|---|---|---|
-| Format | *text*: each 8 bits are a character (UTF-8, top bit first; control characters show as `·`); *bits*: print 0s and 1s | text, bits | text |
-| Frame | Characters per line in *text*, bits per line in *bits* | 1 – 4096 | 8 |
-| Lines | How many of the newest lines are kept | 4, 8, 16, 32, 64, 128 | 8 |
-| Width, Height | Size of the log on the block (also set by dragging its corner, like the Debug Sink's) | 120 – 1000 px, 40 – 800 px | 220 × 120 |
-| Preamble type | How *Preamble* is written: *text*, *hex* or *bits* | text, hex, bits | text |
-| Preamble | What marks where a frame starts, in that notation (empty: no framing) | up to 100 characters | empty |
-
-With no preamble the block counts bits from the first one it receives, so after a Symbol Recovery (which can
-output stray bits before and after a burst) the characters may be shifted and read as garbage. With a preamble it
-ignores the stream until it sees those bits (at any bit offset), collects one frame (the preamble is not in it)
-and goes back to looking. Pick a preamble unlikely to appear by chance in the data. Changing the frame size or
-the preamble drops the bits collected so far.
-
-Shown on the block: Format, Frame and Preamble.
-
 **Debug Sink**: prints the type and the value of every sample that arrives. Input: `in` (async, any type). It is
 the one port that takes any async cable (a Strobe Source, a Serializer, a Symbol Recovery...), but not audio.
 It reads *Stopped* while the audio is off, and the log starts empty on every Run.
@@ -534,8 +513,7 @@ signal (`ch1`) against the square wave (`ch2`, the trigger).
 microphone). The Audio Source feeds a Carrier Recovery, which rebuilds a clean 440 Hz carrier; a Math Operator
 set to *multiply* mixes it with the signal, so the keyed bursts come out at baseband; the Filter (low-pass,
 517 Hz) removes the double-frequency term, the Squelch silences the gaps, Symbol Recovery samples the symbols at
-1000 baud and the Bit Monitor waits for the preamble `ddd` and collects the 5 characters that follow,
-which it prints. It expects a transmitter that sends that at 1000 baud on a 440 Hz carrier. The
+1000 baud and the Debug Sink prints the bits it recovers. It expects a transmitter that sends that at 1000 baud on a 440 Hz carrier. The
 example is only a starting point: nobody has tried it here with a real microphone.
 
 **Compare two waves.** Add a second Wave Generator and connect it to `ch2`. Set the scope's X / div to
