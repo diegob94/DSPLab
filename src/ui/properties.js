@@ -137,7 +137,7 @@ function wireClock(e) {
   const from = graph.nodes.get(e.from.node);
   if (outWire(from, e.from.port) === 'audio') return 'audio (sample rate)';
   const rate = outRate(from, e.from.port);
-  return rate ? `asynchronous, ${rate} samples/s` : 'asynchronous';
+  return rate ? `synchronous, ${rate} samples/s` : 'asynchronous';
 }
 
 let wireSizeEl = null;

@@ -23,24 +23,48 @@ const run = (page, steps) => page.evaluate(async (steps) => {
   return { log, got };
 }, steps);
 
-test('the elements of an array go out one by one, whatever they are', () => withApp(app, async (page) => {
-  assert.deepEqual((await run(page, [[0, [65, 255, 0]], [1, null]])).got, [65, 255, 0]);
-  assert.deepEqual((await run(page, [[0, [[1], 'x', 0.5]], [1, null]])).got, [[1], 'x', 0.5]);
+test('the elements of an array go out one by one, whatever they are, and then it is zeros', () => withApp(app, async (page) => {
+  assert.deepEqual((await run(page, [[0, [65, 255, 7]], [0.005, null]])).got, [65, 255, 7, 0, 0, 0]);
+  assert.deepEqual((await run(page, [[0, [[1], 'x', 0.5]], [0.003, null]])).got, [[1], 'x', 0.5, 0]);
 }));
 
-test('the audio clock sets the pace: one symbol per 1 / baud, none early', () => withApp(app, async (page) => {
-  // at t=0 the first is out; by 3.5 ms (1000 baud) four are due; by 20 ms all eight
-  assert.deepEqual((await run(page, [[0, [1, 2, 3, 4, 5, 6, 7, 8]], [0.0035, null], [0.02, null]])).log, [1, 4, 8]);
+test('it delivers samples continuously at the baud rate, 0 while the buffer is empty, none early', () => withApp(app, async (page) => {
+  // 1000 baud: at t = 0 the first sample is due, by 3.5 ms four, by 20 ms twenty-one (an empty buffer gives zeros)
+  const { log, got } = await run(page, [[0, null], [0.0035, null], [0.0035, [9, 9]], [0.02, null], [0.03, null]]);
+  assert.deepEqual(log, [1, 4, 4, 21, 31]);
+  assert.deepEqual(got.slice(0, 4), [0, 0, 0, 0]);
+  assert.deepEqual(got.slice(4, 7), [9, 9, 0], 'the array that arrived is consumed from the next sample on');
 }));
 
-test('an array that arrives meanwhile is queued behind; after a pause the next starts at once', () => withApp(app, async (page) => {
-  const { log, got } = await run(page, [[0, [7, 8]], [0, [9]], [0.0015, null], [10, [5]]]);
-  assert.deepEqual(log, [1, 1, 2, 4]);
-  assert.deepEqual(got, [7, 8, 9, 5]);
+test('an array that arrives while another is being consumed waits in the buffer', () => withApp(app, async (page) => {
+  const { got } = await run(page, [[0, [7, 8]], [0, [9]], [0.006, null]]);
+  assert.deepEqual(got, [7, 8, 9, 0, 0, 0, 0]);
 }));
 
-test('anything that is not an array is ignored', () => withApp(app, async (page) => {
-  assert.deepEqual((await run(page, [[0, 1], [0, 'ab'], [0, null], [1, null]])).got, []);
+test('a new baud rate starts from now; a long stall skips ahead instead of delivering it all', () => withApp(app, async (page) => {
+  const r = await page.evaluate(async () => {
+    const ctx = { currentTime: 0 };
+    const blk = dsplab.BLOCKS.serializer.build(ctx, { baud: 1000 });
+    let n = 0;
+    blk.outputs.out.connect({ receive: () => n++ });
+    const wait = () => new Promise((r) => setTimeout(r, 30));
+    ctx.currentTime = 0.01; await wait();
+    const at1000 = n;                                   // 11
+    blk.update({ baud: 100 });
+    ctx.currentTime = 0.02; await wait();               // the new rate starts at 0.01: samples at 0.01 and 0.02
+    const at100 = n - at1000;
+    ctx.currentTime = 60; await wait();                 // a minute at once: at most a second of samples
+    const stalled = n - at1000 - at100;
+    blk.dispose();
+    return { at1000, at100, stalled };
+  });
+  assert.equal(r.at1000, 11);
+  assert.equal(r.at100, 2);
+  assert.ok(r.stalled <= 100 + 1, `${r.stalled}`);
+}));
+
+test('anything that is not an array is ignored (the output stays at zero)', () => withApp(app, async (page) => {
+  assert.deepEqual((await run(page, [[0, 1], [0, 'ab'], [0, null], [0.003, null]])).got, [0, 0, 0, 0], 'nothing but zeros');
 }));
 
 test('Serializer has array[T] in and T out, both async; the output type follows what feeds it', () => withApp(app, async (page) => {

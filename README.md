@@ -238,21 +238,24 @@ longer fit are dropped.
 
 Shown on the block: Rows and Columns.
 
-**Serializer**: sends the elements of an array one at a time. Input: `in` (async, `array[T]`). Output: `out`
-(async, `T`).
+**Serializer**: turns arrays into a continuous signal, one element per sample. Input: `in` (async, `array[T]`). Output:
+`out` (`T`, **synchronous**, sample rate = baud rate).
 
-Each array that arrives is taken apart and its elements go out one by one, whatever they are. What leaves `out` is a
-signal whose **sample rate is the baud rate**: one sample per 1 / baud seconds. Select the cable and its *Clock* in
-Properties reads, for example, `asynchronous, 1000 samples/s`, following the setting. `T` is the element type of the array on the cable that feeds `in`: after a Strobe Source (`array[uint8]`)
-the output carries `uint8`. While nothing is connected to `in` the output takes any async cable, and when you connect
-`in` the cables on `out` that no longer fit are dropped. Pacing follows the audio clock, so the average rate is
-exact; because a browser timer can't fire once per symbol at kilobaud, the symbols that are due are sent together
-every ~10 ms, and whoever receives them does its own timing. An array that arrives while another is going out is
-queued behind it. Anything that is not an array is ignored.
+The arrays that arrive go into a buffer, and the output delivers a sample every 1 / baud seconds for as long as the
+audio runs: the next element of the buffer, whatever it is, or **0 when the buffer is empty**. So it never stops: with
+nothing to send it sends zeros, and an array that arrives is consumed from the next sample on, after whatever was
+already waiting. Select the cable on `out` and its *Clock* in Properties reads, for example, `synchronous, 1000
+samples/s`, following the setting. `T` is the element type of the array on the cable that feeds `in`: after a Strobe
+Source (`array[uint8]`) the output carries `uint8`. While nothing is connected to `in` the output takes any async
+cable, and when you connect `in` the cables on `out` that no longer fit are dropped. Pacing follows the audio clock,
+so the average rate is exact; because a browser timer can't fire once per sample at kilobaud, the samples that are due
+are delivered together every ~10 ms, and whoever receives them does its own timing. A new baud rate starts from the
+moment you change it, and after a stall (a tab in the background) it skips ahead rather than delivering more than a
+second of samples at once. Anything that is not an array is ignored.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
-| Baud rate | Elements per second | 50 – 20000 (logarithmic) | 1000 baud |
+| Baud rate | Samples per second (the sample rate of `out`) | 50 – 20000 (logarithmic) | 1000 baud |
 
 Shown on the block: Baud rate.
 

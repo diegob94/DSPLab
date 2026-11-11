@@ -1,8 +1,12 @@
-import { bitSender } from './bit-sender.js';
+import { streamOutput } from './stream.js';
 
-// array[T] in, T out: the elements of each array go out one by one: a signal whose sample rate is the baud rate. T is whatever
-// the array holds (see graph.js, where the output type follows the cable that feeds the input).
-// An array that arrives while another is going out is queued behind it.
+const TICK = 10;      // ms between checks; timers can't fire once per sample at kilobaud, so the samples due are delivered together
+const MAX_BACKLOG = 1;   // s: after a stall (a background tab) it skips ahead instead of delivering everything it missed
+
+// array[T] in, T out. The input arrays go into a buffer and the output is a synchronous signal whose sample rate is
+// the baud rate: it delivers one sample every 1 / baud seconds, for as long as the block runs. Each sample is the next
+// element of the buffer, or 0 when the buffer is empty.
+// T is whatever the array holds (see graph.js, where the output type follows the cable that feeds the input).
 export const serializer = {
   title: 'Serializer',
   category: 'Processing blocks',
@@ -16,12 +20,23 @@ export const serializer = {
   ],
   build(ctx, p) {
     let baud = p.baud;
-    const sender = bitSender(ctx, () => baud);
+    const out = streamOutput();
+    const buffer = [];      // the elements waiting to go out
+    let t0 = ctx.currentTime;   // audio time of sample 0 of the current rate
+    let sent = 0;               // samples delivered since t0
+    // the audio clock sets the pace (not the timer), so the average rate is exactly the baud rate
+    const pump = () => {
+      let due = Math.floor((ctx.currentTime - t0) * baud + 1e-9) + 1;
+      if (due - sent > MAX_BACKLOG * baud) sent = due - Math.ceil(MAX_BACKLOG * baud);
+      for (; sent < due; sent++) out.send(buffer.length ? buffer.shift() : 0);
+    };
+    const timer = setInterval(pump, TICK);
     return {
-      outputs: { out: sender.out },
-      inputs: { in: { receive(items) { if (Array.isArray(items)) sender.send(items); } } },
-      update(p) { baud = p.baud; },
-      dispose() { sender.dispose(); },
+      outputs: { out },
+      inputs: { in: { receive(items) { if (Array.isArray(items)) buffer.push(...items); } } },
+      // a new rate starts from now, so the samples already delivered stay where they were
+      update(p) { if (p.baud !== baud) { t0 = ctx.currentTime; sent = 0; baud = p.baud; } },
+      dispose() { clearInterval(timer); buffer.length = 0; out.disconnect(); },
     };
   },
 };
