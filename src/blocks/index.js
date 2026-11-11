@@ -11,6 +11,8 @@
  * parameter flagged `ports: true` rebuilds the node's ports when it changes, and a select's
  * `options` (strings or numbers) may be a function of the params too. A `type: 'text'` param is a
  * free string (optional `maxLength`, default 100).
+ * A param with `visible: (params) => boolean` is only listed in the panel and the big screen while that holds (the
+ * oscilloscope's display mode of each channel).
  * A range param flagged `reset: true` gets a ↺ button next to its value that puts it back to the default.
  * `asyncPorts` lists the port names (inputs or outputs) whose signal has an asynchronous clock: its samples
  * (bits) come at their own instants instead of at the audio sample rate. An output is any object with

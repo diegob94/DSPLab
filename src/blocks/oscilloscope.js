@@ -5,6 +5,27 @@ const SCOPE_COLORS = ['#f2a65a', '#4dd0e1', '#8bd17c', '#e57fd0', '#f5d76e', '#7
 
 const inputNames = (p) => Array.from({ length: p.channels }, (_, i) => `ch${i + 1}`);
 
+// how a channel is drawn between its own samples
+const DISPLAY_MODES = ['auto', 'linear', 'sample & hold', 'impulse'];
+
+// 'auto' is a polyline for a channel at the sound card's rate and sample & hold for a slower one (whose samples are
+// the symbols it holds)
+export const effectiveDisplay = (mode, rate, sampleRate) => (mode !== 'auto' ? mode : rate && rate < sampleRate ? 'sample & hold' : 'linear');
+
+// The indices, in a window of `length` output samples that starts at context frame `abs`, of the samples of a channel
+// at `rate` samples per second (null: the sound card's, sampleRate: every output sample is one).
+export function channelPoints(length, abs, rate, sampleRate) {
+  const out = [];
+  if (!rate || rate >= sampleRate) { for (let i = 0; i < length; i++) out.push(i); return out; }
+  const step = sampleRate / rate;   // output samples per sample of the channel
+  for (let j = Math.max(0, Math.ceil(abs / step - 1e-9)); ; j++) {
+    const i = Math.round(j * step) - abs;
+    if (i >= length) break;
+    if (i >= 0) out.push(i);
+  }
+  return out;
+}
+
 const DIV_X = 10, DIV_Y = 8;   // graticule divisions
 const HOLDOFF_MAX_MS = 3000;   // longest holdoff
 const LEVEL_SHOWN_MS = 1500;   // how long the trigger level line stays after it was last changed
@@ -25,7 +46,14 @@ export const oscilloscope = {
     { key: 'xdiv',     label: 'X / div',    show: true, type: 'range', scale: 'log', min: 0.1, max: 1000, unit: 'ms', default: 1 },
     { key: 'xpos',     label: 'X position', type: 'range', min: -10000, max: 10000, step: 0.1, unit: 'ms', reset: true, default: 0 },
     { key: 'ydiv',     label: 'Y / div',    show: true, type: 'range', scale: 'log', min: 0.01, max: 2, default: 0.25 },
+    // how each channel is drawn between its samples; only the ones of the channels that exist are shown
+    ...Array.from({ length: 8 }, (_, i) => ({
+      key: `display${i + 1}`, label: `Ch${i + 1} display`, type: 'select', options: DISPLAY_MODES, default: 'auto',
+      visible: (p) => p.channels > i,
+    })),
   ],
+  effectiveDisplay,
+  channelPoints,
   // the capture processor must be registered before build() can create the worklet node
   setup(ctx) {
     return ctx.audioWorklet.addModule(new URL('./scope-processor.js', import.meta.url).href);
@@ -255,11 +283,25 @@ export const oscilloscope = {
       sweeps.forEach((data, k) => {
         if (!data || data.length < 2) return;
         g.strokeStyle = SCOPE_COLORS[k % SCOPE_COLORS.length];
+        const rate = inst.channelRates[k];
+        const display = effectiveDisplay(node.params[`display${k + 1}`], rate, inst.sampleRate);
+        const points = sweeps.abs === undefined ? [] : channelPoints(data.length, sweeps.abs, rate, inst.sampleRate);
+        const X = (i) => i * (W - 1) / (data.length - 1);
         g.beginPath();
-        if (data.length <= 4 * W) {
-          for (let i = 0; i < data.length; i++) {
-            const x = i * (W - 1) / (data.length - 1);
-            if (i) g.lineTo(x, yOf(data[i])); else g.moveTo(x, yOf(data[i]));
+        if (points.length && points.length <= 4 * W) {
+          if (display === 'impulse') {
+            // a vertical line from zero to the value at each sample, nothing between them
+            const y0 = yOf(0);
+            for (const i of points) { g.moveTo(X(i), y0); g.lineTo(X(i), yOf(data[i])); }
+          } else if (display === 'sample & hold') {
+            // each sample's value is held until the next one
+            g.moveTo(0, yOf(data[0]));
+            let y = yOf(data[0]);
+            for (const i of points) { g.lineTo(X(i), y); y = yOf(data[i]); g.lineTo(X(i), y); }
+            g.lineTo(W - 1, y);
+          } else {
+            // linear: straight lines from sample to sample
+            points.forEach((i, n) => { if (n) g.lineTo(X(i), yOf(data[i])); else g.moveTo(X(i), yOf(data[i])); });
           }
         } else {
           // many samples per pixel: draw each column's lowest and highest sample, in time order
@@ -276,19 +318,11 @@ export const oscilloscope = {
           }
         }
         g.stroke();
-        // a channel whose sample rate is lower than the sound card's was sampled at its own instants: mark them (only on
-        // the big screen; the block's small one is too crowded)
-        const rate = inst.channelRates[k];
-        if (labels && rate && rate < inst.sampleRate && sweeps.abs !== undefined) {
-          const step = inst.sampleRate / rate;           // output samples per sample of this channel
-          const first = Math.max(0, Math.ceil(sweeps.abs / step - 1e-9)), last = Math.floor((sweeps.abs + data.length - 1) / step + 1e-9);
-          if (last - first <= 300) {
-            g.fillStyle = SCOPE_COLORS[k % SCOPE_COLORS.length];
-            for (let j = first; j <= last; j++) {
-              const i = Math.min(Math.round(j * step) - sweeps.abs, data.length - 1);
-              g.beginPath(); g.arc(i * (W - 1) / (data.length - 1), yOf(data[i]), 2.5, 0, 2 * Math.PI); g.fill();
-            }
-          }
+        // dots on the samples of a channel slower than the sound card's (on the big screen, which has room; an impulse
+        // always has its dot, as its tip)
+        if (points.length && points.length <= 300 && rate && rate < inst.sampleRate && (labels || display === 'impulse')) {
+          g.fillStyle = SCOPE_COLORS[k % SCOPE_COLORS.length];
+          for (const i of points) { g.beginPath(); g.arc(X(i), yOf(data[i]), 2.5, 0, 2 * Math.PI); g.fill(); }
         }
       });
     }
