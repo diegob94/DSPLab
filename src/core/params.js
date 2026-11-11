@@ -9,7 +9,10 @@ export const portClock = (def, name) => ((def.asyncPorts || []).includes(name) ?
 // '*' (in a block's wireTypes) accepts any async port, whatever its sample type; audio only goes with audio
 export const wiresMatch = (a, b) => a === b || (a === '*' && b !== 'audio') || (b === '*' && a !== 'audio')
   || (a === 'array[T]' && b.startsWith('array[')) || (b === 'array[T]' && a.startsWith('array['))
-  || (a === 'array[int*]' && isIntArray(b)) || (b === 'array[int*]' && isIntArray(a));
+  || (a === 'array[int*]' && isIntArray(b)) || (b === 'array[int*]' && isIntArray(a))
+  || (a === 'array[array[T]]' && isArray2(b)) || (b === 'array[array[T]]' && isArray2(a));
+
+const isArray2 = (wire) => wire.startsWith('array[array[');
 
 // 'array[int*]' (in a block's wireTypes): an array of integers of a known width
 const INT_ARRAY = /^array\[(u?)int(8|16|32)\]$/;

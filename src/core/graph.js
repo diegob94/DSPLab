@@ -70,14 +70,16 @@ export function clearGraph() {
 }
 
 // What an output port carries. A generic output ('T') carries the element type of the array on the cable
-// that feeds the block's `in`, or anything ('*') while that is unknown.
+// that feeds the block's `in`, and 'same' carries whatever that cable carries; both are anything ('*') while
+// that is unknown.
 export function outWire(node, port, seen = new Set()) {
   const wire = portWire(BLOCKS[node.type], port);
-  if (wire !== 'T') return wire;
+  if (wire !== 'T' && wire !== 'same') return wire;
   const e = graph.edges.find((e) => e.to.node === node.id && e.to.port === 'in');
   const src = e && graph.nodes.get(e.from.node);
   if (!src || seen.has(node.id)) return '*';
-  return elementOf(outWire(src, e.from.port, seen.add(node.id))) || '*';
+  const up = outWire(src, e.from.port, seen.add(node.id));
+  return wire === 'same' ? up : elementOf(up) || '*';
 }
 
 const wiresFit = (e) => {
