@@ -38,7 +38,7 @@ test('it has Inputs array[uint8] async inputs and one output, and Inputs changes
   assert.equal(await page.locator('.node:has-text("Concatenate") .port.out.async').count(), 1);
   await page.evaluate(() => {
     const n = [...dsplab.graph.nodes.values()].find((n) => n.type === 'concatenate');
-    dsplab.setParam(n, 'inputs', 4);
+    n.params.inputs = 4;
     dsplab.rebuildPorts(n);
   });
   assert.equal(await page.locator('.node:has-text("Concatenate") .port.in.async').count(), 4);
