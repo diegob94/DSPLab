@@ -41,7 +41,7 @@ for (const type of ['strobe_source', 'constant_source']) {
     const wired = await page.evaluate((type) => {
       const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
       const to = (t, port) => !!dsplab.addEdge({ node: by(type).id, port: 'out' }, { node: by(t).id, port });
-      return [to('audio_sink', 'in'), to('pulse_shaper', 'bits')];
+      return [to('audio_sink', 'in'), to('pulse_shaper', 'in')];
     }, type);
     assert.deepEqual(wired, [false, false]);
   }));

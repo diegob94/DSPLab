@@ -48,7 +48,7 @@ test('it takes arrays of ints of 8, 16 and 32 bits only, gives array[array[uint8
     const [s, u, d, w, m] = ['strobe_source', 'array_unpack', 'debug_sink', 'wave_generator', 'pulse_shaper'].map(by);
     const e = (a, ap, b, bp) => !!dsplab.addEdge({ node: a.id, port: ap }, { node: b.id, port: bp });
     s.params.period = 50;
-    const out = { audio: e(w, 'out', u, 'in'), pulse: e(u, 'out', m, 'bits'), strobe: e(s, 'out', u, 'in'), debug: e(u, 'out', d, 'in') };
+    const out = { audio: e(w, 'out', u, 'in'), pulse: e(u, 'out', m, 'in'), strobe: e(s, 'out', u, 'in'), debug: e(u, 'out', d, 'in') };
     await dsplab.engine.start();
     out.width = dsplab.engine.live.get(u.id).width;
     await dsplab.engine.stop();

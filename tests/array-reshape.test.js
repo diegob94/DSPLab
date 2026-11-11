@@ -54,19 +54,19 @@ test('anything that is not a rectangular array of arrays is ignored', () => with
 }));
 
 test('it takes an array, gives array[T] when a dimension is 0 and array[array[T]] otherwise; cables that stop fitting are dropped', () => withApp(app, async (page) => {
-  for (const t of ['Strobe Source', 'Array Unpack', 'Array Reshape', 'Pulse Shaper', 'Debug Sink']) await addFromPalette(page, t);
+  for (const t of ['Strobe Source', 'Array Unpack', 'Array Reshape', 'Serializer', 'Debug Sink']) await addFromPalette(page, t);
   assert.equal(await page.locator('.node:has-text("Array Reshape") .port.in.async').count(), 1);
   assert.equal(await page.locator('.node:has-text("Array Reshape") .port.out.async').count(), 1);
   const r = await page.evaluate(async () => {
     const g = await import('/src/core/graph.js');
     const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
-    const [s, u, z, p, d] = ['strobe_source', 'array_unpack', 'array_reshape', 'pulse_shaper', 'debug_sink'].map(by);
+    const [s, u, z, p, d] = ['strobe_source', 'array_unpack', 'array_reshape', 'serializer', 'debug_sink'].map(by);
     const e = (a, ap, b, bp) => !!dsplab.addEdge({ node: a.id, port: ap }, { node: b.id, port: bp });
     const edgesFromZ = () => dsplab.graph.edges.filter((x) => x.from.node === z.id).length;
     const out = {};
-    out.nothingYet = e(z, 'out', p, 'bits');                 // the output is 'anything' until its input is cabled
+    out.nothingYet = e(z, 'out', p, 'in');                 // the output is 'anything' until its input is cabled
     out.fed = e(s, 'out', z, 'in');                          // array[uint8] in; Rows 1 (the default): array[array[uint8]] out
-    out.droppedPulse = edgesFromZ() === 0;                   // which doesn't fit the Pulse Shaper's int
+    out.droppedPulse = edgesFromZ() === 0;                   // which doesn't fit the Serializer, that takes arrays of numbers
     out.nestedToUnpack = e(z, 'out', u, 'in');               // nor an Array Unpack, which takes array[int*]
     g.setParam(z, 'rows', 0);                                // Rows 0 disappears: the output is array[uint8]
     out.flatToUnpack = e(z, 'out', u, 'in');

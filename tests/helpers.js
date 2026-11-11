@@ -87,12 +87,22 @@ const panelControl = (page, label) => page.locator(`#props .param:has(> label:te
 
 const snapshot = (page) => page.evaluate(() => JSON.stringify(dsplab.serialize()));
 
-// Feeds the bits of a text (most significant bit first) to the live block of the given type every `period` ms.
-// The Serializer's output doesn't fit the Pulse Shaper's input yet, so this stands in for the source and serializer.
-const feedBits = (page, type, text, period) => page.evaluate(([type, text, period]) => {
-  const id = [...dsplab.graph.nodes.values()].find((n) => n.type === type).id;
-  const bits = Array.from(new TextEncoder().encode(text), (b) => b.toString(2).padStart(8, '0')).join('').split('').map(Number);
-  setInterval(() => bits.forEach((b) => dsplab.engine.live.get(id).inputs.bits.receive(b)), period);
-}, [type, text, period]);
+// Builds a transmitter in the diagram: Strobe Source (text) -> Array Unpack -> Array Reshape (flat) -> Serializer ->
+// Upsampler -> Pulse Shaper, with 20 samples per symbol and the symbol rate that makes the signal run at exactly the
+// sound card's rate, so it can be cabled to audio blocks. Returns the symbol rate and the ids of its blocks.
+const buildTransmitter = (page, text, period) => page.evaluate(([text, period]) => {
+  const g = dsplab.graph;
+  const add = (type) => dsplab.addNode(type, 0, 0);
+  const [s, u, r, z, up, p] = ['strobe_source', 'array_unpack', 'array_reshape', 'serializer', 'upsampler', 'pulse_shaper'].map(add);
+  const baud = g.nativeRate / 20;
+  Object.assign(s.params, { data: text, period });
+  Object.assign(r.params, { rows: 0, cols: -1 });
+  z.params.baud = baud;
+  up.params.factor = 20;
+  Object.assign(p.params, { pulse: 'square', sps: 20 });
+  const e = (a, ap, b, bp) => dsplab.addEdge({ node: a.id, port: ap }, { node: b.id, port: bp });
+  e(s, 'out', u, 'in'); e(u, 'out', r, 'in'); e(r, 'out', z, 'in'); e(z, 'out', up, 'in'); e(up, 'out', p, 'in');
+  return { baud, shaper: p.id };
+}, [text, period]);
 
-module.exports = { feedBits, assert, launch, withApp, sleep, selectNode, addFromPalette, connect, setRange, panelControl, startAudio, snapshot };
+module.exports = { buildTransmitter, assert, launch, withApp, sleep, selectNode, addFromPalette, connect, setRange, panelControl, startAudio, snapshot };

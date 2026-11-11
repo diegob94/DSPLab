@@ -277,23 +277,25 @@ Array Unpack) flatten it first with an Array Reshape with *Rows* 0.
 
 Shown on the block: Baud rate.
 
-**Pulse Shaper**: turns a stream of bits (symbols, on an asynchronous clock) into a waveform you can play or look at.
-Input: `bits` (async, `int`). Output: `out` (audio).
+**Pulse Shaper**: a simple convolutional filter: it convolves its input signal with a pulse. Input: `in` (a signal, of
+any sample rate). Output: `out` (a signal, at the same sample rate).
 
-A one is `1` (times the amplitude) and a zero is `0`; the train of symbols is convolved with a pulse shape,
-sampled at the audio sample rate. Symbols are placed one after the other on a grid of 1 / baud seconds,
-whatever the exact moment each bit arrives; the first symbol after a pause starts about 50 ms ahead. Set
-the same baud rate here as on the Serializer, or the stream will fall behind or run ahead.
+It is an FIR filter whose impulse response is the pulse: *square* is a level held for one symbol (*Samples / symbol*
+samples) and *sinc* is a band-limited pulse that crosses zero at the other symbols' centres, cut off 4 symbols to each
+side of its peak. Fed with an impulse train, a one every *Samples / symbol* samples and zeros between them, it puts one
+pulse per symbol, which is pulse shaping: a Strobe Source → Array Unpack → Array Reshape (*Rows* 0) → Serializer
+(the symbol rate) → Upsampler (*Factor* = *Samples / symbol*) → Pulse Shaper chain turns text into a waveform, and
+with a symbol rate of the sound card's rate ÷ *Samples / symbol* the result can go to an Audio Sink. The convolution
+is done at the sample rate of the input (a signal from an Upsampler at 24000 samples/s is convolved at 24000 samples/s),
+so the output has that same rate. The sinc is centred on its peak, so the output is delayed by 4 symbols.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
-| Pulse | *square* holds the level for the whole symbol; *sinc* is a band-limited pulse that crosses zero at the other symbols' centres | square, sinc | square |
-| Baud rate | Symbols per second | 50 – 20000 (logarithmic) | 1000 baud |
-| Amplitude | Level of a one | 0 – 1 | 0.5 |
+| Pulse | The shape of the kernel | square, sinc | square |
+| Samples / symbol | Length of one symbol, in samples of the input | 1 – 64 | 8 |
+| Amplitude | Scales the kernel: the level of a one | 0 – 1 | 0.5 |
 
-The sinc pulse is cut off 4 symbols to each side of its peak. Changing a setting applies to the next symbol.
-
-Shown on the block: Pulse and Baud rate.
+Changing a setting applies at once and keeps what the filter has heard so far. Shown on the block: Pulse and Samples / symbol.
 
 **Matched Filter**: the receiver's counterpart of the Pulse Shaper: it correlates the input with the pulse, which
 gives the best signal-to-noise ratio at the instant a symbol is sampled. Input: `in`. Output: `out`.
@@ -302,7 +304,7 @@ It is an FIR filter whose impulse response is the pulse (both shapes are symmetr
 changes nothing), scaled so that a symbol sent with amplitude A comes out with a peak of A. With the *square*
 pulse it is an integrate-and-dump: each output sample is the average of the last symbol; the peak falls at the end
 of the symbol. With *sinc* the peak comes 4 symbols after the pulse's centre (the filter's delay). Put it before
-Symbol Recovery, with the same pulse and baud rate as the Pulse Shaper.
+Symbol Recovery, with the same pulse as the Pulse Shaper and the baud rate of the Serializer that feeds it.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
