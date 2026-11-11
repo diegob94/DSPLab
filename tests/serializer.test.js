@@ -25,7 +25,8 @@ const run = (page, steps) => page.evaluate(async (steps) => {
 
 test('the elements of an array go out one by one, whatever they are, and then it is zeros', () => withApp(app, async (page) => {
   assert.deepEqual((await run(page, [[0, [65, 255, 7]], [0.005, null]])).got, [65, 255, 7, 0, 0, 0]);
-  assert.deepEqual((await run(page, [[0, [[1], 'x', 0.5]], [0.003, null]])).got, [[1], 'x', 0.5, 0]);
+  assert.deepEqual((await run(page, [[0, ['x', 0.5, null]], [0.003, null]])).got, ['x', 0.5, null, 0]);
+  assert.deepEqual((await run(page, [[0, [[1], 2]], [0.003, null]])).got, [0, 0, 0, 0], 'an array of arrays is ignored');
 }));
 
 test('it delivers samples continuously at the baud rate, 0 while the buffer is empty, none early', () => withApp(app, async (page) => {
@@ -88,4 +89,27 @@ test('Serializer has array[T] in and T out, both async; the output type follows 
   assert.deepEqual(r.left, ['debug'], 'the cable to the Pulse Shaper no longer fits and is dropped');
   assert.equal(r.toPulse, false);
   assert.equal(r.audioIn, false);
+}));
+
+test('the input takes array[T] only when T is not an array', () => withApp(app, async (page) => {
+  for (const t of ['Strobe Source', 'Array Unpack', 'Array Reshape', 'Serializer']) await addFromPalette(page, t);
+  const r = await page.evaluate(async () => {
+    const g = await import('/src/core/graph.js');
+    const by = (t) => [...dsplab.graph.nodes.values()].find((n) => n.type === t);
+    const [s, u, z, k] = ['strobe_source', 'array_unpack', 'array_reshape', 'serializer'].map(by);
+    const e = (a, ap, b, bp) => !!dsplab.addEdge({ node: a.id, port: ap }, { node: b.id, port: bp });
+    const out = {};
+    out.flat = e(s, 'out', k, 'in');                  // array[uint8]
+    e(s, 'out', u, 'in');
+    out.nested = e(u, 'out', k, 'in');                // array[array[uint8]]: its elements are arrays
+    out.stillFlat = dsplab.graph.edges.some((x) => x.from.node === s.id && x.to.node === k.id);   // the refused cable changed nothing
+    e(s, 'out', z, 'in');
+    out.reshapeNested = e(z, 'out', k, 'in');         // Array Reshape with Rows 1: array[array[uint8]]
+    g.setParam(z, 'rows', 0);                         // Rows 0: a plain array[uint8]
+    out.reshapeFlat = e(z, 'out', k, 'in');
+    g.setParam(z, 'rows', 3);                         // an array of arrays again: the cable to the Serializer no longer fits
+    out.dropped = !dsplab.graph.edges.some((x) => x.from.node === z.id && x.to.node === k.id);
+    return out;
+  });
+  assert.deepEqual(r, { flat: true, nested: false, stillFlat: true, reshapeNested: false, reshapeFlat: true, dropped: true });
 }));

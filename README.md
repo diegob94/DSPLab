@@ -238,7 +238,8 @@ longer fit are dropped.
 
 Shown on the block: Rows and Columns.
 
-**Serializer**: turns arrays into a continuous signal, one element per sample. Input: `in` (async, `array[T]`). Output:
+**Serializer**: turns arrays into a continuous signal, one element per sample. Input: `in` (async, `array[T]`, where
+`T` is **not an array**: it takes a plain array, not an array of arrays). Output:
 `out` (`T`, **synchronous**, sample rate = baud rate).
 
 The arrays that arrive go into a buffer, and the output delivers a sample every 1 / baud seconds for as long as the
@@ -251,7 +252,8 @@ cable, and when you connect `in` the cables on `out` that no longer fit are drop
 so the average rate is exact; because a browser timer can't fire once per sample at kilobaud, the samples that are due
 are delivered together every ~10 ms, and whoever receives them does its own timing. A new baud rate starts from the
 moment you change it, and after a stall (a tab in the background) it skips ahead rather than delivering more than a
-second of samples at once. Anything that is not an array is ignored.
+second of samples at once. Anything that is not an array, or is an array of arrays, is ignored. To feed it an array of arrays (like the output of
+Array Unpack) flatten it first with an Array Reshape with *Rows* 0.
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
