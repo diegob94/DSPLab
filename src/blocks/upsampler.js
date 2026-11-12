@@ -9,7 +9,7 @@ export const upsampler = {
   inputRate: 'rated',
   rates: { out: (params, inRate) => (inRate ? inRate * params.factor : null) },
   params: [
-    { key: 'factor', label: 'Factor', show: true, type: 'range', min: 2, max: 64, step: 1, default: 2 },
+    { key: 'factor', label: 'Factor', show: true, type: 'range', min: 2, max: 1000, step: 1, default: 2 },
   ],
   // the processor must be registered before build() can create the worklet node
   setup(ctx) {
