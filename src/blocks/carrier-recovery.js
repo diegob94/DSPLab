@@ -7,7 +7,7 @@ export const carrierRecovery = {
   outputs: ['out', 'phase'],   // phase: the loop's phase error / pi (0 when locked)
   params: [
     { key: 'frequency', label: 'Frequency', show: true, type: 'range', scale: 'log', min: 20, max: 20000, step: 1, unit: 'Hz', default: 440 },
-    { key: 'bandwidth', label: 'Loop bandwidth', show: true, type: 'range', scale: 'log', min: 1, max: 500, step: 1, unit: 'Hz', default: 20 },
+    { key: 'bandwidth', label: 'Loop bandwidth', show: true, type: 'range', scale: 'log', min: 0.1, max: 500, step: 0.1, unit: 'Hz', default: 20 },
     { key: 'amplitude', label: 'Amplitude', type: 'range', min: 0, max: 1, step: 0.01, default: 0.5 },
   ],
   // the processor must be registered before build() can create the worklet node

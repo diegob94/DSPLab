@@ -360,7 +360,7 @@ does not matter). Use it to get the carrier back from a modulated signal, or to 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
 | Frequency | Where the oscillator runs on its own, and where it looks for the carrier | 20 – 20000 Hz (logarithmic) | 440 Hz |
-| Loop bandwidth | How wide a band around the frequency it can lock from, and how fast it follows: higher locks from further and sooner but lets more noise through | 1 – 500 Hz (logarithmic) | 20 Hz |
+| Loop bandwidth | How wide a band around the frequency it can lock from, and how fast it follows: higher locks from further and sooner but lets more noise through | 0.1 – 500 Hz (logarithmic) | 20 Hz |
 | Amplitude | Level of the output sine | 0 – 1 | 0.5 |
 
 Set *Frequency* close to the carrier (within about the loop bandwidth, a few times that at most) and give it
