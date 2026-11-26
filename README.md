@@ -252,7 +252,7 @@ through a chain of Upsamplers, and a cable that needs the sound card's rate (an 
 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
-| Factor | The multiplier of the sample rate | 2 – 64 | 2 |
+| Factor | The multiplier of the sample rate | 2 – 1000 | 2 |
 
 Shown on the block: Factor.
 
@@ -292,7 +292,7 @@ so the output has that same rate. The sinc is centred on its peak, so the output
 | Setting | What it does | Range | Default |
 |---|---|---|---|
 | Pulse | The shape of the kernel | square, sinc | square |
-| Samples / symbol | Length of one symbol, in samples of the input | 1 – 64 | 8 |
+| Samples / symbol | Length of one symbol, in samples of the input | 1 – 1000 | 8 |
 
 The kernel has unit amplitude: a one in the input comes out as a pulse of level 1, so the level of the output is the level
 of the input (a Serializer sends the numbers you give it; use a Math Operator to scale). Changing a setting applies at once and keeps what the filter has heard so far. Shown on the block: Pulse and Samples / symbol.
@@ -310,7 +310,7 @@ Pulse Shaper that feeds the channel.
 | Setting | What it does | Range | Default |
 |---|---|---|---|
 | Pulse | Shape to match | square, sinc | square |
-| Samples / symbol | Length of one symbol, in samples of the input | 1 – 64 | 8 |
+| Samples / symbol | Length of one symbol, in samples of the input | 1 – 1000 | 8 |
 
 Changing a setting applies at once and keeps what the filter has heard so far. Shown on the block: Pulse and Samples / symbol.
 
@@ -360,7 +360,7 @@ does not matter). Use it to get the carrier back from a modulated signal, or to 
 | Setting | What it does | Range | Default |
 |---|---|---|---|
 | Frequency | Where the oscillator runs on its own, and where it looks for the carrier | 20 – 20000 Hz (logarithmic) | 440 Hz |
-| Loop bandwidth | How wide a band around the frequency it can lock from, and how fast it follows: higher locks from further and sooner but lets more noise through | 1 – 500 Hz (logarithmic) | 20 Hz |
+| Loop bandwidth | How wide a band around the frequency it can lock from, and how fast it follows: higher locks from further and sooner but lets more noise through | 0.1 – 500 Hz (logarithmic) | 20 Hz |
 | Amplitude | Level of the output sine | 0 – 1 | 0.5 |
 
 Set *Frequency* close to the carrier (within about the loop bandwidth, a few times that at most) and give it

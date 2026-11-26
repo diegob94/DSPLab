@@ -19,7 +19,7 @@ export const matchedFilter = {
   matchedKernel,
   params: [
     { key: 'pulse', label: 'Pulse',            show: true, type: 'select', options: ['square', 'sinc'], default: 'square' },
-    { key: 'sps',   label: 'Samples / symbol', show: true, type: 'range', min: 1, max: 64, step: 1, default: 8 },
+    { key: 'sps',   label: 'Samples / symbol', show: true, type: 'range', min: 1, max: 1000, step: 1, default: 8 },
   ],
   // the processor must be registered before build() can create the worklet node
   setup(ctx) {
